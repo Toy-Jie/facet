@@ -23,37 +23,54 @@ class TestHealthEndpoint:
 
 
 class TestReadyEndpoint:
+    """Tests target the async /ready endpoint that uses get_async_db()."""
+
+    @staticmethod
+    def _async_cm(conn):
+        from contextlib import asynccontextmanager
+        @asynccontextmanager
+        async def _ctx():
+            yield conn
+        return _ctx
+
+    @staticmethod
+    def _make_async_conn(execute_side_effect=None):
+        class _Cursor:
+            async def fetchone(self): return (1,)
+            async def close(self): pass
+        class _Conn:
+            async def execute(self, *a, **kw):
+                if execute_side_effect is not None:
+                    raise execute_side_effect
+                return _Cursor()
+        return _Conn()
+
     def test_ready_when_database_accessible(self, client):
-        mock_conn = mock.MagicMock()
-        mock_conn.execute.return_value = None
-
-        with mock.patch("api.routers.health.get_db", return_value=nullcontext(mock_conn)):
+        conn = self._make_async_conn()
+        with mock.patch("api.routers.health.get_async_db", self._async_cm(conn)):
             resp = client.get("/ready")
-
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ready"
         assert body["checks"]["database"] == "ok"
 
     def test_not_ready_when_database_unavailable(self, client):
-        with mock.patch(
-            "api.routers.health.get_db",
-            side_effect=Exception("connection refused"),
-        ):
+        from contextlib import asynccontextmanager
+        @asynccontextmanager
+        async def _broken():
+            raise Exception("connection refused")
+            yield  # unreachable
+        with mock.patch("api.routers.health.get_async_db", _broken):
             resp = client.get("/ready")
-
         assert resp.status_code == 503
         body = resp.json()
         assert body["status"] == "not_ready"
         assert body["checks"]["database"] == "unavailable"
 
     def test_not_ready_when_query_fails(self, client):
-        mock_conn = mock.MagicMock()
-        mock_conn.execute.side_effect = Exception("disk I/O error")
-
-        with mock.patch("api.routers.health.get_db", return_value=nullcontext(mock_conn)):
+        conn = self._make_async_conn(execute_side_effect=Exception("disk I/O error"))
+        with mock.patch("api.routers.health.get_async_db", self._async_cm(conn)):
             resp = client.get("/ready")
-
         assert resp.status_code == 503
         body = resp.json()
         assert body["status"] == "not_ready"

@@ -110,7 +110,7 @@ def run_doctor(config_path=None, db_path=None, simulate_gpu=None, simulate_vram=
         _section("GPU")
         name = torch.cuda.get_device_name(0)
         props = torch.cuda.get_device_properties(0)
-        vram_gb = props.total_mem / (1024 ** 3)
+        vram_gb = props.total_memory / (1024 ** 3)
         _ok("Device", name)
         _ok("VRAM", f"{vram_gb:.1f} GB")
         _ok("Compute capability", f"{props.major}.{props.minor}")

@@ -83,8 +83,11 @@ describe('FilterValueFormatPipe', () => {
 
   describe('ISO', () => {
     it('formats with ISO prefix', () => {
+      // The pipe uses toLocaleString() with the system locale, so the thousand
+      // separator differs (en-US ",", fr-FR/de-DE " "). Match against the
+      // locale-specific output rather than hard-coding the separator.
       expect(pipe.transform(100, 'iso_min')).toBe('ISO 100');
-      expect(pipe.transform(6400, 'iso_max')).toBe('ISO 6,400');
+      expect(pipe.transform(6400, 'iso_max')).toBe('ISO ' + (6400).toLocaleString());
     });
   });
 

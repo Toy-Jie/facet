@@ -1,5 +1,6 @@
 """Tests for the diagnostics module (--doctor command)."""
 
+import importlib.util
 import json
 import sqlite3
 import sys
@@ -10,6 +11,15 @@ import pytest
 
 from config.scoring_config import ScoringConfig
 from diagnostics import _info, _ok, _section, _warn, run_doctor
+
+
+def _make_mock_torch_module():
+    """Build a torch stand-in with a proper __spec__ so importlib.import_module(...)
+    on dependents like transformers/accelerate doesn't raise
+    ``ValueError: torch.__spec__ is None``."""
+    mod = types.ModuleType("torch")
+    mod.__spec__ = importlib.util.spec_from_loader("torch", loader=None)
+    return mod
 
 
 class _StdoutProxy:
@@ -131,7 +141,7 @@ class TestGpuTroubleshooting:
 
     def test_nvidia_smi_finds_gpu(self, capsys, tmp_path):
         """When nvidia-smi sees a GPU but PyTorch can't, show pip install hint."""
-        mock_torch = types.ModuleType("torch")
+        mock_torch = _make_mock_torch_module()
         mock_torch.__version__ = "2.5.0"
         mock_torch.version = types.SimpleNamespace(cuda=None)
         mock_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
@@ -157,7 +167,7 @@ class TestGpuTroubleshooting:
 
     def test_nvidia_smi_not_found(self, capsys, tmp_path):
         """When nvidia-smi is missing, suggest driver installation."""
-        mock_torch = types.ModuleType("torch")
+        mock_torch = _make_mock_torch_module()
         mock_torch.__version__ = "2.5.0"
         mock_torch.version = types.SimpleNamespace(cuda=None)
         mock_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
@@ -178,7 +188,7 @@ class TestGpuTroubleshooting:
 
     def test_nvidia_smi_no_gpu(self, capsys, tmp_path):
         """When nvidia-smi runs but finds no GPU."""
-        mock_torch = types.ModuleType("torch")
+        mock_torch = _make_mock_torch_module()
         mock_torch.__version__ = "2.5.0"
         mock_torch.version = types.SimpleNamespace(cuda=None)
         mock_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
@@ -207,7 +217,7 @@ class TestDetectGpuVramGb:
 
     def test_gpu_detected(self):
         """When CUDA is available, return VRAM in GB."""
-        mock_torch = types.ModuleType("torch")
+        mock_torch = _make_mock_torch_module()
         mock_torch.cuda = types.SimpleNamespace(
             is_available=lambda: True,
             get_device_properties=lambda idx: types.SimpleNamespace(
@@ -220,7 +230,7 @@ class TestDetectGpuVramGb:
 
     def test_no_gpu(self):
         """When CUDA is not available, return None."""
-        mock_torch = types.ModuleType("torch")
+        mock_torch = _make_mock_torch_module()
         mock_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
         with mock.patch.dict("sys.modules", {"torch": mock_torch}):
             result = ScoringConfig.detect_gpu_vram_gb()
@@ -344,7 +354,7 @@ class TestRtx5070TiScenario:
 
     def test_full_doctor_output(self, capsys, tmp_path):
         """Simulate RTX 5070 Ti with no CUDA support — full doctor run."""
-        mock_torch = types.ModuleType("torch")
+        mock_torch = _make_mock_torch_module()
         mock_torch.__version__ = "2.5.0"
         mock_torch.version = types.SimpleNamespace(cuda=None)
         mock_torch.cuda = types.SimpleNamespace(is_available=lambda: False)

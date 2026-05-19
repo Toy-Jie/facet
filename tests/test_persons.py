@@ -327,4 +327,5 @@ class TestListPersons:
         params = count_call[0][1]
         assert "p.name LIKE ?" in sql
         assert "p.id = ?" in sql
-        assert params == ["%42%", 42]
+        # Implementation emits "p.id = ? OR p.name LIKE ?" → params [id, like]
+        assert params == [42, "%42%"]

@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import {
+  HttpBackend,
   HttpRequest,
   HttpHandlerFn,
   HttpErrorResponse,
 } from '@angular/common/http';
-import { throwError } from 'rxjs';
+import { EMPTY, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { errorInterceptor } from './error.interceptor';
 import { AuthService } from '../services/auth.service';
@@ -14,12 +15,17 @@ describe('errorInterceptor', () => {
   let authMock: { token: string | null; logout: jest.Mock };
   let snackBarMock: { open: jest.Mock };
   let i18nMock: { t: jest.Mock; locale: jest.Mock };
+  let backendMock: { handle: jest.Mock };
   let next: jest.MockedFunction<HttpHandlerFn>;
 
   beforeEach(() => {
     authMock = { token: null, logout: jest.fn() };
     snackBarMock = { open: jest.fn() };
     i18nMock = { t: jest.fn((key: string) => key), locale: jest.fn(() => 'en') };
+    // The interceptor uses HttpBackend directly to post 5xx crash reports
+    // without recursing through itself. Mock returns an empty observable so
+    // the post is a no-op.
+    backendMock = { handle: jest.fn(() => EMPTY) };
     next = jest.fn();
 
     TestBed.configureTestingModule({
@@ -27,6 +33,7 @@ describe('errorInterceptor', () => {
         { provide: AuthService, useValue: authMock },
         { provide: MatSnackBar, useValue: snackBarMock },
         { provide: I18nService, useValue: i18nMock },
+        { provide: HttpBackend, useValue: backendMock },
       ],
     });
   });
