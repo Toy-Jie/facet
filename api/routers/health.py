@@ -7,6 +7,7 @@ and load balancers.
 
 import collections
 import logging
+import os
 import threading
 import time
 
@@ -109,20 +110,20 @@ def _metrics_enabled() -> bool:
 
 
 @router.get("/metrics")
-def metrics():
+def metrics(request: Request):
     """Prometheus-style metrics endpoint.
 
-    Returns text in Prometheus exposition format. Includes:
-    - facet_photos_total
-    - facet_photos_with_embedding
-    - facet_photos_with_topiq
-    - facet_persons_total
-    - facet_faces_total
-    - facet_db_size_bytes
-    - facet_process_memory_bytes (if psutil is installed)
+    Returns text in Prometheus exposition format. Includes DB-derived
+    counters, GPU VRAM, scan activity, async readiness latency, and
+    fast-path availability gauges.
 
-    Intentionally lightweight (no histograms / counters that require state) —
-    sufficient for monitoring scan progress and library size over time.
+    The fast-path gauges (vec_available, fts_available, photo_tags_available,
+    etc.) let operators answer "is search actually using the intended fast
+    path?" without code inspection. See plan
+    drifting-crafting-lampson.md Part B for context.
+
+    Intentionally lightweight (no histograms / per-handler buckets) —
+    sufficient for scan progress and library-size monitoring.
 
     Opt-in via ``viewer.features.metrics_enabled = true`` in scoring_config.json.
     """
@@ -134,6 +135,11 @@ def metrics():
     def gauge(name: str, value: float | int, help_text: str) -> None:
         lines.append(f"# HELP {name} {help_text}")
         lines.append(f"# TYPE {name} gauge")
+        lines.append(f"{name} {value}")
+
+    def counter(name: str, value: int, help_text: str) -> None:
+        lines.append(f"# HELP {name} {help_text}")
+        lines.append(f"# TYPE {name} counter")
         lines.append(f"{name} {value}")
 
     try:
@@ -210,6 +216,102 @@ def metrics():
         is_running = bool((_scan_state or {}).get("running"))
         gauge("facet_scan_active", 1 if is_running else 0,
               "1 if a scan is currently running, 0 otherwise")
+    except Exception:
+        pass
+
+    # Fast-path availability — answers "is the production deploy actually
+    # using the intended fast paths?" without forcing operators to inspect code.
+    # All reads are O(1) in-process state; no DB calls in the metrics handler.
+    try:
+        from api.routers.search import (
+            _vec_available, _fts_available,
+            _search_vec_fallback_total, _search_fts_skip_total,
+        )
+        gauge(
+            "facet_vec_available",
+            1 if _vec_available is True else 0,
+            "1 if sqlite-vec extension loaded and photos_vec populated; 0 means /api/search uses NumPy fallback",
+        )
+        gauge(
+            "facet_fts_available",
+            1 if _fts_available is True else 0,
+            "1 if photos_fts virtual table is queryable; 0 means text search skips BM25",
+        )
+        counter(
+            "facet_search_vec_fallback_total",
+            _search_vec_fallback_total,
+            "Times /api/search ran NumPy matmul instead of sqlite-vec — climbing = degraded perf",
+        )
+        counter(
+            "facet_search_fts_skip_total",
+            _search_fts_skip_total,
+            "Times FTS5 query threw OperationalError and returned empty",
+        )
+    except Exception:
+        pass
+
+    try:
+        from api.config import (
+            _photo_tags_available, _existing_columns_cache,
+            _count_cache, _stats_cache,
+        )
+        gauge(
+            "facet_photo_tags_available",
+            1 if _photo_tags_available is True else 0,
+            "1 if photo_tags lookup table is populated; 0 means tag filters use slow LIKE scan",
+        )
+        gauge(
+            "facet_existing_columns_cached",
+            1 if _existing_columns_cache is not None else 0,
+            "1 if lifespan-warmed PRAGMA table_info cache is populated",
+        )
+        gauge(
+            "facet_count_cache_entries",
+            len(_count_cache),
+            "Number of cached SELECT COUNT(*) results in the in-memory cache",
+        )
+        # stats_cache_age = seconds since the oldest entry was stored.
+        # 0 if empty. An entry's `expires` is (stored_at + ttl), so
+        # `expires - ttl` recovers stored_at; we use `expires - now` and
+        # report the largest absolute age (= ttl - remaining).
+        if _stats_cache:
+            ttl = max(0.0, float(_FULL_CONFIG.get("viewer", {}).get("cache_ttl_seconds", 60)))
+            now_mono = time.monotonic()
+            ages = [max(0.0, ttl - (e["expires"] - now_mono)) for e in _stats_cache.values()]
+            gauge(
+                "facet_stats_cache_age_seconds",
+                round(max(ages), 1),
+                "Age in seconds of the oldest entry in the in-memory stats cache",
+            )
+        else:
+            gauge("facet_stats_cache_age_seconds", 0,
+                  "Age in seconds of the oldest entry in the in-memory stats cache")
+    except Exception:
+        pass
+
+    # WAL checkpoint thread liveness — if the thread died silently, the
+    # `-wal` file grows unbounded between restarts. wal_file_size_bytes
+    # tracks the symptom directly.
+    try:
+        wal_thread = getattr(request.app.state, "wal_thread", None)
+        gauge(
+            "facet_wal_thread_alive",
+            1 if (wal_thread is not None and wal_thread.is_alive()) else 0,
+            "1 if the periodic WAL checkpoint thread is running",
+        )
+    except Exception:
+        pass
+
+    try:
+        from pathlib import Path
+        from db import DEFAULT_DB_PATH
+        wal_path = Path(DEFAULT_DB_PATH + "-wal")
+        wal_size = wal_path.stat().st_size if wal_path.exists() else 0
+        gauge(
+            "facet_wal_file_size_bytes",
+            wal_size,
+            "Size of the SQLite -wal file on disk; growing without checkpoint = dead WAL thread",
+        )
     except Exception:
         pass
 

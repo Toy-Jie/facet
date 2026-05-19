@@ -31,6 +31,13 @@ _embedding_cache = None  # numpy fallback: {'matrix': np.array, 'paths': list, '
 _vec_available = None
 _vec_checked_at = 0.0
 
+# Fallback counters — observable via /metrics. Incremented when the NumPy
+# fallback path runs instead of sqlite-vec, or when the FTS5 query throws
+# OperationalError and returns empty. An operator seeing these climb in
+# production has the signal that the intended fast path is silently degraded.
+_search_vec_fallback_total = 0
+_search_fts_skip_total = 0
+
 
 async def _check_vec_available(conn):
     """Check if the photos_vec virtual table exists and has rows (TTL cached)."""
@@ -300,6 +307,8 @@ async def _fts_search(conn, query, limit):
         rows = await cur.fetchall()
         await cur.close()
     except sqlite3.OperationalError:
+        global _search_fts_skip_total
+        _search_fts_skip_total += 1
         return {}
 
     if not rows:
@@ -360,6 +369,8 @@ async def api_search(
             if await _check_vec_available(conn):
                 embedding_scores = await _search_vec(conn, text_emb, limit, threshold, vis_sql, vis_params)
             else:
+                global _search_vec_fallback_total
+                _search_vec_fallback_total += 1
                 embedding_scores = await _search_numpy(conn, text_emb, limit, threshold, vis_sql, vis_params, user_id)
 
             # --- Merge results ---

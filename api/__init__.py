@@ -123,6 +123,9 @@ async def lifespan(app: FastAPI):
         wal_thread.start()
         logger.info("WAL checkpoint thread enabled (every %d min)", wal_minutes)
 
+    # Expose the WAL thread reference so /metrics can report whether it died.
+    app.state.wal_thread = wal_thread
+
     logger.info("Facet API ready")
     yield
     if wal_stop is not None:
