@@ -368,6 +368,42 @@ def split_photo_tags(rows, tags_limit):
     return photos
 
 
+_PERSONS_FOR_PATHS_TMPL = """
+    SELECT DISTINCT f.photo_path, f.person_id, p.name
+    FROM faces f
+    JOIN persons p ON p.id = f.person_id
+    WHERE f.photo_path IN ({placeholders})
+      AND f.person_id IS NOT NULL
+"""
+
+_UNASSIGNED_FOR_PATHS_TMPL = """
+    SELECT photo_path, COUNT(*) as unassigned_count
+    FROM faces
+    WHERE photo_path IN ({placeholders})
+      AND person_id IS NULL
+    GROUP BY photo_path
+"""
+
+
+def _apply_person_data(photos, person_rows, unassigned_rows):
+    """Mutate ``photos`` in place from the two query result sets.
+
+    Shared by the sync and async variants so the post-query logic stays in
+    one place.
+    """
+    path_to_persons: dict[str, list[dict]] = {}
+    for row in person_rows:
+        path = row['photo_path']
+        path_to_persons.setdefault(path, []).append({
+            'id': row['person_id'],
+            'name': row['name'] or f"Person {row['person_id']}",
+        })
+    path_to_unassigned = {row['photo_path']: row['unassigned_count'] for row in unassigned_rows}
+    for photo in photos:
+        photo['persons'] = path_to_persons.get(photo['path'], [])
+        photo['unassigned_faces'] = path_to_unassigned.get(photo['path'], 0)
+
+
 def attach_person_data(photos, conn):
     """Batch-fetch person associations and unassigned face counts for photos."""
     if not photos:
@@ -375,38 +411,44 @@ def attach_person_data(photos, conn):
     try:
         photo_paths = [p['path'] for p in photos]
         placeholders = ','.join(['?'] * len(photo_paths))
-        person_rows = conn.execute(f"""
-            SELECT DISTINCT f.photo_path, f.person_id, p.name
-            FROM faces f
-            JOIN persons p ON p.id = f.person_id
-            WHERE f.photo_path IN ({placeholders})
-              AND f.person_id IS NOT NULL
-        """, photo_paths).fetchall()
-
-        path_to_persons = {}
-        for row in person_rows:
-            path = row['photo_path']
-            if path not in path_to_persons:
-                path_to_persons[path] = []
-            path_to_persons[path].append({
-                'id': row['person_id'],
-                'name': row['name'] or f"Person {row['person_id']}"
-            })
-
-        unassigned_rows = conn.execute(f"""
-            SELECT photo_path, COUNT(*) as unassigned_count
-            FROM faces
-            WHERE photo_path IN ({placeholders})
-              AND person_id IS NULL
-            GROUP BY photo_path
-        """, photo_paths).fetchall()
-        path_to_unassigned = {row['photo_path']: row['unassigned_count'] for row in unassigned_rows}
-
-        for photo in photos:
-            photo['persons'] = path_to_persons.get(photo['path'], [])
-            photo['unassigned_faces'] = path_to_unassigned.get(photo['path'], 0)
+        person_rows = conn.execute(
+            _PERSONS_FOR_PATHS_TMPL.format(placeholders=placeholders),
+            photo_paths,
+        ).fetchall()
+        unassigned_rows = conn.execute(
+            _UNASSIGNED_FOR_PATHS_TMPL.format(placeholders=placeholders),
+            photo_paths,
+        ).fetchall()
+        _apply_person_data(photos, person_rows, unassigned_rows)
     except Exception:
         logger.exception("Failed to attach person data")
+        for photo in photos:
+            photo['persons'] = []
+            photo['unassigned_faces'] = 0
+
+
+async def attach_person_data_async(photos, conn):
+    """Async variant: same shape, awaits aiosqlite cursors."""
+    if not photos:
+        return
+    try:
+        photo_paths = [p['path'] for p in photos]
+        placeholders = ','.join(['?'] * len(photo_paths))
+        cursor = await conn.execute(
+            _PERSONS_FOR_PATHS_TMPL.format(placeholders=placeholders),
+            photo_paths,
+        )
+        person_rows = await cursor.fetchall()
+        await cursor.close()
+        cursor = await conn.execute(
+            _UNASSIGNED_FOR_PATHS_TMPL.format(placeholders=placeholders),
+            photo_paths,
+        )
+        unassigned_rows = await cursor.fetchall()
+        await cursor.close()
+        _apply_person_data(photos, person_rows, unassigned_rows)
+    except Exception:
+        logger.exception("Failed to attach person data (async)")
         for photo in photos:
             photo['persons'] = []
             photo['unassigned_faces'] = 0

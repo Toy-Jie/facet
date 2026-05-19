@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.auth import CurrentUser, get_optional_user
 from api.config import VIEWER_CONFIG
-from api.database import get_async_db, get_db
+from api.database import get_async_db
 from api.db_helpers import (
     build_hide_clauses, build_date_range_clauses,
     build_photo_select_columns, sanitize_float_values,
-    split_photo_tags, attach_person_data,
+    split_photo_tags, attach_person_data, attach_person_data_async,
     get_visibility_clause, get_photos_from_clause,
     format_date,
 )
@@ -54,14 +54,8 @@ def _build_grouped_summaries_query(from_clause, where_clauses, group_expr, order
     )
 
 
-def _fetch_grouped_summaries(conn, from_clause, where_clauses, sql_params, group_expr, order='ASC'):
-    """Return (group_key, count, hero_photo_path) rows in one query (no N+1)."""
-    query = _build_grouped_summaries_query(from_clause, where_clauses, group_expr, order)
-    return conn.execute(query, sql_params).fetchall()
-
-
 async def _fetch_grouped_summaries_async(conn, from_clause, where_clauses, sql_params, group_expr, order='ASC'):
-    """Async variant for aiosqlite — same SQL, awaitable cursor."""
+    """Return (group_key, count, hero_photo_path) rows in one query (no N+1)."""
     query = _build_grouped_summaries_query(from_clause, where_clauses, group_expr, order)
     cursor = await conn.execute(query, sql_params)
     rows = await cursor.fetchall()
@@ -71,7 +65,7 @@ async def _fetch_grouped_summaries_async(conn, from_clause, where_clauses, sql_p
 
 
 @router.get("/api/timeline")
-def api_timeline(
+async def api_timeline(
     cursor: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     direction: str = Query("older"),
@@ -85,9 +79,11 @@ def api_timeline(
     granularity: str = Query('day'),
     user: Optional[CurrentUser] = Depends(get_optional_user),
 ):
-    """Return photos grouped by date for timeline view.
+    """Return photos grouped by date for timeline view (async).
 
-    Uses cursor-based pagination on DATE(date_taken).
+    Uses cursor-based pagination on DATE(date_taken). Migrated to aiosqlite —
+    relies on build_photo_select_columns()'s startup-warmed PRAGMA cache so
+    no sync DB call leaks into the event loop on the hot path.
     """
     # Validate sort_by to prevent injection
     if sort_by not in ('aggregate', 'date_taken', 'filename'):
@@ -105,8 +101,8 @@ def api_timeline(
         date_expr = "DATE(REPLACE(SUBSTR(date_taken,1,10),':','-'))"
 
     user_id = user.user_id if user else None
-    with get_db() as conn:
-        try:
+    try:
+        async with get_async_db() as conn:
             from_clause, from_params = get_photos_from_clause(user_id)
             vis_sql, vis_params = get_visibility_clause(user_id)
 
@@ -142,12 +138,16 @@ def api_timeline(
                 f"LIMIT ?"
             )
             # Fetch one extra to detect has_more
-            date_rows = conn.execute(date_query, sql_params + [limit + 1]).fetchall()
+            date_cur = await conn.execute(date_query, sql_params + [limit + 1])
+            date_rows = await date_cur.fetchall()
+            await date_cur.close()
 
             has_more = len(date_rows) > limit
             date_rows = date_rows[:limit]
 
-            # Build select columns
+            # build_photo_select_columns reads the startup-warmed
+            # _existing_columns_cache and never touches conn — safe to call
+            # with an aiosqlite Connection.
             select_cols = build_photo_select_columns(conn, user_id)
 
             tags_limit = VIEWER_CONFIG['display']['tags_per_photo']
@@ -192,13 +192,15 @@ def api_timeline(
                 )
                 batch_params.append(ppg)
 
-                rows = conn.execute(photo_query, batch_params).fetchall()
+                photo_cur = await conn.execute(photo_query, batch_params)
+                rows = await photo_cur.fetchall()
+                await photo_cur.close()
                 all_photos = split_photo_tags(rows, tags_limit)
 
                 for photo in all_photos:
                     photo['date_formatted'] = format_date(photo.get('date_taken'))
 
-                attach_person_data(all_photos, conn)
+                await attach_person_data_async(all_photos, conn)
                 sanitize_float_values(all_photos)
 
                 # Group photos by date, preserving the paginated date order
@@ -218,11 +220,11 @@ def api_timeline(
 
                 next_cursor = date_list[-1]
 
-        except HTTPException:
-            raise
-        except Exception:
-            logger.exception("Failed to fetch timeline")
-            return {'groups': [], 'next_cursor': None, 'has_more': False}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to fetch timeline")
+        return {'groups': [], 'next_cursor': None, 'has_more': False}
 
     return {
         'groups': groups,
