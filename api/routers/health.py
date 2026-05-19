@@ -63,13 +63,19 @@ def health():
 
 @router.get("/ready")
 async def ready():
-    """Readiness check — verifies the database is accessible.
+    """Readiness check — verifies the database is accessible and reports
+    fast-path availability.
+
+    Returns ``status: ready`` (200) when the DB ping succeeds, even if some
+    fast paths are unavailable — load balancers should keep routing traffic.
+    The ``degraded`` array lists subsystems running in fallback mode so
+    operators can see "did the production deploy actually wire up
+    sqlite-vec?" with one curl.
 
     Reference implementation of the get_async_db() migration pattern: the
     endpoint is fully async, opens an aiosqlite connection, runs a trivial
     query without blocking the event loop, and records its elapsed time
-    into the readiness payload. Real load tests should compare this against
-    the sync /health endpoint's response time at the same concurrency.
+    into the readiness payload.
     """
     checks: dict = {}
     t0 = time.monotonic()
@@ -79,18 +85,36 @@ async def ready():
             await cursor.fetchone()
             await cursor.close()
             checks["database"] = "ok"
+            # Probe fast-path availability on the same async connection so a
+            # /ready call after a fresh restart populates the cached state
+            # before the first /api/search hits production traffic.
+            try:
+                from api.routers.search import _check_vec_available, _has_fts
+                vec_ok = await _check_vec_available(conn)
+                fts_ok = await _has_fts(conn)
+                checks["vec"] = "ok" if vec_ok else "unavailable"
+                checks["fts"] = "ok" if fts_ok else "unavailable"
+            except Exception:
+                logger.warning("Fast-path probe failed in /ready", exc_info=True)
     except Exception:
         checks["database"] = "unavailable"
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "checks": checks},
+            content={"status": "not_ready", "checks": checks, "degraded": []},
         )
 
     elapsed_ms = (time.monotonic() - t0) * 1000.0
     _ready_latency_samples.append(elapsed_ms)
     if len(_ready_latency_samples) > _LATENCY_RING_SIZE:
         _ready_latency_samples.pop(0)
-    return {"status": "ready", "checks": checks, "elapsed_ms": round(elapsed_ms, 2)}
+
+    degraded = [name for name in ("vec", "fts") if checks.get(name) == "unavailable"]
+    return {
+        "status": "ready",
+        "checks": checks,
+        "degraded": degraded,
+        "elapsed_ms": round(elapsed_ms, 2),
+    }
 
 
 # Ring buffer for /ready async DB latency — exposed via /metrics.

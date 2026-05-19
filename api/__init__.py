@@ -65,7 +65,15 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.warning("Schema migration on startup failed", exc_info=True)
 
-    from api.db_helpers import get_existing_columns, is_photo_tags_available, backfill_image_dimensions
+    # init_database may have ALTERed columns onto the photos table — clear the
+    # cache before warming it so the new column set is reflected. Without this,
+    # a hot-deploy that adds a column would serve queries with the old column
+    # set until the next API restart.
+    from api.db_helpers import (
+        get_existing_columns, is_photo_tags_available,
+        backfill_image_dimensions, invalidate_existing_columns_cache,
+    )
+    invalidate_existing_columns_cache()
     get_existing_columns()
     is_photo_tags_available()
     backfill_image_dimensions()

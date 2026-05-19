@@ -251,9 +251,13 @@ _count_cache = {}
 _count_cache_lock = threading.Lock()
 COUNT_CACHE_TTL = 300  # seconds
 
-# Track if photo_tags lookup table is available (checked once at startup)
+# Track if photo_tags lookup table is available.
+# TTL-cached so `database.py --migrate-tags` running while the API is up
+# eventually flips the cache without requiring an API restart.
 _photo_tags_available = None
+_photo_tags_checked_at = 0.0
 _photo_tags_lock = threading.Lock()
+PHOTO_TAGS_CACHE_TTL = 300  # seconds — recheck every 5 min
 
 # Cache for stats API responses
 _stats_cache = {}  # key -> {'data': ..., 'expires': float}

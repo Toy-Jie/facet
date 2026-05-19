@@ -13,7 +13,7 @@ from config import ScoringConfig
 
 from api.config import (
     _existing_columns_cache, _existing_columns_lock,
-    _photo_tags_available, _photo_tags_lock,
+    _photo_tags_available, _photo_tags_lock, PHOTO_TAGS_CACHE_TTL,
     _count_cache, _count_cache_lock, COUNT_CACHE_TTL,
     is_multi_user_enabled, get_user_directories, _FULL_CONFIG,
 )
@@ -126,21 +126,45 @@ def get_existing_columns(conn=None):
     return _existing_columns_cache
 
 
+def invalidate_existing_columns_cache():
+    """Clear the existing-columns cache.
+
+    Call after ``init_database()`` if it added columns (e.g. lifespan
+    startup, or if a deploy hot-runs schema migrations). Without this,
+    queries continue to use the stale PHOTO_OPTIONAL_COLS subset and
+    miss newly-added columns until the API restarts.
+    """
+    global _existing_columns_cache
+    with _existing_columns_lock:
+        _existing_columns_cache = None
+
+
 def is_photo_tags_available(conn=None):
     """Check if the photo_tags lookup table exists and has data.
 
-    Cache-warm path (after first call) returns instantly without touching
+    Result is TTL-cached (5 min by default; see ``PHOTO_TAGS_CACHE_TTL``).
+    Without a TTL the cache stayed permanently False on a fresh DB even
+    after the operator ran ``database.py --migrate-tags`` while the API
+    was up — the lookup table would be populated but the API would
+    continue using the slow LIKE fallback until restart.
+
+    Cache-warm path (within TTL) returns instantly without touching
     ``conn`` — safe to call from an async context with an aiosqlite
-    Connection as long as the lifespan startup warmed the cache.
+    Connection as long as the lifespan startup or a prior call warmed it.
     """
     global _photo_tags_available
+    from api import config as _config_mod
+    import time
+    now = time.monotonic()
     with _photo_tags_lock:
-        if _photo_tags_available is not None:
+        if (_photo_tags_available is not None
+                and (now - _config_mod._photo_tags_checked_at) < PHOTO_TAGS_CACHE_TTL):
             return _photo_tags_available
 
-    # Cold path: only fire if a sync sqlite3.Connection was provided, or open
-    # a fresh one. Passing an aiosqlite Connection here would be a programmer
-    # error — refuse rather than emit a coroutine-never-awaited warning.
+    # Cold path / TTL expired: only fire if a sync sqlite3.Connection was
+    # provided, or open a fresh one. Passing an aiosqlite Connection here
+    # would be a programmer error — refuse rather than emit a
+    # coroutine-never-awaited warning.
     if conn is not None and not isinstance(conn, sqlite3.Connection):
         # Fall through to open our own sync connection.
         conn = None
@@ -162,6 +186,7 @@ def is_photo_tags_available(conn=None):
 
     with _photo_tags_lock:
         _photo_tags_available = result
+        _config_mod._photo_tags_checked_at = now
     return _photo_tags_available
 
 

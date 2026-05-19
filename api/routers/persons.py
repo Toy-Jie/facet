@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api.auth import CurrentUser, require_edition, require_authenticated
-from api.config import VIEWER_CONFIG
+from api.config import VIEWER_CONFIG, _stats_cache
 from api.database import get_db
 from api.db_helpers import reassign_faces_to_person
 
@@ -117,6 +117,7 @@ def rename_person(
     with get_db() as conn:
         conn.execute("UPDATE persons SET name = ? WHERE id = ?", (name or None, person_id))
         conn.commit()
+    _stats_cache.clear()
     return {"success": True, "name": name or f"Person {person_id}"}
 
 
@@ -161,6 +162,7 @@ def _do_merge(source_id: int, target_id: int):
             conn.execute("DELETE FROM persons WHERE id = ?", (source_id,))
 
             conn.commit()
+            _stats_cache.clear()
 
             return {"success": True, "new_count": count}
         except HTTPException:
@@ -208,6 +210,7 @@ def merge_persons_batch(
                 body.source_ids,
             )
             conn.commit()
+            _stats_cache.clear()
 
             return {
                 "success": True,
@@ -238,6 +241,7 @@ def delete_person(
             conn.execute("DELETE FROM persons WHERE id = ?", (person_id,))
 
             conn.commit()
+            _stats_cache.clear()
 
             return {"success": True}
         except sqlite3.Error:
@@ -271,6 +275,7 @@ def delete_persons_batch(
             )
 
             conn.commit()
+            _stats_cache.clear()
 
             return {"success": True, "deleted_count": len(body.person_ids)}
         except sqlite3.Error:
@@ -331,6 +336,7 @@ def api_create_person(
                 face_count = result["face_count"]
 
             conn.commit()
+            _stats_cache.clear()
             return {"id": person_id, "name": name, "face_count": face_count}
         except LookupError as e:
             conn.rollback()
@@ -363,6 +369,7 @@ def api_assign_faces_batch(
             deleted_persons = result["deleted_persons"]
 
             conn.commit()
+            _stats_cache.clear()
             return {
                 "success": True,
                 "person_id": person_id,
