@@ -10,13 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.auth import CurrentUser, get_optional_user, require_edition
 from api.config import _FULL_CONFIG
-from api.database import get_db
+from api.database import get_async_db, get_db
 from api.db_helpers import (
     build_photo_select_columns,
     sanitize_float_values,
     get_visibility_clause,
     split_photo_tags,
-    attach_person_data,
+    attach_person_data_async,
     format_date,
 )
 
@@ -146,11 +146,11 @@ def get_capsules(
 
 
 @router.get("/api/capsules/{capsule_id}/photos")
-def get_capsule_photos(
+async def get_capsule_photos(
     capsule_id: str,
     user: Optional[CurrentUser] = Depends(get_optional_user),
 ):
-    """Return the curated photo list for a specific capsule."""
+    """Return the curated photo list for a specific capsule (async)."""
     user_id = user.user_id if user else None
     capsule = _resolve_capsule(capsule_id, user_id)
 
@@ -158,10 +158,10 @@ def get_capsule_photos(
     if not paths:
         return {"photos": [], "capsule": _capsule_summary(capsule)}
 
-    with get_db() as conn:
-        try:
-            # Fetch full photo data for these paths
-            select_cols = build_photo_select_columns(conn, user_id)
+    try:
+        async with get_async_db() as conn:
+            # build_photo_select_columns(conn=None) hits the lifespan-warmed cache.
+            select_cols = build_photo_select_columns(conn=None, user_id=user_id)
             inner_cols = ", ".join(select_cols)
 
             vis_sql, vis_params = get_visibility_clause(user_id)
@@ -173,7 +173,9 @@ def get_capsule_photos(
                 WHERE path IN ({placeholders})
                   AND {vis_sql}
             """
-            rows = conn.execute(query, paths + vis_params).fetchall()
+            cur = await conn.execute(query, paths + vis_params)
+            rows = await cur.fetchall()
+            await cur.close()
 
             from api.config import VIEWER_CONFIG
 
@@ -183,7 +185,7 @@ def get_capsule_photos(
             for photo in photos:
                 photo["date_formatted"] = format_date(photo.get("date_taken"))
 
-            attach_person_data(photos, conn)
+            await attach_person_data_async(photos, conn)
             sanitize_float_values(photos)
 
             # Preserve the original path ordering
@@ -195,11 +197,11 @@ def get_capsule_photos(
                 "capsule": _capsule_summary(capsule),
             }
 
-        except HTTPException:
-            raise
-        except sqlite3.Error:
-            logger.exception("Failed to fetch capsule photos for %s", capsule_id)
-            raise HTTPException(status_code=500, detail="Internal server error")
+    except HTTPException:
+        raise
+    except sqlite3.Error:
+        logger.exception("Failed to fetch capsule photos for %s", capsule_id)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/capsules/{capsule_id}/save-album")

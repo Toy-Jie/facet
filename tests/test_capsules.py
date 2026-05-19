@@ -106,27 +106,42 @@ class TestCapsulePhotos:
 
     def test_capsule_photos_returns_photos(self, client):
         """Valid capsule returns its photos in path order."""
+        from contextlib import asynccontextmanager
         capsule = _make_capsule("c1", paths=["/x.jpg", "/y.jpg"])
         cache_entry = {"data": [capsule], "ts": time.time()}
 
-        mock_conn = mock.MagicMock()
         photo_rows = [
             {"path": "/y.jpg", "tags": "", "date_taken": "2024:01:01 12:00:00", "filename": "y.jpg"},
             {"path": "/x.jpg", "tags": "", "date_taken": "2024:01:02 12:00:00", "filename": "x.jpg"},
         ]
 
+        # Async conn mock — /api/capsules/{id}/photos now uses get_async_db.
+        class _Cursor:
+            async def fetchall(self): return photo_rows
+            async def fetchone(self): return photo_rows[0]
+            async def close(self): pass
+
+        class _Conn:
+            async def execute(self, *a, **kw): return _Cursor()
+
+        @asynccontextmanager
+        async def _async_cm():
+            yield _Conn()
+
+        async def _async_noop(*args, **kwargs):
+            return None
+
         with (
             mock.patch(f"{_ROUTER_MODULE}._capsule_cache", {(None, "", ""): cache_entry}),
-            mock.patch(f"{_ROUTER_MODULE}.get_db", return_value=nullcontext(mock_conn)),
+            mock.patch(f"{_ROUTER_MODULE}.get_async_db", _async_cm),
             mock.patch(f"{_ROUTER_MODULE}.build_photo_select_columns", return_value=["path", "tags", "date_taken"]),
             mock.patch(f"{_ROUTER_MODULE}.get_visibility_clause", return_value=("1=1", [])),
             mock.patch(f"{_ROUTER_MODULE}.split_photo_tags", return_value=photo_rows),
-            mock.patch(f"{_ROUTER_MODULE}.attach_person_data"),
+            mock.patch(f"{_ROUTER_MODULE}.attach_person_data_async", _async_noop),
             mock.patch(f"{_ROUTER_MODULE}.sanitize_float_values"),
             mock.patch(f"{_ROUTER_MODULE}.format_date", return_value="01/01/2024 12:00"),
             mock.patch("api.config.VIEWER_CONFIG", {"display": {"tags_per_photo": 10}}),
         ):
-            mock_conn.execute.return_value.fetchall.return_value = photo_rows
             resp = client.get("/api/capsules/c1/photos")
 
         assert resp.status_code == 200

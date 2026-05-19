@@ -13,11 +13,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.auth import CurrentUser, get_optional_user
-from api.database import get_db
+from api.database import get_async_db
 from api.db_helpers import (
     build_photo_select_columns, sanitize_float_values,
     get_visibility_clause, get_photos_from_clause,
-    split_photo_tags, attach_person_data, format_date,
+    split_photo_tags, attach_person_data_async, format_date,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def _get_top_per_year():
 
 
 @router.get("/api/memories/check")
-def check_memories(
+async def check_memories(
     user: Optional[CurrentUser] = Depends(get_optional_user),
     date_str: Optional[str] = Query(None, alias="date"),
 ):
@@ -50,8 +50,8 @@ def check_memories(
     month_day = target.strftime("%m-%d")
     target_year = target.strftime("%Y")
 
-    with get_db() as conn:
-        try:
+    try:
+        async with get_async_db() as conn:
             user_id = user.user_id if user else None
             vis_sql, vis_params = get_visibility_clause(user_id)
             from_clause, from_params = get_photos_from_clause(user_id)
@@ -65,22 +65,24 @@ def check_memories(
                 LIMIT 1
             """
             params = from_params + [month_day, target_year] + vis_params
-            row = conn.execute(query, params).fetchone()
+            cur = await conn.execute(query, params)
+            row = await cur.fetchone()
+            await cur.close()
             return {'has_memories': row is not None}
 
-        except HTTPException:
-            raise
-        except sqlite3.Error:
-            logger.exception("Failed to check memories")
-            return {'has_memories': False}
+    except HTTPException:
+        raise
+    except sqlite3.Error:
+        logger.exception("Failed to check memories")
+        return {'has_memories': False}
 
 
 @router.get("/api/memories")
-def get_memories(
+async def get_memories(
     user: Optional[CurrentUser] = Depends(get_optional_user),
     date_str: Optional[str] = Query(None, alias="date"),
 ):
-    """Return top photos from the same day in previous years.
+    """Return top photos from the same day in previous years (async).
 
     Groups by year, returns up to TOP_PER_YEAR photos per year sorted by
     aggregate score descending.  Uses ROW_NUMBER() to limit rows at the
@@ -98,12 +100,12 @@ def get_memories(
     month_day = target.strftime("%m-%d")
     target_year = target.strftime("%Y")
 
-    with get_db() as conn:
-        try:
+    try:
+        async with get_async_db() as conn:
             user_id = user.user_id if user else None
             vis_sql, vis_params = get_visibility_clause(user_id)
 
-            select_cols = build_photo_select_columns(conn, user_id)
+            select_cols = build_photo_select_columns(conn=None, user_id=user_id)
 
             from_clause, from_params = get_photos_from_clause(user_id)
 
@@ -136,7 +138,9 @@ def get_memories(
                 LIMIT ?
             """
             params = from_params + [month_day, target_year] + vis_params + [top_per_year, safety_limit]
-            rows = conn.execute(query, params).fetchall()
+            cur = await conn.execute(query, params)
+            rows = await cur.fetchall()
+            await cur.close()
 
             # Group by year
             from api.config import VIEWER_CONFIG
@@ -146,7 +150,7 @@ def get_memories(
             for photo in all_photos:
                 photo['date_formatted'] = format_date(photo.get('date_taken'))
 
-            attach_person_data(all_photos, conn)
+            await attach_person_data_async(all_photos, conn)
 
             # Build year groups from the pre-limited results
             year_groups: dict[str, dict] = {}
@@ -176,8 +180,8 @@ def get_memories(
                 'date': target.isoformat(),
             }
 
-        except HTTPException:
-            raise
-        except sqlite3.Error:
-            logger.exception("Failed to fetch memories")
-            raise HTTPException(status_code=500, detail="Internal server error")
+    except HTTPException:
+        raise
+    except sqlite3.Error:
+        logger.exception("Failed to fetch memories")
+        raise HTTPException(status_code=500, detail="Internal server error")

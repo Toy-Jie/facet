@@ -1,6 +1,6 @@
 """Tests for the memories endpoint (api/routers/memories.py)."""
 
-from contextlib import nullcontext
+from contextlib import asynccontextmanager, nullcontext
 from unittest import mock
 
 import pytest
@@ -13,6 +13,38 @@ from api import create_app
 def client():
     app = create_app()
     return TestClient(app)
+
+
+def _async_cm(conn):
+    """Async context-manager factory; passes the mock conn through."""
+    @asynccontextmanager
+    async def _ctx():
+        yield conn
+    return _ctx
+
+
+def _make_async_conn(rows):
+    """Build a mock async conn whose execute returns a cursor with these rows."""
+    class _Cursor:
+        async def fetchall(self):
+            return rows
+
+        async def fetchone(self):
+            return rows[0] if rows else None
+
+        async def close(self):
+            pass
+
+    class _Conn:
+        async def execute(self, *a, **kw):
+            return _Cursor()
+
+    return _Conn()
+
+
+async def _async_noop(*args, **kwargs):
+    """No-op coroutine used to mock async helpers like attach_person_data_async."""
+    return None
 
 
 def _make_photo_row(path, date_taken, aggregate, tags=""):
@@ -34,13 +66,11 @@ class TestMemoriesEndpoint:
     def test_invalid_date_format_returns_400(self, client):
         """Non-ISO date string should return 400."""
         with (
-            mock.patch("api.routers.memories.get_db") as mock_get_conn,
+            mock.patch("api.routers.memories.get_async_db", _async_cm(_make_async_conn([]))),
             mock.patch("api.routers.memories.get_visibility_clause", return_value=("1=1", [])),
             mock.patch("api.routers.memories.build_photo_select_columns", return_value=["path", "date_taken", "aggregate", "tags"]),
             mock.patch("api.routers.memories.get_photos_from_clause", return_value=("photos", [])),
         ):
-            mock_conn = mock.MagicMock()
-            mock_get_conn.return_value = nullcontext(mock_conn)
             resp = client.get("/api/memories", params={"date": "not-a-date"})
 
         assert resp.status_code == 400
@@ -52,12 +82,12 @@ class TestMemoriesEndpoint:
         mock_conn.execute.return_value.fetchall.return_value = []
 
         with (
-            mock.patch("api.routers.memories.get_db", return_value=nullcontext(mock_conn)),
+            mock.patch("api.routers.memories.get_async_db", _async_cm(_make_async_conn([]))),
             mock.patch("api.routers.memories.get_visibility_clause", return_value=("1=1", [])),
             mock.patch("api.routers.memories.build_photo_select_columns", return_value=["path", "date_taken", "aggregate", "tags"]),
             mock.patch("api.routers.memories.get_photos_from_clause", return_value=("photos", [])),
             mock.patch("api.routers.memories.split_photo_tags", return_value=[]),
-            mock.patch("api.routers.memories.attach_person_data"),
+            mock.patch("api.routers.memories.attach_person_data_async", _async_noop),
         ):
             resp = client.get("/api/memories", params={"date": "2025-03-14"})
 
@@ -74,12 +104,12 @@ class TestMemoriesEndpoint:
         mock_conn.execute.return_value.fetchall.return_value = []
 
         with (
-            mock.patch("api.routers.memories.get_db", return_value=nullcontext(mock_conn)),
+            mock.patch("api.routers.memories.get_async_db", _async_cm(_make_async_conn([]))),
             mock.patch("api.routers.memories.get_visibility_clause", return_value=("1=1", [])),
             mock.patch("api.routers.memories.build_photo_select_columns", return_value=["path", "date_taken", "aggregate", "tags"]),
             mock.patch("api.routers.memories.get_photos_from_clause", return_value=("photos", [])),
             mock.patch("api.routers.memories.split_photo_tags", return_value=[]),
-            mock.patch("api.routers.memories.attach_person_data"),
+            mock.patch("api.routers.memories.attach_person_data_async", _async_noop),
         ):
             resp = client.get("/api/memories")
 
@@ -101,12 +131,12 @@ class TestMemoriesEndpoint:
         ]
 
         with (
-            mock.patch("api.routers.memories.get_db", return_value=nullcontext(mock_conn)),
+            mock.patch("api.routers.memories.get_async_db", _async_cm(_make_async_conn([]))),
             mock.patch("api.routers.memories.get_visibility_clause", return_value=("1=1", [])),
             mock.patch("api.routers.memories.build_photo_select_columns", return_value=["path", "date_taken", "aggregate", "tags"]),
             mock.patch("api.routers.memories.get_photos_from_clause", return_value=("photos", [])),
             mock.patch("api.routers.memories.split_photo_tags", return_value=photos),
-            mock.patch("api.routers.memories.attach_person_data"),
+            mock.patch("api.routers.memories.attach_person_data_async", _async_noop),
             mock.patch("api.routers.memories.format_date", return_value="14/03/2023 10:00"),
             mock.patch("api.routers.memories.sanitize_float_values"),
             mock.patch("api.config.VIEWER_CONFIG", {"display": {"tags_per_photo": 10}}),
@@ -132,12 +162,12 @@ class TestMemoriesEndpoint:
         mock_conn.execute.return_value.fetchall.return_value = []
 
         with (
-            mock.patch("api.routers.memories.get_db", return_value=nullcontext(mock_conn)),
+            mock.patch("api.routers.memories.get_async_db", _async_cm(_make_async_conn([]))),
             mock.patch("api.routers.memories.get_visibility_clause", return_value=("1=1", [])),
             mock.patch("api.routers.memories.build_photo_select_columns", return_value=["path", "date_taken", "aggregate", "tags"]),
             mock.patch("api.routers.memories.get_photos_from_clause", return_value=("photos", [])),
             mock.patch("api.routers.memories.split_photo_tags", return_value=[]),
-            mock.patch("api.routers.memories.attach_person_data"),
+            mock.patch("api.routers.memories.attach_person_data_async", _async_noop),
         ):
             resp = client.get("/api/memories", params={"date": "2025-06-15"})
 
@@ -158,12 +188,12 @@ class TestMemoriesEndpoint:
         ]
 
         with (
-            mock.patch("api.routers.memories.get_db", return_value=nullcontext(mock_conn)),
+            mock.patch("api.routers.memories.get_async_db", _async_cm(_make_async_conn([]))),
             mock.patch("api.routers.memories.get_visibility_clause", return_value=("1=1", [])),
             mock.patch("api.routers.memories.build_photo_select_columns", return_value=["path"]),
             mock.patch("api.routers.memories.get_photos_from_clause", return_value=("photos", [])),
             mock.patch("api.routers.memories.split_photo_tags", return_value=photos),
-            mock.patch("api.routers.memories.attach_person_data"),
+            mock.patch("api.routers.memories.attach_person_data_async", _async_noop),
             mock.patch("api.routers.memories.format_date", return_value="14/03/2023"),
             mock.patch("api.routers.memories.sanitize_float_values"),
             mock.patch("api.config.VIEWER_CONFIG", {"display": {"tags_per_photo": 10}}),
