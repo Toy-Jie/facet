@@ -107,6 +107,31 @@ PYIQA_MODELS = {
         'description': 'LIQE - Quality score + distortion type diagnosis',
         'has_distortion': True,
     },
+    # Q-Align (LLM-based IQA, q-future/one-align — mPLUG-Owl2 base).
+    # Three variants by quantisation; the 4-bit fits an 8GB card, the 8-bit
+    # fits 12-14GB, full precision wants 16GB+. The score is on the AVA MOS
+    # scale (1-5 typically), so it benchmarks naturally against AVA.txt.
+    'qalign': {
+        'pyiqa_id': 'qalign',
+        'vram_gb': 14,
+        'lower_better': False,
+        'score_range': (1, 5),
+        'description': 'Q-Align — full precision (16GB+ VRAM, ~13.6GB weights)',
+    },
+    'qalign_8bit': {
+        'pyiqa_id': 'qalign_8bit',
+        'vram_gb': 8,
+        'lower_better': False,
+        'score_range': (1, 5),
+        'description': 'Q-Align — 8-bit quantised (~12-14GB VRAM, ~7GB weights)',
+    },
+    'qalign_4bit': {
+        'pyiqa_id': 'qalign_4bit',
+        'vram_gb': 5,
+        'lower_better': False,
+        'score_range': (1, 5),
+        'description': 'Q-Align — 4-bit quantised (~6-8GB VRAM, ~4GB weights)',
+    },
 }
 
 

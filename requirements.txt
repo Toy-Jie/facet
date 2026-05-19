@@ -31,8 +31,10 @@ insightface>=0.7.0
 #   onnxruntime-gpu>=1.17.0       # GPU acceleration for CUDA 12.x / 13.x
 #   onnxruntime-gpu>=1.15.0,<1.18 # GPU acceleration for CUDA 11.8
 
-# Quality Assessment (PyIQA models: TOPIQ, HyperIQA, DBCNN, MUSIQ)
-pyiqa>=0.1.10
+# Quality Assessment (PyIQA models: TOPIQ, HyperIQA, DBCNN, MUSIQ).
+# >=0.1.11 also exposes Q-Align (qalign / qalign_8bit / qalign_4bit) — see
+# models/pyiqa_scorer.py PYIQA_MODELS for the registered variants.
+pyiqa>=0.1.11
 
 # Scientific Computing
 numpy>=1.24.0
