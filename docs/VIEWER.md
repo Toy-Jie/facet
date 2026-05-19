@@ -947,6 +947,7 @@ The `/api/download/options` endpoint detects companion RAW files automatically a
 |----------|-------------|
 | `GET /health` | Server health check |
 | `GET /ready` | Server readiness check |
+| `GET /metrics` | Prometheus-format metrics: photo counts, embedding coverage, DB size, process memory |
 
 ### Internationalization
 

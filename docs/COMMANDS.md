@@ -68,6 +68,7 @@ These commands update specific metrics without full photo reprocessing.
 | `python facet.py --recompute-composition-cpu` | Recompute composition (rule-based, CPU) |
 | `python facet.py --recompute-composition-gpu` | Rescan with SAMP-Net (GPU required) |
 | `python facet.py --recompute-iqa` | Recompute supplementary IQA metrics (TOPIQ IAA, NR-Face, LIQE) from thumbnails |
+| `python facet.py --upgrade-db` | Backfill all metric columns on an older DB by running recompute-iqa / saliency / composition-cpu / burst / blinks / average in sequence. Each step is idempotent. |
 | `python facet.py --recompute-blinks` | Recompute blink detection |
 | `python facet.py --recompute-burst` | Recompute burst detection groups |
 | `python facet.py --detect-duplicates` | Detect duplicate photos using pHash comparison |

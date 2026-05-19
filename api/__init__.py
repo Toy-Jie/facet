@@ -70,8 +70,36 @@ async def lifespan(app: FastAPI):
                 logger.warning("Failed to pre-compute capsules", exc_info=True)
         threading.Thread(target=_precompute_capsules, daemon=True).start()
 
+    # WAL checkpoint thread — periodically truncates the WAL to keep it from
+    # ballooning on long-running deployments. Skip if interval <= 0.
+    wal_minutes = int(_FULL_CONFIG.get("performance", {}).get("wal_checkpoint_minutes", 30))
+    wal_stop = None
+    if wal_minutes > 0:
+        import threading
+        wal_stop = threading.Event()
+
+        def _wal_checkpoint_loop():
+            from api.database import get_db_connection
+            import sqlite3 as _sqlite3
+            interval = max(60, wal_minutes * 60)
+            while not wal_stop.wait(interval):
+                try:
+                    conn = get_db_connection()
+                    try:
+                        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        conn.commit()
+                    finally:
+                        conn.close()
+                except _sqlite3.Error:
+                    logger.warning("WAL checkpoint failed", exc_info=True)
+
+        threading.Thread(target=_wal_checkpoint_loop, daemon=True, name="wal-checkpoint").start()
+        logger.info("WAL checkpoint thread enabled (every %d min)", wal_minutes)
+
     logger.info("Facet API ready")
     yield
+    if wal_stop is not None:
+        wal_stop.set()
     # Shutdown: clean up plugin thread pool
     from plugins import get_plugin_manager
     _plugin_mgr = get_plugin_manager()

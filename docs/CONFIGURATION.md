@@ -1256,7 +1256,8 @@ Database performance settings.
 {
   "performance": {
     "mmap_size_mb": 12288,
-    "cache_size_mb": 64
+    "cache_size_mb": 64,
+    "wal_checkpoint_minutes": 30
   }
 }
 ```
@@ -1265,6 +1266,7 @@ Database performance settings.
 |---------|---------|-------------|
 | `mmap_size_mb` | `12288` | SQLite memory-mapped I/O size |
 | `cache_size_mb` | `64` | SQLite cache size |
+| `wal_checkpoint_minutes` | `30` | Interval in minutes for the viewer's background `PRAGMA wal_checkpoint(TRUNCATE)`. Prevents WAL bloat on long-running deployments. Set to `0` to disable. |
 
 ---
 

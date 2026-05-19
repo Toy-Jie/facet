@@ -212,6 +212,10 @@ Configuration:
                         help='Backfill TOPIQ quality scores from stored thumbnails (requires GPU)')
     db_group.add_argument('--recompute-iqa', action='store_true',
                         help='Recompute supplementary IQA metrics (TOPIQ IAA, NR-Face, LIQE) from stored thumbnails')
+    db_group.add_argument('--upgrade-db', action='store_true',
+                        help='Run all metric backfills (recompute-iqa, recompute-saliency, recompute-composition-cpu, '
+                             'recompute-burst, recompute-blinks, recompute-average) in one pass. '
+                             'Idempotent — re-runs are safe.')
     db_group.add_argument('--compute-recommendations', action='store_true',
                         help='Analyze database and show scoring recommendations')
     db_group.add_argument('--apply-recommendations', action='store_true',
@@ -514,6 +518,36 @@ Configuration:
     if args.recompute_blinks:
         scorer = Facet(db_path=args.db, config_path=args.config, lightweight=True)
         scorer.recompute_blink_detection()
+        exit()
+
+    # --upgrade-db: run the full backfill chain in dependency order by
+    # re-invoking this script with each individual flag. Subprocess isolation
+    # keeps model loads and GPU memory clean between steps. Idempotent — each
+    # underlying recompute skips rows already populated.
+    if args.upgrade_db:
+        import subprocess
+        logger.info("=" * 60)
+        logger.info("Upgrading DB — running backfill chain")
+        logger.info("=" * 60)
+        steps = [
+            ("--recompute-iqa", "TOPIQ IAA + NR-Face + LIQE"),
+            ("--recompute-saliency", "Subject saliency (BiRefNet)"),
+            ("--recompute-composition-cpu", "Rule-based composition"),
+            ("--recompute-burst", "Burst detection grouping"),
+            ("--recompute-blinks", "Blink detection from landmarks"),
+            ("--recompute-average", "Aggregate scores"),
+        ]
+        cmd_base = [sys.executable, os.path.abspath(__file__)]
+        if args.db:
+            cmd_base += ["--db", args.db]
+        if args.config:
+            cmd_base += ["--config", args.config]
+        for flag, label in steps:
+            logger.info("--- %s ---", label)
+            result = subprocess.run(cmd_base + [flag])
+            if result.returncode != 0:
+                logger.warning("Step %s exited with code %d; continuing", flag, result.returncode)
+        logger.info("Upgrade complete.")
         exit()
 
     # Extract faces mode (needs GPU for face analysis)
