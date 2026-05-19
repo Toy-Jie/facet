@@ -247,8 +247,111 @@ def run_doctor(config_path=None, db_path=None, simulate_gpu=None, simulate_vram=
             _ok("Photos", f"{count:,}")
         except Exception as e:
             _warn("Database query", str(e))
+
+        # --- Fast-path Availability ---
+        check_fast_paths(db_path)
     else:
         _info("Database", f"{db_path} not found (will be created on first scan)")
+
+
+def check_fast_paths(db_path):
+    """Probe each perf-critical fast path against the DB on disk.
+
+    Reports the same fast paths /metrics exposes (sqlite-vec, FTS5,
+    photo_tags, stats_cache). This is the one-command verification an
+    operator can run before deploying — answers "is the production
+    deploy going to actually use the intended fast paths?" without
+    starting the API.
+    """
+    _section("Fast-path Availability")
+
+    # sqlite-vec extension installable
+    try:
+        import sqlite_vec
+        vec_version = getattr(sqlite_vec, "__version__", "unknown")
+        _ok("sqlite-vec installable", f"v{vec_version}")
+        sqlite_vec_module = sqlite_vec
+    except ImportError:
+        _warn("sqlite-vec installable", "package not installed — /api/search will use NumPy fallback")
+        sqlite_vec_module = None
+
+    # Direct DB probes — use a fresh connection so we measure on-disk state,
+    # not anything cached by a running API.
+    try:
+        with sqlite3.connect(db_path) as conn:
+            # photos_vec table populated?
+            try:
+                if sqlite_vec_module is not None:
+                    conn.enable_load_extension(True)
+                    sqlite_vec_module.load(conn)
+                    conn.enable_load_extension(False)
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='photos_vec'"
+                ).fetchone()
+                if row and row[0]:
+                    n = conn.execute("SELECT COUNT(*) FROM photos_vec").fetchone()[0]
+                    if n > 0:
+                        _ok("photos_vec populated", f"{n:,} embeddings")
+                    else:
+                        _warn("photos_vec populated", "table exists but empty — run database.py --populate-vec")
+                else:
+                    _warn("photos_vec populated", "table missing — run database.py --populate-vec")
+            except sqlite3.OperationalError as e:
+                _warn("photos_vec query", str(e))
+
+            # photos_fts table indexed?
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='photos_fts'"
+                ).fetchone()
+                if row and row[0]:
+                    n = conn.execute("SELECT COUNT(*) FROM photos_fts").fetchone()[0]
+                    _ok("photos_fts indexed", f"{n:,} rows")
+                else:
+                    _warn("photos_fts indexed", "table missing — run database.py --rebuild-fts")
+            except sqlite3.OperationalError as e:
+                _warn("photos_fts query", str(e))
+
+            # photo_tags lookup table?
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='photo_tags'"
+                ).fetchone()
+                if row and row[0]:
+                    n = conn.execute("SELECT COUNT(*) FROM photo_tags").fetchone()[0]
+                    if n > 0:
+                        _ok("photo_tags populated", f"{n:,} entries")
+                    else:
+                        _warn(
+                            "photo_tags populated",
+                            "table exists but empty — run database.py --migrate-tags",
+                        )
+                else:
+                    _warn("photo_tags populated", "table missing — run database.py --migrate-tags")
+            except sqlite3.OperationalError as e:
+                _warn("photo_tags query", str(e))
+
+            # stats_cache age — read the table directly instead of the
+            # in-memory cache (we're not in the API process).
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*), MAX(strftime('%s','now') - strftime('%s', updated_at)) "
+                    "FROM stats_cache"
+                ).fetchone()
+                if row and row[0]:
+                    n, max_age = row[0], row[1] or 0
+                    hours = max_age / 3600.0
+                    if hours > 5:
+                        _info("stats_cache",
+                              f"{n} entries, oldest {hours:.1f}h (stale — run database.py --refresh-stats)")
+                    else:
+                        _ok("stats_cache", f"{n} entries, oldest {hours:.1f}h")
+                else:
+                    _info("stats_cache", "empty — run database.py --refresh-stats")
+            except sqlite3.OperationalError:
+                _info("stats_cache", "table missing — run database.py --refresh-stats")
+    except sqlite3.Error as e:
+        _warn("Fast-path probe", str(e))
 
 
 def main():
