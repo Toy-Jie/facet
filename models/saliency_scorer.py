@@ -50,7 +50,10 @@ class SaliencyScorer:
             min_subject_pixels: Minimum pixels to consider a subject detected (default: 50)
         """
         _ensure_imports()
-        self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
+        if device is None:
+            from utils.device import get_device
+            device = get_device()
+        self.device = device
         self.model_name = model_name or self.DEFAULT_MODEL
         self.resolution = resolution or self.DEFAULT_RESOLUTION
         self.mask_threshold = mask_threshold if mask_threshold is not None else self.DEFAULT_MASK_THRESHOLD

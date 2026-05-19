@@ -5,6 +5,12 @@
 ```bash
 git clone https://github.com/ncoevoet/facet.git && cd facet
 bash install.sh          # auto-detects GPU, creates venv, installs everything
+
+# Activate the venv that install.sh created — the install script can't do this
+# for you because it runs in a subshell.
+source venv/bin/activate         # macOS/Linux
+# .\venv\Scripts\Activate.ps1    # Windows PowerShell
+
 python facet.py --doctor # verify your setup
 ```
 
@@ -219,10 +225,19 @@ Models are cached in standard locations (`~/.cache/` or `~/.insightface/`).
 ```bash
 # Only needed for development or custom builds
 cd client
-npm ci
+npm install
 npx ng build    # Production build → client/dist/
 npx ng serve    # Dev server on http://localhost:4200 (proxies API to :5000)
 ```
+
+> **`npm audit` warnings:** Angular pulls in a deep transitive dependency tree
+> and `npm audit` will report findings most of which are in build-time dev
+> dependencies that never reach the browser. Review the list before running
+> `npm audit fix` — it can silently downgrade or remove packages.
+
+> **macOS port 5000:** ControlCenter's AirPlay Receiver listens on 5000 by
+> default. Start the viewer with `python viewer.py --port 5001` (or set the
+> `PORT` env var) to avoid the conflict.
 
 ### SAMP-Net Manual Download
 

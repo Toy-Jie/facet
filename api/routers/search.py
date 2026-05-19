@@ -76,7 +76,8 @@ def _load_text_encoder():
     config.check_vram_profile_compatibility(verbose=False)
     clip_config = config.get_clip_config()
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    from utils.device import get_device
+    device = get_device()
     backend = clip_config.get('backend', 'open_clip')
     model_name = clip_config.get('model_name')
 

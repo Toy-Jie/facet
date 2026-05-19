@@ -432,7 +432,8 @@ class Facet:
             _load_image_modules()
             _load_gpu_modules()
 
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            from utils.device import get_device
+            self.device = get_device()
             logger.info("Using %s", self.device)
 
             # Check VRAM compatibility with configured profile

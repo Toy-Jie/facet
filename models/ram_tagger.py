@@ -74,7 +74,8 @@ class RAMTagger:
         self.scoring_config = scoring_config
         self.model = None
         self.transform = None
-        self.device = 'cuda'
+        from utils.device import get_device
+        self.device = get_device()
 
         # Build tag mapping from config vocabulary to RAM++ tags
         self.tag_mapping = {}

@@ -52,8 +52,9 @@ class ModelManager:
             config: ScoringConfig instance with model settings
         """
         self.config = config
-        _torch = _ensure_torch()
-        self.device = 'cuda' if _torch.cuda.is_available() else 'cpu'
+        _ensure_torch()
+        from utils.device import get_device
+        self.device = get_device()
         self.models = {}
         self.profile = None
 

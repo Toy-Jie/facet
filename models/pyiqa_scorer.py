@@ -151,7 +151,10 @@ class PyIQAScorer:
 
         self.model_name = model_name
         self.model_info = PYIQA_MODELS[model_name]
-        self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
+        if device is None:
+            from utils.device import get_device
+            device = get_device()
+        self.device = device
         self.model = None
         self._loaded = False
 

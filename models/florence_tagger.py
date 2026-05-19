@@ -75,7 +75,8 @@ class FlorenceTagger:
         self.scoring_config = scoring_config
         self.model = None
         self.processor = None
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        from utils.device import get_device
+        self.device = get_device()
         self.batch_size = model_config.get('vlm_batch_size', 4)
         self.max_new_tokens = model_config.get('max_new_tokens', 256)
 

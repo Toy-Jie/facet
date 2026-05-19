@@ -56,7 +56,7 @@ Multiple mappings are supported (first match wins):
 The viewer uses an Angular SPA that must be built before deployment. The FastAPI server serves the pre-built files from `client/dist/client/browser/`.
 
 ```bash
-cd client && npm ci && npx ng build && cd ..
+cd client && npm install && npx ng build && cd ..
 ```
 
 This requires Node.js 20+ at build time only. The built files in `client/dist/` are static assets — Node.js is not needed on the server at runtime.
@@ -113,7 +113,7 @@ The "Find Similar" feature won't work on the exported database (CLIP embeddings 
 On the scoring machine, build the Angular client first:
 
 ```bash
-cd client && npm ci && npx ng build && cd ..
+cd client && npm install && npx ng build && cd ..
 ```
 
 Then sync the viewer and exported database to the NAS:

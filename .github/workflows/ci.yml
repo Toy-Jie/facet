@@ -36,8 +36,8 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: client/package-lock.json
-      - run: npm ci
+          cache-dependency-path: client/package.json
+      - run: npm install --no-audit --no-fund
       - run: npm test -- --ci --passWithNoTests
 
   lint:
@@ -54,8 +54,8 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: client/package-lock.json
-      - run: npm ci
+          cache-dependency-path: client/package.json
+      - run: npm install --no-audit --no-fund
         working-directory: client
       - run: npx ng lint
         working-directory: client

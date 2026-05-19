@@ -186,7 +186,7 @@ if [[ "$SKIP_CLIENT" -eq 0 ]]; then
         if command -v node &>/dev/null && command -v npm &>/dev/null; then
             node_version=$(node --version)
             info "Building Angular frontend (Node $node_version)..."
-            (cd client && npm ci && npx ng build)
+            (cd client && npm install --no-audit --no-fund && npx ng build)
             ok "Angular client built"
         else
             warn "Node.js not found — skipping Angular build"
@@ -215,6 +215,10 @@ echo -e "${GREEN}  Installation complete!${NC}"
 echo -e "${GREEN}══════════════════════════════════${NC}"
 echo ""
 echo "  Next steps:"
+echo ""
+echo "    # Activate the venv (install.sh ran in a subshell — your shell doesn't see it)"
+echo "    source venv/bin/activate         # macOS/Linux"
+echo "    # .\\venv\\Scripts\\Activate.ps1   # Windows PowerShell"
 echo ""
 echo "    # Check your setup"
 echo "    python facet.py --doctor"

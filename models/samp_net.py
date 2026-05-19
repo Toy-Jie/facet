@@ -857,11 +857,19 @@ class SAMPNetScorer:
             urllib.request.urlretrieve(SAMPNET_WEIGHTS_URL, self.model_path)
             logger.info("SAMP-Net download complete.")
         except Exception as e:
-            logger.error("Failed to download SAMP-Net weights: %s", e)
-            logger.info("Please download manually from Google Drive:")
-            logger.info("  https://drive.google.com/file/d/1sIcYr5cQGbxm--tCGaASmN0xtE_r-QUg/view")
-            logger.info("  Place at: %s", self.model_path)
-            raise
+            # The upstream GitHub release URL has been intermittently 404 since
+            # late 2025. Don't bring down the whole pipeline — composition
+            # scoring is one signal among many and the caller catches None.
+            logger.warning(
+                "SAMP-Net weights unavailable (%s). Composition scoring will be skipped.",
+                e,
+            )
+            logger.warning("  To enable, download manually from Google Drive:")
+            logger.warning("    https://drive.google.com/file/d/1sIcYr5cQGbxm--tCGaASmN0xtE_r-QUg/view")
+            logger.warning("  and place the file at: %s", self.model_path)
+            raise RuntimeError(
+                "SAMP-Net weights download failed — see WARNING above for manual install."
+            ) from e
 
     def _load_model(self):
         """Load and initialize the SAMP-Net model."""
@@ -1065,7 +1073,8 @@ def create_samp_scorer(config) -> SAMPNetScorer:
             samp_config = {}
 
         model_path = samp_config.get('model_path', 'pretrained_models/samp_net.pth')
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        from utils.device import get_device
+        device = get_device()
 
         return SAMPNetScorer(model_path=model_path, device=device)
     except Exception as e:

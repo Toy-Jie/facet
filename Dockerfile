@@ -2,8 +2,8 @@
 FROM node:22-alpine AS client-build
 
 WORKDIR /app/client
-COPY client/package.json client/package-lock.json ./
-RUN npm ci
+COPY client/package.json ./
+RUN npm install --no-audit --no-fund
 COPY client/ ./
 RUN npx ng build
 

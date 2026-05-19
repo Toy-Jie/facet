@@ -85,6 +85,14 @@ def run_doctor(config_path=None, db_path=None, simulate_gpu=None, simulate_vram=
                 _ok("torch.cuda.is_available()", "True")
             else:
                 _warn("torch.cuda.is_available()", "False")
+
+            # Apple Silicon MPS — detected but not yet routed at runtime (issue #7).
+            from utils.device import mps_available
+            if mps_available():
+                _info("Apple Silicon (MPS)", "available (not used at runtime — see issue #7)")
+            else:
+                hint = " — Facet runs on CPU on this Mac" if sys.platform == "darwin" else ""
+                _info("Apple Silicon (MPS)", f"not available{hint}")
         except ImportError:
             _warn("torch", "NOT INSTALLED")
             logger.warning("  Install PyTorch: pip install torch torchvision")

@@ -995,4 +995,4 @@ The `/api/download/options` endpoint detects companion RAW files automatically a
 | Map shows no photos | Run `--extract-gps` to populate GPS columns, ensure photos have EXIF GPS data |
 | Captions not generating | Requires 16gb/24gb VRAM profile for VLM captioning |
 | Timeline empty | Ensure photos have `date_taken` values |
-| Port 5000 in use | Change port in `viewer.py` or kill the conflicting process |
+| Port 5000 in use | Run `python viewer.py --port 5001` (or set `PORT=5001`). On macOS, ControlCenter's AirPlay Receiver binds 5000 by default — either pick another port or disable AirPlay Receiver in System Settings → General → AirDrop & Handoff. |

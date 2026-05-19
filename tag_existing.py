@@ -116,7 +116,8 @@ def main():
     clip_cfg = config.get_clip_config()
     clip_model_name = clip_cfg.get('model_name', 'ViT-L-14')
     clip_backend = clip_cfg.get('backend', 'open_clip')
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    from utils.device import get_device
+    device = get_device()
 
     if clip_backend == 'transformers':
         from transformers import AutoModel

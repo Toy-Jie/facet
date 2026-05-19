@@ -34,6 +34,10 @@ scoring_config.json.backup.*
 # Build output
 dist/
 
+# Node — exact versions pinned in client/package.json, lock file not tracked
+client/node_modules/
+client/package-lock.json
+
 # ML model cache
 .fastembed_cache/
 

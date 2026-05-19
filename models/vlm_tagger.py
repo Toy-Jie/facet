@@ -70,7 +70,8 @@ class VLMTagger:
         self.scoring_config = scoring_config
         self.model = None
         self.processor = None
-        self.device = 'cuda'
+        from utils.device import get_device
+        self.device = get_device()
 
         # Detect model family from path, with explicit override via config.
         # The override lets power users point at a non-Qwen model path while
