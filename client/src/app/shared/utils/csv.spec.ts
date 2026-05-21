@@ -58,6 +58,11 @@ describe('downloadCsv', () => {
     expect(lines()[1]).toBe('"x,y","he said ""hi""","line1\nline2"');
   });
 
+  it('neutralizes formula injection by prefixing a quote, leaving numbers numeric (CWE-1236)', () => {
+    downloadCsv('f', [{ a: '=1+1', b: '-cmd', c: -5, d: '@x', e: 'safe' }]);
+    expect(lines()[1]).toBe("'=1+1,'-cmd,-5,'@x,safe");
+  });
+
   it('emits an empty cell for null and undefined values', () => {
     downloadCsv('n', [{ a: null, b: undefined, c: 0 }]);
     expect(lines()[1]).toBe(',,0');

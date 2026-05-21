@@ -4,7 +4,13 @@ export type CsvValue = string | number | boolean | null | undefined;
 /** Escape one CSV field per RFC 4180 — quote when it contains a comma, quote, or newline. */
 function escapeCsvField(value: CsvValue): string {
   if (value === null || value === undefined) return '';
-  const str = String(value);
+  let str = String(value);
+  // Neutralize CSV formula injection (CWE-1236): a text cell starting with
+  // = + - @ tab or CR is run as a formula by Excel/LibreOffice/Sheets. Prefix
+  // a single quote. The typeof guard keeps real numbers (e.g. -5) numeric.
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
   if (/[",\r\n]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }

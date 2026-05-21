@@ -74,6 +74,34 @@ class TestRequestLogging:
                   if r.name == "api" and "/boom" in r.getMessage() and "500" in r.getMessage()]
         assert access, "a failed request must still produce an access-log line"
 
+    def test_static_asset_request_is_not_logged(self, caplog):
+        # The middleware deliberately skips access-logging for static assets to
+        # cut noise — a request under /assets/ must produce no access-log line.
+        app = _make_app()
+
+        @app.get("/assets/app.js")
+        def asset():
+            return {"ok": True}
+
+        client = TestClient(app)
+        with caplog.at_level(logging.INFO, logger="api"):
+            resp = client.get("/assets/app.js")
+        assert resp.status_code == 200
+        assert not [r for r in caplog.records
+                    if r.name == "api" and "/assets/app.js" in r.getMessage()]
+
+    def test_zero_threshold_disables_slow_warning(self, caplog):
+        # slow_request_ms=0 disables the SLOW escalation (documented behaviour):
+        # even a genuinely slow request stays at INFO, never WARNING.
+        client = TestClient(_make_app(slow_request_ms=0))
+        with caplog.at_level(logging.INFO, logger="api"):
+            resp = client.get("/slow")
+        assert resp.status_code == 200
+        assert not [r for r in caplog.records
+                    if r.name == "api" and r.levelno >= logging.WARNING]
+        assert [r for r in caplog.records
+                if r.name == "api" and r.levelno == logging.INFO and "/slow" in r.getMessage()]
+
 
 class TestExceptionHandlers:
     def test_validation_error_returns_422_and_logs(self, caplog):
