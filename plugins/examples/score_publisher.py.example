@@ -1,0 +1,44 @@
+"""Append every finished score as a JSON line to a rolling log file.
+
+Copy to ``plugins/score_publisher.py`` (drop the ``.example`` suffix).
+Each ``on_score_complete`` event writes one JSON line to ``LOG_PATH``.
+The output is structured for log shippers (Filebeat, Vector, Promtail)
+and friendly to ``tail -F`` for a real-time feed during a scan.
+
+A separate file lock would be needed for multi-worker writes; the
+default single-worker viewer/scoring path uses an exclusive ``with
+open`` per write which keeps lines atomic for the typical workload.
+"""
+
+import json
+import logging
+import os
+import time
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+LOG_PATH = Path(os.environ.get(
+    "FACET_SCORE_LOG", "/var/log/facet/scores.jsonl",
+))
+
+
+def on_score_complete(data: dict) -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "ts": time.time(),
+        "path": data.get("path"),
+        "filename": data.get("filename"),
+        "aggregate": data.get("aggregate"),
+        "aesthetic": data.get("aesthetic"),
+        "comp_score": data.get("comp_score"),
+        "face_quality": data.get("face_quality"),
+        "tech_sharpness": data.get("tech_sharpness"),
+        "category": data.get("category"),
+        "tags": data.get("tags"),
+    }
+    try:
+        with LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+    except Exception:
+        logger.exception("[score_publisher] failed to append for %s", record["path"])

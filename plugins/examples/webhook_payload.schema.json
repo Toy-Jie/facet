@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ncoevoet/photoscore/plugins/examples/webhook_payload.schema.json",
+  "title": "Facet plugin webhook payload",
+  "description": "Validates the JSON body POSTed by PluginManager._send_webhook to any URL listed in plugins.webhooks in scoring_config.json.",
+  "type": "object",
+  "required": ["event", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "event": {
+      "type": "string",
+      "enum": [
+        "on_score_complete",
+        "on_new_photo",
+        "on_burst_detected",
+        "on_high_score"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "description": "Event-specific payload. Always includes 'path'; extra fields depend on the event.",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute filesystem path of the affected photo."
+        },
+        "filename": {
+          "type": "string"
+        },
+        "aggregate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "aesthetic": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 10
+        },
+        "comp_score": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 10
+        },
+        "face_quality": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 10
+        },
+        "tech_sharpness": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 10
+        },
+        "category": {
+          "type": ["string", "null"]
+        },
+        "tags": {
+          "type": ["array", "null"],
+          "items": {"type": "string"}
+        },
+        "camera_model": {
+          "type": ["string", "null"]
+        },
+        "burst_group_id": {
+          "type": ["integer", "null"]
+        },
+        "paths": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Present on on_burst_detected events — every photo in the burst."
+        },
+        "best_path": {
+          "type": ["string", "null"],
+          "description": "Best-of-burst pick, present on on_burst_detected."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

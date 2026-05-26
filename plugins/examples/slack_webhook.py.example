@@ -1,0 +1,59 @@
+"""Slack-channel notifier for high-scoring photos.
+
+Copy to ``plugins/slack_webhook.py`` (drop the ``.example`` suffix) and
+set ``SLACK_WEBHOOK_URL`` below to your Slack incoming-webhook URL. The
+plugin posts a one-line summary every time a photo's aggregate score
+crosses the configured threshold.
+
+Slack webhooks expect a JSON body like ``{"text": "..."}`` — different
+from Facet's native webhook payload — so this plugin formats its own
+message rather than using the generic ``plugins.webhooks`` list in
+``scoring_config.json``.
+"""
+
+import json
+import logging
+import os
+import urllib.request
+
+logger = logging.getLogger(__name__)
+
+# Either hard-code this for a personal/dev setup or read from env so the
+# secret never lands in the repo.
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+
+
+def on_high_score(data: dict) -> None:
+    """Notify Slack when a photo scores high.
+
+    ``data`` from Facet:
+        - path: str          — absolute path to the photo
+        - aggregate: float   — final aggregate score
+        - category: str      — content category
+    """
+    if not SLACK_WEBHOOK_URL:
+        logger.debug("[slack_webhook] SLACK_WEBHOOK_URL not set, skipping")
+        return
+
+    path = data.get("path", "?")
+    aggregate = data.get("aggregate", 0.0)
+    category = data.get("category", "uncategorised")
+
+    text = (
+        f":star: Top-scoring `{category}` photo: `{path}` "
+        f"(aggregate {aggregate:.2f}/10)"
+    )
+
+    payload = json.dumps({"text": text}).encode("utf-8")
+    req = urllib.request.Request(
+        SLACK_WEBHOOK_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status >= 400:
+                logger.warning("[slack_webhook] Slack returned %s", resp.status)
+    except Exception:
+        logger.exception("[slack_webhook] delivery failed for %s", path)
