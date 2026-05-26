@@ -174,6 +174,40 @@ def refresh_stats_cache(db_path='photo_scores_pro.db', verbose=True):
         except sqlite3.OperationalError:
             pass
 
+        # 9. Aperture (rounded f_stop) counts
+        try:
+            apertures = conn.execute("""
+                SELECT ROUND(f_stop, 1) as ap, COUNT(*) as cnt
+                FROM photos
+                WHERE f_stop IS NOT NULL AND f_stop > 0 AND f_stop < 1000
+                GROUP BY ap
+                ORDER BY ap ASC
+            """).fetchall()
+            aperture_data = [(r[0], r[1]) for r in apertures]
+            stats['apertures'] = aperture_data
+            _cache_stat(conn, 'apertures', json.dumps(aperture_data), now)
+            if verbose:
+                logger.info("  Apertures: %d", len(aperture_data))
+        except sqlite3.OperationalError:
+            pass
+
+        # 10. Focal length (rounded) counts
+        try:
+            focals = conn.execute("""
+                SELECT CAST(ROUND(focal_length) AS INTEGER) as fl, COUNT(*) as cnt
+                FROM photos
+                WHERE focal_length IS NOT NULL AND focal_length > 0
+                GROUP BY fl
+                ORDER BY fl ASC
+            """).fetchall()
+            focal_data = [(r[0], r[1]) for r in focals]
+            stats['focal_lengths'] = focal_data
+            _cache_stat(conn, 'focal_lengths', json.dumps(focal_data), now)
+            if verbose:
+                logger.info("  Focal lengths: %d", len(focal_data))
+        except sqlite3.OperationalError:
+            pass
+
         conn.commit()
 
     if verbose:
