@@ -53,6 +53,13 @@ def rebuild_fts(db_path='photo_scores_pro.db'):
             f"SELECT COUNT(*) FROM photos WHERE {not_null}"
         ).fetchone()[0]
 
+    # If a viewer process had cached a previous `has_fts_table` result —
+    # particularly False when the table didn't yet exist — that result would
+    # be served for up to _FTS_CACHE_TTL seconds, so gallery search would
+    # keep using the LIKE fallback despite FTS5 now being ready. Invalidate
+    # so the next request re-probes.
+    invalidate_fts_cache()
+
     logger.info("FTS index rebuilt: %d photos indexed (covering schema)", count)
     return count
 

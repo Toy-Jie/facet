@@ -166,20 +166,22 @@ async def scan_stream(
     _verify_superadmin_token(token)
 
     async def event_generator():
+        import time as _time
         last_output_len = -1
         was_running = None
         # Emit a comment-line heartbeat every HEARTBEAT_SECONDS so reverse
         # proxies (nginx, Cloudflare, ingress controllers) don't close the
         # connection on an idle scan. SSE comments (lines starting with ":")
         # are silently dropped by EventSource clients, so heartbeats don't
-        # surface to the UI.
+        # surface to the UI. Use time.monotonic() rather than the event
+        # loop's clock so the cadence stays stable even if the loop changes.
         HEARTBEAT_SECONDS = 15
-        last_heartbeat = asyncio.get_event_loop().time()
+        last_heartbeat = _time.monotonic()
         while True:
             snapshot = _build_scan_snapshot(lines)
             current_output_len = len(_scan_state['output_lines'])
             current_running = snapshot['running']
-            now = asyncio.get_event_loop().time()
+            now = _time.monotonic()
             changed = current_output_len != last_output_len or current_running != was_running
             if changed:
                 yield f"data: {json.dumps(snapshot)}\n\n"

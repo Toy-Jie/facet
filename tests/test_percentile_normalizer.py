@@ -12,7 +12,6 @@ left for an integration test pass once the split decision is final.
 
 from __future__ import annotations
 
-import math
 import sqlite3
 
 import pytest

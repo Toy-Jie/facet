@@ -36,16 +36,35 @@ DATABASE = str(REPO_ROOT / 'database.py')
 VALIDATE = str(REPO_ROOT / 'validate_db.py')
 
 
+# Strip these from the subprocess environment so secrets / per-developer
+# configuration in the parent shell don't leak into a CLI smoke run.
+_SENSITIVE_ENV_PREFIXES = (
+    'SLACK_', 'GITHUB_', 'GH_', 'AWS_', 'OPENAI_', 'ANTHROPIC_',
+    'GOOGLE_', 'AZURE_', 'HF_', 'HUGGINGFACE_', 'SENTRY_',
+    'API_KEY', 'TOKEN', 'PASSWORD', 'SECRET', 'CREDENTIAL',
+    'FACET_SCORE_LOG', 'FACET_BEST_OF_DIR',
+)
+
+
+def _sanitized_env(extra=None):
+    env = {
+        k: v for k, v in os.environ.items()
+        if not any(k.startswith(p) or p in k for p in _SENSITIVE_ENV_PREFIXES)
+    }
+    # Force the DB path to whatever the test passes via --db.
+    env.pop('DB_PATH', None)
+    if extra:
+        env.update(extra)
+    return env
+
+
 def _run(*args, timeout=60, env_extra=None, cwd=None):
-    env = os.environ.copy()
-    if env_extra:
-        env.update(env_extra)
     return subprocess.run(
         [PY, *args],
         capture_output=True,
         text=True,
         timeout=timeout,
-        env=env,
+        env=_sanitized_env(env_extra),
         cwd=cwd or str(REPO_ROOT),
     )
 

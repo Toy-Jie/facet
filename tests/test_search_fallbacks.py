@@ -21,7 +21,12 @@ import pytest
 
 
 def _reset_search_module_state():
-    """Wipe the search module's TTL caches between tests."""
+    """Wipe the search module's TTL caches AND fallback counter between tests.
+
+    Without resetting `_search_vec_fallback_total`, the counter accumulates
+    across the test session and any assertion that compares its post-state
+    against zero would have to rely on a fragile `>=` workaround.
+    """
     from api.routers import search
     search._vec_available = None
     search._vec_success_checked_at = 0.0
@@ -29,6 +34,7 @@ def _reset_search_module_state():
     search._fts_available = None
     search._fts_success_checked_at = 0.0
     search._fts_failure_checked_at = 0.0
+    search._search_vec_fallback_total = 0
 
 
 @pytest.fixture(autouse=True)
@@ -211,10 +217,12 @@ class TestSearchEndpointDegradation:
 class TestVecFallbackCounter:
     def test_increments_when_falling_back_to_numpy(self, edition_client, stub_text_encoder):
         from api.routers import search
-        initial = search._search_vec_fallback_total
+        # _reset_search_module_state (autouse) zeroes the counter, so the
+        # post-call value is an exact match rather than a >= workaround.
+        assert search._search_vec_fallback_total == 0
         with mock.patch(
             'api.routers.search._check_vec_available',
             new=mock.AsyncMock(return_value=False),
         ):
             edition_client.get('/api/search', params={'q': 'cat'})
-        assert search._search_vec_fallback_total >= initial + 1
+        assert search._search_vec_fallback_total == 1
