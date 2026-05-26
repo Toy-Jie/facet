@@ -1,23 +1,15 @@
 """
-Weight Optimizer for Pairwise Comparison Feedback System
+Weight Optimizer for Pairwise Comparison Feedback System.
 
-Provides two optimization approaches:
+Directly optimizes weights to maximize the likelihood that the weighted
+component scores correctly predict comparison outcomes. Uses the
+Bradley-Terry probability model with Davidson extension for ties.
 
-1. **Direct Preference Optimization** (recommended):
-   Directly optimizes weights to maximize the likelihood that weighted component
-   scores correctly predict comparison outcomes. Uses Bradley-Terry probability
-   model with Davidson extension for ties.
-
-2. **Legacy Two-Stage** (deprecated):
-   First derives "true scores" via Bradley-Terry model, then uses regression
-   to find weights that minimize MSE to those scores.
-
-Usage:
-    from weight_optimizer import WeightOptimizer
+Usage::
 
     optimizer = WeightOptimizer(db_path)
 
-    # Direct optimization (recommended) - uses raw comparisons
+    # Single-shot direct optimization
     result = optimizer.optimize_weights_direct(category='others')
 
     # With cross-validation for robustness
@@ -26,12 +18,9 @@ Usage:
     # Apply optimized weights to config
     optimizer.apply_optimized_weights(result['new_weights'], category='others')
 
-    # Legacy approach (deprecated)
-    optimizer.compute_learned_scores()
-    result = optimizer.optimize_weights()
+CLI::
 
-CLI Usage:
-    python facet.py --optimize-weights  # Uses direct optimization
+    python facet.py --optimize-weights
 """
 
 import json
@@ -48,13 +37,12 @@ logger = logging.getLogger("facet.optimizer")
 
 class WeightOptimizer:
     """
-    Optimizes scoring weights using Bradley-Terry model and regression.
+    Optimizes scoring weights from pairwise comparisons.
 
-    The optimization process:
-    1. Collect pairwise comparisons from users
-    2. Derive "true" quality scores using Bradley-Terry maximum likelihood
-    3. Use regression to find weights that minimize MSE between
-       weighted component scores and learned true scores
+    Uses direct preference optimization: weights are chosen to maximize the
+    Bradley-Terry/Davidson likelihood of the observed comparison outcomes
+    given the per-photo weighted score (no intermediate "learned scores"
+    table; raw comparisons feed the optimizer directly).
     """
 
     # Score components that can be weighted (must match photos table columns)
@@ -119,227 +107,6 @@ class WeightOptimizer:
         # Avoid division by zero
         scales = np.where(scales > 1e-8, scales, 1.0)
         return X / scales
-
-    def compute_learned_scores(self, max_iterations: int = 100, tolerance: float = 1e-6) -> Dict:
-        """
-        Compute Bradley-Terry scores from pairwise comparisons.
-
-        The Bradley-Terry model estimates the "strength" of each item based on
-        head-to-head comparison outcomes. Items that win more comparisons get
-        higher scores.
-
-        Returns:
-            Dict with 'photos_updated' count and 'iterations' used
-        """
-        with get_connection(self.db_path) as conn:
-            # Get all valid comparisons (excluding skips and ties)
-            cursor = conn.execute("""
-                SELECT photo_a_path, photo_b_path, winner
-                FROM comparisons
-                WHERE winner IN ('a', 'b')
-            """)
-            comparisons = [(row['photo_a_path'], row['photo_b_path'], row['winner'])
-                           for row in cursor]
-
-            if not comparisons:
-                return {'photos_updated': 0, 'iterations': 0, 'message': 'No comparisons available'}
-
-            # Get all unique photos involved in comparisons
-            photos = set()
-            for a, b, _ in comparisons:
-                photos.add(a)
-                photos.add(b)
-
-            # Initialize scores (Bradley-Terry parameters) to 1.0
-            scores = {p: 1.0 for p in photos}
-
-            # Build win/loss counts for each photo
-            wins = {p: 0 for p in photos}
-            comparisons_per_photo = {p: [] for p in photos}
-
-            for a, b, winner in comparisons:
-                comparisons_per_photo[a].append((b, winner == 'a'))
-                comparisons_per_photo[b].append((a, winner == 'b'))
-                if winner == 'a':
-                    wins[a] += 1
-                else:
-                    wins[b] += 1
-
-            # Bradley-Terry iterative maximum likelihood estimation
-            # Using the MM (minorization-maximization) algorithm
-            iterations = 0
-            for iteration in range(max_iterations):
-                old_scores = dict(scores)
-
-                for photo in photos:
-                    if not comparisons_per_photo[photo]:
-                        continue
-
-                    # Sum of 1 / (score_i + score_j) for all comparisons involving photo
-                    denominator = 0
-                    for opponent, _ in comparisons_per_photo[photo]:
-                        denominator += 1.0 / (scores[photo] + scores[opponent])
-
-                    if denominator > 0:
-                        scores[photo] = wins[photo] / denominator
-
-                # Normalize scores so they sum to len(photos)
-                total = sum(scores.values())
-                if total > 0:
-                    for p in scores:
-                        scores[p] = scores[p] * len(photos) / total
-
-                # Check convergence
-                max_change = max(abs(scores[p] - old_scores[p]) for p in photos)
-                iterations = iteration + 1
-                if max_change < tolerance:
-                    break
-
-            # Convert Bradley-Terry scores to 0-10 scale
-            min_score = min(scores.values())
-            max_score = max(scores.values())
-            score_range = max_score - min_score if max_score > min_score else 1.0
-
-            for p in scores:
-                # Scale to 0-10
-                scores[p] = ((scores[p] - min_score) / score_range) * 10.0
-
-            # Count comparisons per photo
-            comparison_counts = {p: len(comparisons_per_photo[p]) for p in photos}
-
-            # Save learned scores to database
-            for photo, score in scores.items():
-                conn.execute("""
-                    INSERT OR REPLACE INTO learned_scores
-                    (photo_path, learned_score, comparison_count, updated_at)
-                    VALUES (?, ?, ?, datetime('now'))
-                """, (photo, score, comparison_counts[photo]))
-
-            conn.commit()
-
-            return {
-                'photos_updated': len(scores),
-                'iterations': iterations,
-                'score_range': (min(scores.values()), max(scores.values())),
-            }
-
-    def optimize_weights(
-        self,
-        category: Optional[str] = None,
-        min_comparisons: int = 50
-    ) -> Dict:
-        """
-        Optimize scoring weights to minimize MSE between predicted and learned scores.
-
-        Uses linear regression to find optimal weights for each score component.
-
-        Args:
-            category: Optimize weights for specific category (or all if None)
-            min_comparisons: Minimum comparisons required before optimization
-
-        Returns:
-            Dict with old_weights, new_weights, mse_before, mse_after
-        """
-        with get_connection(self.db_path) as conn:
-            # Check if we have enough comparisons
-            comparison_count = conn.execute("""
-                SELECT COUNT(*) FROM comparisons WHERE winner IN ('a', 'b')
-            """).fetchone()[0]
-
-            if comparison_count < min_comparisons:
-                return {
-                    'error': f'Need at least {min_comparisons} comparisons (have {comparison_count})',
-                    'comparison_count': comparison_count,
-                }
-
-            # Ensure learned scores are computed
-            self.compute_learned_scores()
-
-            # Get photos with both learned scores and component scores
-            where_clause = "WHERE ls.learned_score IS NOT NULL"
-            params = []
-            if category:
-                where_clause += " AND p.category = ?"
-                params.append(category)
-
-            query = f"""
-                SELECT p.path, ls.learned_score,
-                       p.aesthetic, p.face_quality, p.eye_sharpness,
-                       p.tech_sharpness, p.color_score, p.exposure_score,
-                       p.comp_score, p.isolation_bonus, p.quality_score,
-                       p.contrast_score, p.dynamic_range_stops
-                FROM photos p
-                JOIN learned_scores ls ON p.path = ls.photo_path
-                {where_clause}
-            """
-            cursor = conn.execute(query, params)
-
-            # Build feature matrix and target vector
-            X = []  # Feature matrix (component scores)
-            y = []  # Target (learned scores)
-
-            for row in cursor:
-                features = []
-                for component in self.SCORE_COMPONENTS:
-                    val = row[component]
-                    features.append(float(val) if val is not None else 0.0)
-                X.append(features)
-                y.append(row['learned_score'])
-
-            # Scale features to 0–1 so weight percentages are meaningful
-            X = self._scale_features(np.array(X)).tolist()
-
-            if len(X) < 10:
-                category_hint = f" in category '{category}'" if category else ""
-                return {
-                    'error': f'Not enough photos with learned scores{category_hint}. Need at least 10, have {len(X)}. Try "All Categories" or do more comparisons in this category.',
-                    'photos_with_scores': len(X),
-                }
-
-            # Load current weights from config
-            old_weights = self._load_current_weights(category)
-
-            # Calculate metrics with current weights
-            mse_before = self._calculate_mse(X, y, old_weights)
-            corr_before = self._calculate_rank_correlation(X, y, old_weights)
-
-            # Optimize weights using correlation-based adjustment
-            new_weights = self._optimize_weights_regression(X, y, old_weights)
-
-            # Calculate metrics with new weights
-            mse_after = self._calculate_mse(X, y, new_weights)
-            corr_after = self._calculate_rank_correlation(X, y, new_weights)
-
-            # Log the optimization run
-            conn.execute("""
-                INSERT INTO weight_optimization_runs
-                (category, comparisons_used, old_weights, new_weights, mse_before, mse_after)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                category,
-                comparison_count,
-                json.dumps(old_weights),
-                json.dumps(new_weights),
-                mse_before,
-                mse_after
-            ))
-            conn.commit()
-
-            # Calculate improvement based on rank correlation (more meaningful than MSE)
-            # Correlation ranges from -1 to 1, so improvement is the increase
-            corr_improvement = (corr_after - corr_before) * 100  # As percentage points
-
-            return {
-                'old_weights': old_weights,
-                'new_weights': new_weights,
-                'mse_before': mse_before,
-                'mse_after': mse_after,
-                'corr_before': corr_before,
-                'corr_after': corr_after,
-                'improvement': corr_improvement,  # Now based on correlation improvement
-                'photos_used': len(X),
-                'comparisons_used': comparison_count,
-            }
 
     def optimize_weights_direct(
         self,
@@ -1086,182 +853,6 @@ class WeightOptimizer:
             # Return default uniform weights
             return {c: 1.0 / len(self.SCORE_COMPONENTS) for c in self.SCORE_COMPONENTS}
 
-    def _calculate_mse(
-        self,
-        X: List[List[float]],
-        y: List[float],
-        weights: Dict[str, float]
-    ) -> float:
-        """Calculate mean squared error between weighted predictions and targets.
-
-        Note: Predictions are scaled to match target range for fair comparison.
-        """
-        weight_vector = [weights.get(c, 0.0) for c in self.SCORE_COMPONENTS]
-
-        predictions = []
-        for features in X:
-            predicted = sum(f * w for f, w in zip(features, weight_vector))
-            predictions.append(predicted)
-
-        if not predictions:
-            return 0.0
-
-        # Scale predictions to match target range for fair MSE comparison
-        pred_min, pred_max = min(predictions), max(predictions)
-        y_min, y_max = min(y), max(y)
-
-        if pred_max - pred_min > 1e-6:
-            # Scale predictions to target range
-            scaled_predictions = [
-                y_min + (p - pred_min) * (y_max - y_min) / (pred_max - pred_min)
-                for p in predictions
-            ]
-        else:
-            scaled_predictions = predictions
-
-        mse = sum((p - t) ** 2 for p, t in zip(scaled_predictions, y)) / len(y)
-        return mse
-
-    def _calculate_rank_correlation(
-        self,
-        X: List[List[float]],
-        y: List[float],
-        weights: Dict[str, float]
-    ) -> float:
-        """Calculate Spearman rank correlation between weighted predictions and targets.
-
-        This is scale-invariant and better reflects how well the weights rank photos.
-        Returns correlation coefficient (-1 to 1), higher is better.
-        """
-        from scipy.stats import spearmanr
-
-        weight_vector = [weights.get(c, 0.0) for c in self.SCORE_COMPONENTS]
-
-        predictions = []
-        for features in X:
-            predicted = sum(f * w for f, w in zip(features, weight_vector))
-            predictions.append(predicted)
-
-        if len(predictions) < 3:
-            return 0.0
-
-        corr, _ = spearmanr(predictions, y)
-        return corr if not np.isnan(corr) else 0.0
-
-    def _optimize_weights_regression(
-        self,
-        X: List[List[float]],
-        y: List[float],
-        old_weights: Dict[str, float],
-        max_weight: float = 0.60,
-        min_weight: float = 0.0,
-        n_restarts: int = 5,
-    ) -> Dict[str, float]:
-        """
-        Optimize weights to maximize rank correlation of weighted sum with preferences.
-
-        Uses scipy.optimize with multiple random restarts to find weight ratios that
-        maximize Spearman correlation between the weighted component sum and learned
-        preference scores.
-
-        Args:
-            X: Feature matrix (component scores)
-            y: Target scores (Bradley-Terry learned scores)
-            old_weights: Current weights to use as one starting point
-            max_weight: Maximum weight per component (default 60%)
-            min_weight: Minimum weight per component (default 0% - allows disabling)
-            n_restarts: Number of random restarts to try (default 5)
-        """
-        from scipy.stats import spearmanr
-        from scipy.optimize import minimize
-
-        X_arr = np.array(X)
-        y_arr = np.array(y)
-        n_features = len(self.SCORE_COMPONENTS)
-
-        def negative_correlation(weights):
-            """Objective: minimize negative correlation (= maximize correlation)."""
-            # Normalize weights to sum to 1
-            w_sum = weights.sum()
-            if w_sum > 0:
-                w = weights / w_sum
-            else:
-                w = np.ones(n_features) / n_features
-            # Compute weighted sum
-            predictions = X_arr @ w
-            # Return negative correlation (we minimize, so negative = maximize)
-            if np.std(predictions) < 1e-6:
-                return 1.0  # No variance, return worst case
-            corr, _ = spearmanr(predictions, y_arr)
-            return -corr if not np.isnan(corr) else 1.0
-
-        # Bounds: each weight between min and max
-        bounds = [(min_weight, max_weight) for _ in range(n_features)]
-
-        # Constraint: weights must sum to 1
-        constraints = {'type': 'eq', 'fun': lambda w: w.sum() - 1.0}
-
-        # Prepare starting points
-        starting_points = []
-
-        # 1. Start from current weights (normalized)
-        current = np.array([old_weights.get(c, 1.0/n_features) for c in self.SCORE_COMPONENTS])
-        if current.sum() > 0:
-            current = current / current.sum()
-        else:
-            current = np.ones(n_features) / n_features
-        starting_points.append(current)
-
-        # 2. Uniform weights
-        starting_points.append(np.ones(n_features) / n_features)
-
-        # 3. Random starting points
-        np.random.seed(42)  # Reproducible
-        for _ in range(n_restarts - 2):
-            random_weights = np.random.dirichlet(np.ones(n_features))
-            starting_points.append(random_weights)
-
-        # Try each starting point and keep the best result
-        best_result = None
-        best_corr = -2.0  # Worse than any real correlation
-
-        for start in starting_points:
-            try:
-                result = minimize(
-                    negative_correlation,
-                    start,
-                    method='SLSQP',
-                    bounds=bounds,
-                    constraints=constraints,
-                    options={'maxiter': 300, 'ftol': 1e-8}
-                )
-
-                if result.success or result.fun < best_corr:
-                    # Check actual correlation achieved
-                    optimized = np.maximum(result.x, 0.0)
-                    if optimized.sum() > 0:
-                        optimized = optimized / optimized.sum()
-                    corr = -negative_correlation(optimized)
-
-                    if corr > best_corr:
-                        best_corr = corr
-                        best_result = optimized
-            except Exception:
-                continue
-
-        if best_result is None:
-            # Fallback to current weights
-            best_result = current
-
-        # Ensure non-negative and normalized
-        best_result = np.maximum(best_result, 0.0)
-        if best_result.sum() > 0:
-            best_result = best_result / best_result.sum()
-        else:
-            best_result = np.ones(n_features) / n_features
-
-        return {c: float(w) for c, w in zip(self.SCORE_COMPONENTS, best_result)}
-
     def apply_optimized_weights(
         self,
         new_weights: Dict[str, float],
@@ -1355,33 +946,6 @@ class WeightOptimizer:
             """, (limit,))
             return [dict(row) for row in cursor]
 
-    def get_learned_scores(
-        self,
-        category: Optional[str] = None,
-        limit: int = 100
-    ) -> List[Dict]:
-        """Get photos with their learned scores."""
-        with get_connection(self.db_path) as conn:
-            where_clause = ""
-            params = []
-            if category:
-                where_clause = "WHERE p.category = ?"
-                params.append(category)
-
-            query = f"""
-                SELECT p.path, p.aggregate, ls.learned_score, ls.comparison_count
-                FROM photos p
-                JOIN learned_scores ls ON p.path = ls.photo_path
-                {where_clause}
-                ORDER BY ls.learned_score DESC
-                LIMIT ?
-            """
-            params.append(limit)
-
-            cursor = conn.execute(query, params)
-            return [dict(row) for row in cursor]
-
-
 def print_comparison_stats(db_path: str = DEFAULT_DB_PATH):
     """Print comparison statistics for CLI."""
     from comparison import ComparisonManager
@@ -1395,7 +959,6 @@ def print_comparison_stats(db_path: str = DEFAULT_DB_PATH):
 
     logger.info("Total comparisons: %d", stats['total_comparisons'])
     logger.info("Unique photos compared: %d", stats['unique_photos_compared'])
-    logger.info("Photos with learned scores: %d", stats['photos_with_learned_scores'])
 
     logger.info("Winner breakdown:")
     for winner, count in stats['winner_breakdown'].items():
@@ -1409,9 +972,16 @@ def print_comparison_stats(db_path: str = DEFAULT_DB_PATH):
     if stats['recent_optimization_runs']:
         logger.info("Recent optimization runs:")
         for run in stats['recent_optimization_runs']:
-            improvement = ((run['mse_before'] - run['mse_after']) / run['mse_before'] * 100
-                          if run['mse_before'] else 0)
-            logger.info("  %s: MSE %.3f -> %.3f (%.1f%% improvement)", run['timestamp'][:10], run['mse_before'], run['mse_after'], improvement)
+            before = run.get('mse_before') or 0.0
+            after = run.get('mse_after') or 0.0
+            improvement = after - before
+            logger.info(
+                "  %s: accuracy %.1f%% -> %.1f%% (%+.1f pp)",
+                run['timestamp'][:10],
+                before,
+                after,
+                improvement,
+            )
 
     logger.info("=" * 60)
 
@@ -1419,7 +989,7 @@ def print_comparison_stats(db_path: str = DEFAULT_DB_PATH):
 def run_weight_optimization(
     db_path: str = DEFAULT_DB_PATH,
     config_path: str = 'scoring_config.json',
-    min_comparisons: int = 50
+    min_comparisons: int = 30,
 ):
     """Run weight optimization from CLI. Optimizes and saves weights automatically."""
     optimizer = WeightOptimizer(db_path, config_path)
@@ -1428,36 +998,31 @@ def run_weight_optimization(
     logger.info("WEIGHT OPTIMIZATION")
     logger.info("=" * 60)
 
-    # First compute/update learned scores
-    logger.info("Computing Bradley-Terry scores from comparisons...")
-    bt_result = optimizer.compute_learned_scores()
-    logger.info("  Photos updated: %d", bt_result.get('photos_updated', 0))
-    logger.info("  Iterations: %d", bt_result.get('iterations', 0))
-
-    # Run optimization (uses all categories)
-    logger.info("Optimizing weights...")
-    result = optimizer.optimize_weights(category=None, min_comparisons=min_comparisons)
+    logger.info("Optimizing weights via direct preference optimization...")
+    result = optimizer.optimize_weights_direct(
+        category=None,
+        min_comparisons=min_comparisons,
+    )
 
     if 'error' in result:
         logger.error("Error: %s", result['error'])
         return
 
-    logger.info("Photos used: %d", result['photos_used'])
     logger.info("Comparisons used: %d", result['comparisons_used'])
-    logger.info("MSE before: %.4f", result['mse_before'])
-    logger.info("MSE after:  %.4f", result['mse_after'])
-    logger.info("Improvement: %.1f%%", result['improvement'])
+    logger.info("Accuracy before: %.1f%%", result['accuracy_before'])
+    logger.info("Accuracy after:  %.1f%%", result['accuracy_after'])
+    logger.info("Improvement:     %+.1f pp", result['improvement'])
+    logger.info("Log-likelihood:  %.4f", result.get('log_likelihood', 0.0))
 
     logger.info("Optimized weights:")
     for component, weight in sorted(result['new_weights'].items(), key=lambda x: -x[1]):
-        if weight > 0.01:  # Only show significant weights
+        if weight > 0.01:
             logger.info("  %s: %.1f%%", component, weight * 100)
 
-    # Always apply weights
     logger.info("Applying weights to config...")
     backup_path = optimizer.apply_optimized_weights(
         result['new_weights'],
-        category='others'
+        category='others',
     )
     if backup_path:
         logger.info("  Backup created: %s", backup_path)

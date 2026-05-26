@@ -93,11 +93,6 @@ class ComparisonManager:
                 )
             """).fetchone()[0]
 
-            # Photos with learned scores
-            photos_with_scores = conn.execute("""
-                SELECT COUNT(*) FROM learned_scores
-            """).fetchone()[0]
-
             # Recent optimization runs
             recent_runs = conn.execute("""
                 SELECT timestamp, category, comparisons_used, mse_before, mse_after
@@ -111,7 +106,6 @@ class ComparisonManager:
                 'winner_breakdown': winner_counts,
                 'category_breakdown': [dict(row) for row in category_counts],
                 'unique_photos_compared': unique_photos,
-                'photos_with_learned_scores': photos_with_scores,
                 'recent_optimization_runs': [dict(row) for row in recent_runs],
             }
 
