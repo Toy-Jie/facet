@@ -44,7 +44,6 @@ COPY utils/ utils/
 COPY plugins/ plugins/
 COPY storage/ storage/
 COPY validation/ validation/
-COPY viewer/ viewer/
 COPY facet.py database.py viewer.py tag_existing.py validate_db.py calibrate.py diagnostics.py ./
 # scoring_config.json is NOT baked in — mount it via docker-compose volume
 COPY pyproject.toml ./
