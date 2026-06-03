@@ -1,4 +1,4 @@
-.PHONY: install install-cpu client doctor run clean test test-cov
+.PHONY: install install-cpu client doctor run up up-gpu clean test test-cov
 
 install:       ## Auto-detect GPU and install everything
 	bash install.sh
@@ -14,6 +14,12 @@ doctor:        ## Run diagnostic checks
 
 run:           ## Start the web viewer
 	python viewer.py
+
+up:            ## Start with Docker Compose (CPU, works anywhere)
+	docker compose up
+
+up-gpu:        ## Start with Docker Compose (NVIDIA GPU acceleration)
+	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
 
 clean:         ## Remove venv and build artifacts
 	rm -rf venv client/dist client/node_modules

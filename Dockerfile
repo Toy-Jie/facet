@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libimage-exiftool-perl \
     libgl1 \
     libglib2.0-0 \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies (torch/torchvision already in base image)
@@ -48,10 +49,15 @@ COPY facet.py database.py viewer.py tag_existing.py validate_db.py calibrate.py 
 # scoring_config.json is NOT baked in — mount it via docker-compose volume
 COPY pyproject.toml ./
 
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN useradd --create-home --shell /bin/bash facet \
-    && chown -R facet:facet /app
+    && mkdir -p /app/data \
+    && chown -R facet:facet /app \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
-USER facet
 EXPOSE 5000
 
+# Entrypoint fixes ownership of the writable bind mounts (created root-owned by
+# the Docker daemon) then drops to the unprivileged "facet" user.
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["python", "viewer.py", "--production"]

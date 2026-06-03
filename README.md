@@ -131,7 +131,13 @@ docker compose up
 # Open http://localhost:5000
 ```
 
-GPU acceleration requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html). Mount your photos directory in `docker-compose.yml`.
+This runs in CPU mode and works on any machine — no GPU required to browse and serve an existing library. Mount your photos directory in `docker-compose.yml`.
+
+**GPU acceleration** (optional) requires an NVIDIA GPU and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html). Enable it with the override file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+```
 
 ### Manual Install
 

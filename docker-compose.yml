@@ -11,13 +11,10 @@ services:
     environment:
       - FACET_LOG_LEVEL=INFO
       - DB_PATH=/app/data/photo_scores_pro.db
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # GPU acceleration is opt-in. The default config runs in CPU mode so
+    # `docker compose up` works on any machine. To enable an NVIDIA GPU
+    # (requires the NVIDIA Container Toolkit), add the override file:
+    #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 30s
