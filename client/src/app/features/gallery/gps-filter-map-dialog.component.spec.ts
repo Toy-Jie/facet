@@ -1,43 +1,35 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { GpsFilterMapDialogComponent } from './gps-filter-map-dialog.component';
 
 // Mock Leaflet
-jest.mock('leaflet', () => ({
-  Icon: { Default: { mergeOptions: jest.fn() } },
-  map: jest.fn(() => ({
-    setView: jest.fn().mockReturnThis(),
-    on: jest.fn(),
-    remove: jest.fn(),
+vi.mock('leaflet', () => ({
+  Icon: { Default: { mergeOptions: vi.fn() } },
+  map: vi.fn(() => ({
+    setView: vi.fn().mockReturnThis(),
+    on: vi.fn(),
+    remove: vi.fn(),
   })),
-  tileLayer: jest.fn(() => ({ addTo: jest.fn() })),
-  marker: jest.fn(() => ({
-    addTo: jest.fn().mockReturnThis(),
-    remove: jest.fn(),
+  tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
+  marker: vi.fn(() => ({
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
   })),
-  circle: jest.fn(() => ({
-    addTo: jest.fn().mockReturnThis(),
-    remove: jest.fn(),
-    setRadius: jest.fn(),
-  })),
-}));
-
-// Mock shared leaflet helper
-jest.mock('../../shared/leaflet', () => ({
-  createLeafletMap: jest.fn(() => ({
-    setView: jest.fn().mockReturnThis(),
-    on: jest.fn(),
-    remove: jest.fn(),
+  circle: vi.fn(() => ({
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+    setRadius: vi.fn(),
   })),
 }));
 
 describe('GpsFilterMapDialogComponent', () => {
   let component: GpsFilterMapDialogComponent;
-  let mockDialogRef: { close: jest.Mock };
+  let mockDialogRef: { close: Mock };
 
   function createComponent(data: Record<string, unknown> = {}) {
     TestBed.resetTestingModule();
-    mockDialogRef = { close: jest.fn() };
+    mockDialogRef = { close: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [

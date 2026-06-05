@@ -12,7 +12,7 @@ const makePersons = (): PersonOption[] => [
 
 describe('PersonSelectorDialogComponent', () => {
   let component: PersonSelectorDialogComponent;
-  const mockDialogRef = { close: jest.fn() };
+  const mockDialogRef = { close: vi.fn() };
   const mockI18n = { t: (key: string) => key };
 
   const createComponent = (persons: PersonOption[] = makePersons()) => {
@@ -27,7 +27,7 @@ describe('PersonSelectorDialogComponent', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     component = createComponent();
   });
 

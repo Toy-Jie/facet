@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { SlideshowComponent } from './slideshow.component';
@@ -6,14 +7,14 @@ import { I18nService } from '../../core/services/i18n.service';
 
 describe('SlideshowComponent', () => {
   let component: SlideshowComponent;
-  let mockStore: { slideshowActive: ReturnType<typeof signal<boolean>>; nextPage: jest.Mock };
+  let mockStore: { slideshowActive: ReturnType<typeof signal<boolean>>; nextPage: Mock };
   const mockI18n = { t: (key: string) => key };
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     mockStore = {
       slideshowActive: signal(true),
-      nextPage: jest.fn(() => Promise.resolve()),
+      nextPage: vi.fn(() => Promise.resolve()),
     };
 
     TestBed.configureTestingModule({
@@ -28,7 +29,7 @@ describe('SlideshowComponent', () => {
 
   afterEach(() => {
     component.ngOnDestroy();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe('initial state', () => {
@@ -137,7 +138,7 @@ describe('SlideshowComponent', () => {
       component['clearTimerInterval']();
       component.progress.set(0);
       component['startInterval']();
-      jest.advanceTimersByTime(100); // one tick with default 4s slideDuration: +2.5%
+      vi.advanceTimersByTime(100); // one tick with default 4s slideDuration: +2.5%
       expect(component.progress()).toBeCloseTo(2.5, 1);
     });
 
@@ -146,7 +147,7 @@ describe('SlideshowComponent', () => {
       component.progress.set(0);
       component.duration.set(1);
       component['startInterval']();
-      jest.advanceTimersByTime(1000); // 10 ticks of 100ms
+      vi.advanceTimersByTime(1000); // 10 ticks of 100ms
       expect(component.currentSlideIndex()).toBe(0); // no photos → stays at 0
       expect(component.progress()).toBe(0);
     });
@@ -181,25 +182,25 @@ describe('SlideshowComponent', () => {
     it('controls auto-hide after 2 seconds', () => {
       component.showControls();
       expect(component.controlsVisible()).toBe(true);
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
       expect(component.controlsVisible()).toBe(false);
     });
 
     it('showControls() resets the hide timer', () => {
       component.showControls();
-      jest.advanceTimersByTime(1500); // 1.5s, not yet hidden
+      vi.advanceTimersByTime(1500); // 1.5s, not yet hidden
       expect(component.controlsVisible()).toBe(true);
       component.showControls(); // reset timer
-      jest.advanceTimersByTime(1500); // 1.5s from reset, still visible
+      vi.advanceTimersByTime(1500); // 1.5s from reset, still visible
       expect(component.controlsVisible()).toBe(true);
-      jest.advanceTimersByTime(500); // 2s from reset, now hidden
+      vi.advanceTimersByTime(500); // 2s from reset, now hidden
       expect(component.controlsVisible()).toBe(false);
     });
   });
 
   describe('fullscreen', () => {
     it('toggleFullscreen() calls requestFullscreen when not fullscreen', () => {
-      const mockEl = { requestFullscreen: jest.fn().mockResolvedValue(undefined) };
+      const mockEl = { requestFullscreen: vi.fn().mockResolvedValue(undefined) };
       Object.defineProperty(component, 'container', { value: () => ({ nativeElement: mockEl }), writable: true, configurable: true });
       Object.defineProperty(document, 'fullscreenElement', { value: null, writable: true, configurable: true });
       component.toggleFullscreen();
@@ -207,7 +208,7 @@ describe('SlideshowComponent', () => {
     });
 
     it('toggleFullscreen() calls exitFullscreen when in fullscreen', () => {
-      document.exitFullscreen = jest.fn().mockResolvedValue(undefined);
+      document.exitFullscreen = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(document, 'fullscreenElement', { value: document.body, writable: true, configurable: true });
       component.toggleFullscreen();
       expect(document.exitFullscreen).toHaveBeenCalled();
@@ -245,7 +246,7 @@ describe('SlideshowComponent', () => {
 
     it('F key toggles fullscreen', () => {
       const handler = component['onKeyDown'].bind(component);
-      const toggleSpy = jest.spyOn(component, 'toggleFullscreen').mockImplementation();
+      const toggleSpy = vi.spyOn(component, 'toggleFullscreen').mockImplementation(() => {});
       handler(new KeyboardEvent('keydown', { key: 'f' }));
       expect(toggleSpy).toHaveBeenCalledTimes(1);
       handler(new KeyboardEvent('keydown', { key: 'F' }));
@@ -257,20 +258,20 @@ describe('SlideshowComponent', () => {
   describe('ngOnDestroy()', () => {
     it('clears the interval', () => {
       component['startInterval']();
-      const clearSpy = jest.spyOn(window, 'clearInterval');
+      const clearSpy = vi.spyOn(window, 'clearInterval');
       component.ngOnDestroy();
       expect(clearSpy).toHaveBeenCalled();
     });
 
     it('clears the hide controls timer', () => {
-      const clearSpy = jest.spyOn(window, 'clearTimeout');
+      const clearSpy = vi.spyOn(window, 'clearTimeout');
       component.showControls(); // starts hide timer
       component.ngOnDestroy();
       expect(clearSpy).toHaveBeenCalled();
     });
 
     it('removes fullscreenchange listener', () => {
-      const removeSpy = jest.spyOn(document, 'removeEventListener');
+      const removeSpy = vi.spyOn(document, 'removeEventListener');
       component['boundFullscreenHandler'] = () => {};
       component.ngOnDestroy();
       expect(removeSpy).toHaveBeenCalledWith('fullscreenchange', component['boundFullscreenHandler']);

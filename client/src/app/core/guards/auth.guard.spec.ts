@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { signal } from '@angular/core';
@@ -7,9 +8,9 @@ import { AuthService, AuthStatus } from '../services/auth.service';
 describe('authGuard', () => {
   let authMock: {
     status: ReturnType<typeof signal<AuthStatus | null>>;
-    checkStatus: jest.Mock;
+    checkStatus: Mock;
   };
-  let routerMock: { navigate: jest.Mock };
+  let routerMock: { navigate: Mock };
 
   const dummyRoute = {} as ActivatedRouteSnapshot;
   const dummyState = {} as RouterStateSnapshot;
@@ -17,9 +18,9 @@ describe('authGuard', () => {
   beforeEach(() => {
     authMock = {
       status: signal<AuthStatus | null>(null),
-      checkStatus: jest.fn(),
+      checkStatus: vi.fn(),
     };
-    routerMock = { navigate: jest.fn() };
+    routerMock = { navigate: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [
@@ -42,6 +43,7 @@ describe('authGuard', () => {
       user_role: null,
       display_name: null,
       features: {},
+      download_profiles: [],
     });
 
     const result = await runGuard();
@@ -63,6 +65,7 @@ describe('authGuard', () => {
         user_role: null,
         display_name: null,
         features: {},
+        download_profiles: [],
       });
     });
 
@@ -94,6 +97,7 @@ describe('authGuard', () => {
       user_role: null,
       display_name: null,
       features: {},
+      download_profiles: [],
     });
 
     const result = await runGuard();

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -7,9 +8,9 @@ import { BurstCullingComponent, IsKeptPipe, IsDecidedPipe, IsConfirmedPipe, IsPa
 
 describe('BurstCullingComponent', () => {
   let component: BurstCullingComponent;
-  let mockApi: { get: jest.Mock; post: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
-  let mockI18n: { t: jest.Mock };
+  let mockApi: { get: Mock; post: Mock };
+  let mockSnackBar: { open: Mock };
+  let mockI18n: { t: Mock };
 
   const mockCullingGroupsResponse = {
     groups: [
@@ -45,11 +46,11 @@ describe('BurstCullingComponent', () => {
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of(mockCullingGroupsResponse)),
-      post: jest.fn(() => of({})),
+      get: vi.fn(() => of(mockCullingGroupsResponse)),
+      post: vi.fn(() => of({})),
     };
-    mockSnackBar = { open: jest.fn() };
-    mockI18n = { t: jest.fn((key: string) => key) };
+    mockSnackBar = { open: vi.fn() };
+    mockI18n = { t: vi.fn((key: string) => key) };
 
     TestBed.configureTestingModule({
       providers: [
@@ -279,12 +280,12 @@ describe('BurstCullingComponent', () => {
 
   describe('skipGroup (pass with countdown)', () => {
     beforeEach(async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       await (component as any).loadGroups();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should add group to passingGroups with countdown of 5', () => {
@@ -307,10 +308,10 @@ describe('BurstCullingComponent', () => {
       const group = component['groups']()[0];
       component['skipGroup'](group);
 
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       expect(component['passingGroups']().get('1_burst')).toBe(4);
 
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       expect(component['passingGroups']().get('1_burst')).toBe(3);
     });
 
@@ -318,7 +319,7 @@ describe('BurstCullingComponent', () => {
       const group = component['groups']()[0];
       component['skipGroup'](group);
 
-      jest.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(5000);
 
       // Group should be hidden (removed from visible groups)
       expect(component['visibleGroups']().find(g => g.group_id === 1)).toBeUndefined();
@@ -330,7 +331,7 @@ describe('BurstCullingComponent', () => {
       const group = component['groups']()[0];
       component['skipGroup'](group);
 
-      jest.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(5000);
 
       expect(component['passingGroups']().has('1_burst')).toBe(false);
     });
@@ -338,12 +339,12 @@ describe('BurstCullingComponent', () => {
 
   describe('cancelPass', () => {
     beforeEach(async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       await (component as any).loadGroups();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should remove group from passingGroups', () => {
@@ -359,7 +360,7 @@ describe('BurstCullingComponent', () => {
       const group = component['groups']()[0];
       component['skipGroup'](group);
 
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
       component['cancelPass'](group);
 
       // Group should still be visible
@@ -370,11 +371,11 @@ describe('BurstCullingComponent', () => {
       const group = component['groups']()[0];
       component['skipGroup'](group);
 
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
       component['cancelPass'](group);
 
       // Advance past original timeout
-      jest.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(5000);
 
       // Group should still be visible
       expect(component['visibleGroups']().find(g => g.group_id === 1)).toBeDefined();

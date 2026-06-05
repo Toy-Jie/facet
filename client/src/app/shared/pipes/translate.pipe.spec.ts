@@ -1,17 +1,18 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { TranslatePipe } from './translate.pipe';
 import { I18nService } from '../../core/services/i18n.service';
 
 describe('TranslatePipe', () => {
   let pipe: TranslatePipe;
-  let i18nMock: { t: jest.Mock; translations: jest.Mock };
+  let i18nMock: { t: Mock; translations: Mock };
   let currentTranslations: Record<string, unknown>;
 
   beforeEach(() => {
     currentTranslations = { en: true };
     i18nMock = {
-      t: jest.fn(),
-      translations: jest.fn(() => currentTranslations),
+      t: vi.fn(),
+      translations: vi.fn(() => currentTranslations),
     };
 
     TestBed.configureTestingModule({

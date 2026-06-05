@@ -38,7 +38,7 @@ This will compile your project and store the build artifacts in the `dist/` dire
 
 ## Running unit tests
 
-To execute unit tests with [Jest](https://jestjs.io/), use the following command:
+To execute unit tests with [Vitest](https://vitest.dev/) (via the Angular CLI's built-in test runner), use the following command:
 
 ```bash
 npm test

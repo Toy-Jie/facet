@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { HttpRequest, HttpHandlerFn, HttpResponse } from '@angular/common/http';
 import { of } from 'rxjs';
@@ -6,11 +7,11 @@ import { AuthService } from '../services/auth.service';
 
 describe('authInterceptor', () => {
   let authMock: { token: string | null };
-  let next: jest.MockedFunction<HttpHandlerFn>;
+  let next: MockedFunction<HttpHandlerFn>;
 
   beforeEach(() => {
     authMock = { token: null };
-    next = jest.fn().mockReturnValue(of(new HttpResponse({ status: 200 })));
+    next = vi.fn().mockReturnValue(of(new HttpResponse({ status: 200 })));
 
     TestBed.configureTestingModule({
       providers: [{ provide: AuthService, useValue: authMock }],

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { of } from 'rxjs';
@@ -11,11 +12,11 @@ import { ManagePersonsComponent } from './manage-persons.component';
 
 describe('ManagePersonsComponent', () => {
   let component: ManagePersonsComponent;
-  let mockApi: { get: jest.Mock; post: jest.Mock };
-  let mockAuth: { isEdition: jest.Mock };
-  let mockI18n: { t: jest.Mock };
-  let mockDialog: { open: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
+  let mockApi: { get: Mock; post: Mock };
+  let mockAuth: { isEdition: Mock };
+  let mockI18n: { t: Mock };
+  let mockDialog: { open: Mock };
+  let mockSnackBar: { open: Mock };
 
   const mockPersonsResponse = {
     persons: [
@@ -28,15 +29,15 @@ describe('ManagePersonsComponent', () => {
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of(mockPersonsResponse)),
-      post: jest.fn(() => of({})),
+      get: vi.fn(() => of(mockPersonsResponse)),
+      post: vi.fn(() => of({})),
     };
-    mockAuth = { isEdition: jest.fn(() => true) };
-    mockI18n = { t: jest.fn((key: string) => key) };
+    mockAuth = { isEdition: vi.fn(() => true) };
+    mockI18n = { t: vi.fn((key: string) => key) };
     mockDialog = {
-      open: jest.fn(() => ({ afterClosed: () => of(true) })),
+      open: vi.fn(() => ({ afterClosed: () => of(true) })),
     };
-    mockSnackBar = { open: jest.fn() };
+    mockSnackBar = { open: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [
@@ -46,7 +47,7 @@ describe('ManagePersonsComponent', () => {
         { provide: I18nService, useValue: mockI18n },
         { provide: MatDialog, useValue: mockDialog },
         { provide: MatSnackBar, useValue: mockSnackBar },
-        { provide: Router, useValue: { navigate: jest.fn() } },
+        { provide: Router, useValue: { navigate: vi.fn() } },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: { get: () => null } } } },
       ],
     });

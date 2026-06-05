@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { of } from 'rxjs';
@@ -7,8 +8,8 @@ import { ShareDialogComponent, ShareDialogData } from './share-dialog.component'
 describe('ShareDialogComponent', () => {
    
   let component: any;
-  let mockApi: { post: jest.Mock; get: jest.Mock; delete: jest.Mock };
-  let mockDialogRef: { close: jest.Mock };
+  let mockApi: { post: Mock; get: Mock; delete: Mock };
+  let mockDialogRef: { close: Mock };
 
   function createComponent(data: ShareDialogData) {
     TestBed.resetTestingModule();
@@ -25,11 +26,11 @@ describe('ShareDialogComponent', () => {
 
   beforeEach(() => {
     mockApi = {
-      post: jest.fn(() => of({ share_url: '/shared/album/1?token=abc', share_token: 'abc' })),
-      get: jest.fn(() => of({ token: 'xyz' })),
-      delete: jest.fn(() => of({})),
+      post: vi.fn(() => of({ share_url: '/shared/album/1?token=abc', share_token: 'abc' })),
+      get: vi.fn(() => of({ token: 'xyz' })),
+      delete: vi.fn(() => of({})),
     };
-    mockDialogRef = { close: jest.fn() };
+    mockDialogRef = { close: vi.fn() };
   });
 
   describe('album sharing', () => {
@@ -123,7 +124,7 @@ describe('ShareDialogComponent', () => {
       });
       component.shareUrl.set('/shared/album/1?token=abc');
 
-      const writeText = jest.fn().mockResolvedValue(undefined);
+      const writeText = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, { clipboard: { writeText } });
 
       await component.copyLink();
@@ -133,7 +134,7 @@ describe('ShareDialogComponent', () => {
     });
 
     it('should reset copied after timeout', async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       createComponent({
         entityType: 'album',
         entityId: 1,
@@ -143,16 +144,16 @@ describe('ShareDialogComponent', () => {
       });
       component.shareUrl.set('/shared/album/1?token=abc');
 
-      const writeText = jest.fn().mockResolvedValue(undefined);
+      const writeText = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, { clipboard: { writeText } });
 
       await component.copyLink();
       expect(component.copied()).toBe(true);
 
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
       expect(component.copied()).toBe(false);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 });

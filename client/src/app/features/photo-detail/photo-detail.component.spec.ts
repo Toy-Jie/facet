@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Location } from '@angular/common';
@@ -11,10 +12,10 @@ import { PhotoDetailComponent } from './photo-detail.component';
 describe('PhotoDetailComponent', () => {
    
   let component: any;
-  let mockApi: { get: jest.Mock; post: jest.Mock; imageUrl: jest.Mock; downloadUrl: jest.Mock; getRaw: jest.Mock };
-  let mockRouter: { navigate: jest.Mock };
-  let mockLocation: { back: jest.Mock };
-  let mockRoute: { snapshot: { queryParamMap: { get: jest.Mock } } };
+  let mockApi: { get: Mock; post: Mock; imageUrl: Mock; downloadUrl: Mock; getRaw: Mock };
+  let mockRouter: { navigate: Mock };
+  let mockLocation: { back: Mock };
+  let mockRoute: { snapshot: { queryParamMap: { get: Mock } } };
   let mockAuth: { isEdition: ReturnType<typeof signal> };
 
   const samplePhoto = {
@@ -65,17 +66,17 @@ describe('PhotoDetailComponent', () => {
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of(samplePhoto)),
-      post: jest.fn(() => of({})),
-      imageUrl: jest.fn((path: string) => `/image?path=${encodeURIComponent(path)}`),
-      downloadUrl: jest.fn((path: string, type = 'original', profile?: string) => `/api/download?path=${encodeURIComponent(path)}&type=${type}${profile ? '&profile=' + profile : ''}`),
-      getRaw: jest.fn(() => of(new Blob(['test'], { type: 'image/jpeg' }))),
+      get: vi.fn(() => of(samplePhoto)),
+      post: vi.fn(() => of({})),
+      imageUrl: vi.fn((path: string) => `/image?path=${encodeURIComponent(path)}`),
+      downloadUrl: vi.fn((path: string, type = 'original', profile?: string) => `/api/download?path=${encodeURIComponent(path)}&type=${type}${profile ? '&profile=' + profile : ''}`),
+      getRaw: vi.fn(() => of(new Blob(['test'], { type: 'image/jpeg' }))),
     };
-    mockRouter = { navigate: jest.fn() };
-    mockLocation = { back: jest.fn() };
+    mockRouter = { navigate: vi.fn() };
+    mockLocation = { back: vi.fn() };
     mockRoute = {
       snapshot: {
-        queryParamMap: { get: jest.fn((key: string) => key === 'path' ? '/photos/test.jpg' : null) },
+        queryParamMap: { get: vi.fn((key: string) => key === 'path' ? '/photos/test.jpg' : null) },
       },
     };
     mockAuth = { isEdition: signal(true) };
@@ -136,7 +137,7 @@ describe('PhotoDetailComponent', () => {
         writable: true,
         configurable: true,
       });
-      mockRoute.snapshot.queryParamMap.get = jest.fn(() => null);
+      mockRoute.snapshot.queryParamMap.get = vi.fn(() => null);
 
       createComponent();
       await component.ngOnInit();
@@ -244,10 +245,10 @@ describe('PhotoDetailComponent', () => {
   describe('download', () => {
     it('should fetch blob and set downloading state', async () => {
       createComponent();
-      URL.createObjectURL = jest.fn(() => 'blob:mock');
-      URL.revokeObjectURL = jest.fn();
-      const appendSpy = jest.spyOn(document.body, 'appendChild').mockImplementation((el) => el);
-      const removeSpy = jest.spyOn(document.body, 'removeChild').mockImplementation((el) => el);
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+      URL.revokeObjectURL = vi.fn();
+      const appendSpy = vi.spyOn(document.body, 'appendChild').mockImplementation((el) => el);
+      const removeSpy = vi.spyOn(document.body, 'removeChild').mockImplementation((el) => el);
 
       expect(component.downloading()).toBe(false);
 

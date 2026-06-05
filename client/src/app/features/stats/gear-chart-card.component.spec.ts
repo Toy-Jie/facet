@@ -69,11 +69,11 @@ describe('GearChartCardComponent', () => {
     component = fixture.componentInstance;
 
     // Mock localStorage
-    jest.spyOn(Storage.prototype, 'getItem').mockImplementation((key: string) => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key: string) => {
       if (key === 'gear_metric_stats.test_title') return 'avg_score';
       return null;
     });
-    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
 
     // Set required inputs
     fixture.componentRef.setInput('titleKey', 'stats.test_title');

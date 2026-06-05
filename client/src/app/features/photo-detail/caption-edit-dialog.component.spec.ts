@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
@@ -6,8 +7,8 @@ import { CaptionEditDialogComponent } from './caption-edit-dialog.component';
 
 describe('CaptionEditDialogComponent', () => {
   let component: CaptionEditDialogComponent;
-  let mockDialogRef: { close: jest.Mock };
-  let mockApi: { put: jest.Mock };
+  let mockDialogRef: { close: Mock };
+  let mockApi: { put: Mock };
 
   const dialogData = {
     path: '/photo.jpg',
@@ -16,8 +17,8 @@ describe('CaptionEditDialogComponent', () => {
   };
 
   beforeEach(() => {
-    mockDialogRef = { close: jest.fn() };
-    mockApi = { put: jest.fn(() => of({})) };
+    mockDialogRef = { close: vi.fn() };
+    mockApi = { put: vi.fn(() => of({})) };
 
     TestBed.configureTestingModule({
       providers: [

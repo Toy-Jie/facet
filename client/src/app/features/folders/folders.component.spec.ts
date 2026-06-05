@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, of } from 'rxjs';
@@ -7,8 +8,8 @@ import { FoldersComponent } from './folders.component';
 describe('FoldersComponent', () => {
    
   let component: any;
-  let mockApi: { get: jest.Mock };
-  let mockRouter: { navigate: jest.Mock };
+  let mockApi: { get: Mock };
+  let mockRouter: { navigate: Mock };
   let mockRoute: { queryParams: Observable<Record<string, string>> };
 
   const foldersResponse = {
@@ -20,8 +21,8 @@ describe('FoldersComponent', () => {
   };
 
   beforeEach(() => {
-    mockApi = { get: jest.fn(() => of(foldersResponse)) };
-    mockRouter = { navigate: jest.fn() };
+    mockApi = { get: vi.fn(() => of(foldersResponse)) };
+    mockRouter = { navigate: vi.fn() };
     mockRoute = { queryParams: of({}) };
 
     TestBed.configureTestingModule({

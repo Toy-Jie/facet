@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { Router, ActivatedRoute } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -128,13 +129,13 @@ function makeConfig(overrides: Partial<ViewerConfig> = {}): ViewerConfig {
 
 describe('GalleryStore', () => {
   let store: GalleryStore;
-  let apiGet: jest.Mock;
-  let routerNavigate: jest.Mock;
+  let apiGet: Mock;
+  let routerNavigate: Mock;
   let queryParams: Record<string, string>;
 
   beforeEach(() => {
-    apiGet = jest.fn();
-    routerNavigate = jest.fn();
+    apiGet = vi.fn();
+    routerNavigate = vi.fn();
     queryParams = {};
 
     TestBed.configureTestingModule({
@@ -146,8 +147,8 @@ describe('GalleryStore', () => {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParams } },
         },
-        { provide: AuthService, useValue: { isEdition: jest.fn(() => false) } },
-        { provide: AlbumService, useValue: { list: jest.fn(() => of({ albums: [] })), update: jest.fn(() => of({})) } },
+        { provide: AuthService, useValue: { isEdition: vi.fn(() => false) } },
+        { provide: AlbumService, useValue: { list: vi.fn(() => of({ albums: [] })), update: vi.fn(() => of({})) } },
       ],
     });
 

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
@@ -8,10 +9,10 @@ import { MergeSuggestionsComponent } from './merge-suggestions.component';
 
 describe('MergeSuggestionsComponent', () => {
   let component: MergeSuggestionsComponent;
-  let mockApi: { get: jest.Mock; post: jest.Mock };
-  let mockI18n: { t: jest.Mock };
-  let mockDialog: { open: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
+  let mockApi: { get: Mock; post: Mock };
+  let mockI18n: { t: Mock };
+  let mockDialog: { open: Mock };
+  let mockSnackBar: { open: Mock };
 
   const makeSuggestion = (
     id1: number,
@@ -29,14 +30,14 @@ describe('MergeSuggestionsComponent', () => {
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of({ suggestions: [] })),
-      post: jest.fn(() => of({})),
+      get: vi.fn(() => of({ suggestions: [] })),
+      post: vi.fn(() => of({})),
     };
-    mockI18n = { t: jest.fn((key: string) => key) };
+    mockI18n = { t: vi.fn((key: string) => key) };
     mockDialog = {
-      open: jest.fn(() => ({ afterClosed: () => of(null) })),
+      open: vi.fn(() => ({ afterClosed: () => of(null) })),
     };
-    mockSnackBar = { open: jest.fn() };
+    mockSnackBar = { open: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [

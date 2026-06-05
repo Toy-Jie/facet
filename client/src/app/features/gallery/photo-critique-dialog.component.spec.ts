@@ -1,13 +1,14 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { I18nService } from '../../core/services/i18n.service';
 import { MismatchReasonPipe } from './photo-critique-dialog.component';
 
 describe('MismatchReasonPipe', () => {
   let pipe: MismatchReasonPipe;
-  let mockI18n: { t: jest.Mock };
+  let mockI18n: { t: Mock };
 
   beforeEach(() => {
-    mockI18n = { t: jest.fn((key: string) => key) };
+    mockI18n = { t: vi.fn((key: string) => key) };
 
     TestBed.configureTestingModule({
       providers: [

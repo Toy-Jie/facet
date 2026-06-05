@@ -47,7 +47,7 @@ describe('ScanService', () => {
     originalEventSource = globalThis.EventSource;
     globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
 
-    jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('test-token');
+    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('test-token');
 
     TestBed.configureTestingModule({
       providers: [
@@ -65,7 +65,7 @@ describe('ScanService', () => {
     service.ngOnDestroy();
     httpTesting.verify();
     globalThis.EventSource = originalEventSource;
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('initial state', () => {
@@ -91,7 +91,7 @@ describe('ScanService', () => {
     });
 
     it('should not connect when no token is available', () => {
-      jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+      vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
       service.connect();
 
       expect(MockEventSource.instances).toHaveLength(0);

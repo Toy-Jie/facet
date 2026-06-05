@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
@@ -6,40 +7,29 @@ import { I18nService } from './i18n.service';
 import { GalleryStore } from '../../features/gallery/gallery.store';
 import { PhotoActionsService } from './photo-actions.service';
 
-// Mock lazy-loaded dialog components so dynamic imports resolve synchronously
-jest.mock('../../features/gallery/photo-critique-dialog.component', () => ({
-  PhotoCritiqueDialogComponent: class MockCritiqueDialog {},
-}));
-jest.mock('../../features/gallery/face-selector-dialog.component', () => ({
-  FaceSelectorDialogComponent: class MockFaceSelector {},
-}));
-jest.mock('../../features/gallery/person-selector-dialog.component', () => ({
-  PersonSelectorDialogComponent: class MockPersonSelector {},
-}));
-
 const mockPhoto: any = { path: '/photos/test.jpg' };
 
 describe('PhotoActionsService', () => {
   let service: PhotoActionsService;
-  let mockDialog: { open: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
-  let mockI18n: { t: jest.Mock };
-  let mockStore: { config: jest.Mock; persons: jest.Mock; assignFace: jest.Mock; createPerson: jest.Mock };
+  let mockDialog: { open: Mock };
+  let mockSnackBar: { open: Mock };
+  let mockI18n: { t: Mock };
+  let mockStore: { config: Mock; persons: Mock; assignFace: Mock; createPerson: Mock };
 
   beforeEach(() => {
     mockDialog = {
-      open: jest.fn(() => ({ afterClosed: () => of(null) })),
+      open: vi.fn(() => ({ afterClosed: () => of(null) })),
     };
-    mockSnackBar = { open: jest.fn() };
-    mockI18n = { t: jest.fn((key: string) => key) };
+    mockSnackBar = { open: vi.fn() };
+    mockI18n = { t: vi.fn((key: string) => key) };
     mockStore = {
-      config: jest.fn(() => ({ features: { show_vlm_critique: false } })),
-      persons: jest.fn(() => [
+      config: vi.fn(() => ({ features: { show_vlm_critique: false } })),
+      persons: vi.fn(() => [
         { id: 1, name: 'Alice', face_count: 5 },
         { id: 2, name: null, face_count: 1 },
       ]),
-      assignFace: jest.fn().mockResolvedValue(undefined),
-      createPerson: jest.fn().mockResolvedValue({ id: 99, name: 'New Person', face_count: 1 }),
+      assignFace: vi.fn().mockResolvedValue(undefined),
+      createPerson: vi.fn().mockResolvedValue({ id: 99, name: 'New Person', face_count: 1 }),
     };
 
     TestBed.configureTestingModule({
@@ -57,7 +47,8 @@ describe('PhotoActionsService', () => {
   describe('openCritique', () => {
     it('should open PhotoCritiqueDialogComponent with photo path and vlmAvailable', async () => {
       service.openCritique(mockPhoto);
-      await Promise.resolve(); // flush dynamic import
+      // The dialog component is lazy-loaded via dynamic import; wait for it to resolve.
+      await vi.waitFor(() => expect(mockDialog.open).toHaveBeenCalled());
 
       expect(mockDialog.open).toHaveBeenCalledWith(
         expect.any(Function),
@@ -72,7 +63,7 @@ describe('PhotoActionsService', () => {
     it('should pass vlmAvailable=true when show_vlm_critique is true', async () => {
       mockStore.config.mockReturnValue({ features: { show_vlm_critique: true } });
       service.openCritique(mockPhoto);
-      await Promise.resolve();
+      await vi.waitFor(() => expect(mockDialog.open).toHaveBeenCalled());
 
       const call = mockDialog.open.mock.calls[0][1];
       expect(call.data.vlmAvailable).toBe(true);
@@ -82,7 +73,7 @@ describe('PhotoActionsService', () => {
   describe('openAddPerson', () => {
     it('should open FaceSelectorDialogComponent first', async () => {
       service.openAddPerson(mockPhoto);
-      await Promise.resolve();
+      await vi.waitFor(() => expect(mockDialog.open).toHaveBeenCalled());
 
       expect(mockDialog.open).toHaveBeenCalledWith(
         expect.any(Function),
@@ -93,7 +84,7 @@ describe('PhotoActionsService', () => {
     it('should call onAssigned callback after successful face assignment', async () => {
       const selectedFace = { id: 10 };
       const selectedResult = { kind: 'select', person: { id: 1, name: 'Alice' } };
-      const onAssigned = jest.fn();
+      const onAssigned = vi.fn();
 
       // Dialog 1 (face selector) returns a face
       // Dialog 2 (person selector) returns a person-select result
@@ -102,9 +93,7 @@ describe('PhotoActionsService', () => {
         .mockReturnValueOnce({ afterClosed: () => of(selectedResult) });
 
       service.openAddPerson(mockPhoto, onAssigned);
-      await Promise.resolve(); // flush face-selector import
-      await Promise.resolve(); // flush person-selector import
-      await Promise.resolve(); // flush afterClosed chain
+      await vi.waitFor(() => expect(mockStore.assignFace).toHaveBeenCalled());
 
       expect(mockStore.assignFace).toHaveBeenCalledWith(10, 1, '/photos/test.jpg', 'Alice');
       expect(onAssigned).toHaveBeenCalled();
@@ -113,16 +102,14 @@ describe('PhotoActionsService', () => {
     it('should create a new person when dialog returns kind="create"', async () => {
       const selectedFace = { id: 10 };
       const createResult = { kind: 'create', name: 'NewPerson' };
-      const onAssigned = jest.fn();
+      const onAssigned = vi.fn();
 
       mockDialog.open
         .mockReturnValueOnce({ afterClosed: () => of(selectedFace) })
         .mockReturnValueOnce({ afterClosed: () => of(createResult) });
 
       service.openAddPerson(mockPhoto, onAssigned);
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      await vi.waitFor(() => expect(mockStore.createPerson).toHaveBeenCalled());
 
       expect(mockStore.createPerson).toHaveBeenCalledWith('NewPerson', [10], '/photos/test.jpg');
       expect(mockStore.assignFace).not.toHaveBeenCalled();
@@ -133,7 +120,7 @@ describe('PhotoActionsService', () => {
       mockDialog.open.mockReturnValue({ afterClosed: () => of(null) });
 
       service.openAddPerson(mockPhoto);
-      await Promise.resolve();
+      await vi.waitFor(() => expect(mockDialog.open).toHaveBeenCalled());
 
       // Only the face selector should have been opened
       expect(mockDialog.open).toHaveBeenCalledTimes(1);
@@ -147,8 +134,7 @@ describe('PhotoActionsService', () => {
         .mockReturnValueOnce({ afterClosed: () => of(null) });
 
       service.openAddPerson(mockPhoto);
-      await Promise.resolve();
-      await Promise.resolve();
+      await vi.waitFor(() => expect(mockDialog.open).toHaveBeenCalledTimes(2));
 
       // PersonSelector receives only named persons
       const personSelectorCall = mockDialog.open.mock.calls[1];

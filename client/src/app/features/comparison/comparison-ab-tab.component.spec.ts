@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
@@ -11,20 +12,20 @@ import { ComparisonAbTabComponent } from './comparison-ab-tab.component';
 describe('ComparisonAbTabComponent', () => {
    
   let component: any;
-  let mockApi: { get: jest.Mock; post: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
-  let mockI18n: { t: jest.Mock };
-  let mockAuth: { isEdition: jest.Mock };
+  let mockApi: { get: Mock; post: Mock };
+  let mockSnackBar: { open: Mock };
+  let mockI18n: { t: Mock };
+  let mockAuth: { isEdition: Mock };
   let compareFilters: { selectedCategory: ReturnType<typeof signal<string>> };
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of({})),
-      post: jest.fn(() => of({})),
+      get: vi.fn(() => of({})),
+      post: vi.fn(() => of({})),
     };
-    mockSnackBar = { open: jest.fn() };
-    mockI18n = { t: jest.fn((key: string) => key) };
-    mockAuth = { isEdition: jest.fn(() => true) };
+    mockSnackBar = { open: vi.fn() };
+    mockI18n = { t: vi.fn((key: string) => key) };
+    mockAuth = { isEdition: vi.fn(() => true) };
     compareFilters = { selectedCategory: signal('portrait') };
 
     TestBed.configureTestingModule({
@@ -139,35 +140,35 @@ describe('ComparisonAbTabComponent', () => {
     });
 
     it('should call submitComparison("a") on ArrowLeft', () => {
-      const spy = jest.spyOn(component, 'submitComparison');
+      const spy = vi.spyOn(component, 'submitComparison');
       const event = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
       component.onKeydown(event);
       expect(spy).toHaveBeenCalledWith('a');
     });
 
     it('should call submitComparison("b") on ArrowRight', () => {
-      const spy = jest.spyOn(component, 'submitComparison');
+      const spy = vi.spyOn(component, 'submitComparison');
       const event = new KeyboardEvent('keydown', { key: 'ArrowRight' });
       component.onKeydown(event);
       expect(spy).toHaveBeenCalledWith('b');
     });
 
     it('should call submitComparison("tie") on "t"', () => {
-      const spy = jest.spyOn(component, 'submitComparison');
+      const spy = vi.spyOn(component, 'submitComparison');
       const event = new KeyboardEvent('keydown', { key: 't' });
       component.onKeydown(event);
       expect(spy).toHaveBeenCalledWith('tie');
     });
 
     it('should call skipPair on "s"', () => {
-      const spy = jest.spyOn(component, 'skipPair');
+      const spy = vi.spyOn(component, 'skipPair');
       const event = new KeyboardEvent('keydown', { key: 's' });
       component.onKeydown(event);
       expect(spy).toHaveBeenCalled();
     });
 
     it('should ignore when target is INPUT', () => {
-      const spy = jest.spyOn(component, 'submitComparison');
+      const spy = vi.spyOn(component, 'submitComparison');
       const input = document.createElement('input');
       const event = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
       Object.defineProperty(event, 'target', { value: input });
@@ -177,7 +178,7 @@ describe('ComparisonAbTabComponent', () => {
 
     it('should ignore when pairA is null', () => {
       component.pairA.set(null);
-      const spy = jest.spyOn(component, 'submitComparison');
+      const spy = vi.spyOn(component, 'submitComparison');
       const event = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
       component.onKeydown(event);
       expect(spy).not.toHaveBeenCalled();
@@ -208,7 +209,7 @@ describe('ComparisonAbTabComponent', () => {
 
   describe('applyWeights', () => {
     it('should emit merged current + suggested weights', () => {
-      const emitSpy = jest.spyOn(component.weightsApplied, 'emit');
+      const emitSpy = vi.spyOn(component.weightsApplied, 'emit');
       component.learnedWeights.set({
         available: true,
         current_weights: { aesthetic_percent: 30, face_quality_percent: 20 },
@@ -226,7 +227,7 @@ describe('ComparisonAbTabComponent', () => {
     });
 
     it('should not emit when learnedWeights has no suggested_weights', () => {
-      const emitSpy = jest.spyOn(component.weightsApplied, 'emit');
+      const emitSpy = vi.spyOn(component.weightsApplied, 'emit');
       component.learnedWeights.set({ available: true });
 
       component.applyWeights();
@@ -330,7 +331,7 @@ describe('ComparisonAbTabComponent', () => {
     it('should load next pair when pairA exists', () => {
       component.pairA.set('/photo.jpg');
       mockApi.get.mockReturnValue(of({ a: '/a.jpg', b: '/b.jpg' }));
-      const spy = jest.spyOn(component, 'loadNextPair');
+      const spy = vi.spyOn(component, 'loadNextPair');
 
       component.onStrategyChange('boundary');
 
@@ -339,7 +340,7 @@ describe('ComparisonAbTabComponent', () => {
 
     it('should not load next pair when pairA is null', () => {
       component.pairA.set(null);
-      const spy = jest.spyOn(component, 'loadNextPair');
+      const spy = vi.spyOn(component, 'loadNextPair');
 
       component.onStrategyChange('active');
 

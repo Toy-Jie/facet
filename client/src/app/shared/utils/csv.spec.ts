@@ -19,9 +19,9 @@ describe('downloadCsv', () => {
       lastCsv = parts && parts.length ? String(parts[0]) : '';
       return new origBlob(parts, opts);
     } as unknown as typeof Blob;
-    URL.createObjectURL = jest.fn(() => 'blob:mock');
-    URL.revokeObjectURL = jest.fn();
-    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
       downloads.push(this.download);
     });
   });
@@ -30,7 +30,7 @@ describe('downloadCsv', () => {
     globalThis.Blob = origBlob;
     URL.createObjectURL = origCreateObjectURL;
     URL.revokeObjectURL = origRevokeObjectURL;
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   const BOM = String.fromCharCode(0xfeff);

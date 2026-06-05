@@ -1,61 +1,69 @@
 import { TestBed } from '@angular/core/testing';
+import type { Mock } from 'vitest';
 import { of, throwError } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { I18nService } from '../../core/services/i18n.service';
 
-// Mock Leaflet before importing the component
-const mockMarkersLayer = {
-  addTo: jest.fn().mockReturnThis(),
-  clearLayers: jest.fn(),
-};
+// Mock Leaflet before importing the component.
+// vi.mock is hoisted, so the mock objects are created via vi.hoisted() to be
+// available both inside the factory and in the test bodies.
+const { mockMarkersLayer, mockCircleMarker, mockMarker, mockMap, leafletMock } = vi.hoisted(() => {
+  const mockMarkersLayer = {
+    addTo: vi.fn().mockReturnThis(),
+    clearLayers: vi.fn(),
+  };
 
-const mockCircleMarker = {
-  bindTooltip: jest.fn().mockReturnThis(),
-  bindPopup: jest.fn().mockReturnThis(),
-  addTo: jest.fn().mockReturnThis(),
-};
+  const mockCircleMarker = {
+    bindTooltip: vi.fn().mockReturnThis(),
+    bindPopup: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+  };
 
-const mockMarker = {
-  bindPopup: jest.fn().mockReturnThis(),
-  addTo: jest.fn().mockReturnThis(),
-  on: jest.fn().mockReturnThis(),
-  getPopup: jest.fn(() => ({ getElement: jest.fn(() => null) })),
-};
+  const mockMarker = {
+    bindPopup: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    on: vi.fn().mockReturnThis(),
+    getPopup: vi.fn(() => ({ getElement: vi.fn(() => null) })),
+  };
 
-const mockMap = {
-  setView: jest.fn().mockReturnThis(),
-  getBounds: jest.fn(() => ({
-    getSouthWest: () => ({ lat: 40, lng: -5 }),
-    getNorthEast: () => ({ lat: 55, lng: 15 }),
-  })),
-  getZoom: jest.fn(() => 5),
-  on: jest.fn(),
-  off: jest.fn(),
-  remove: jest.fn(),
-};
+  const mockMap = {
+    setView: vi.fn().mockReturnThis(),
+    getBounds: vi.fn(() => ({
+      getSouthWest: () => ({ lat: 40, lng: -5 }),
+      getNorthEast: () => ({ lat: 55, lng: 15 }),
+    })),
+    getZoom: vi.fn(() => 5),
+    on: vi.fn(),
+    off: vi.fn(),
+    remove: vi.fn(),
+  };
 
-jest.mock('leaflet', () => ({
-  Icon: { Default: { mergeOptions: jest.fn() } },
-  map: jest.fn(() => mockMap),
-  tileLayer: jest.fn(() => ({ addTo: jest.fn() })),
-  layerGroup: jest.fn(() => mockMarkersLayer),
-  circleMarker: jest.fn(() => mockCircleMarker),
-  marker: jest.fn(() => mockMarker),
-}));
+  const leafletMock = {
+    Icon: { Default: { mergeOptions: vi.fn() } },
+    map: vi.fn(() => mockMap),
+    tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
+    layerGroup: vi.fn(() => mockMarkersLayer),
+    circleMarker: vi.fn(() => mockCircleMarker),
+    marker: vi.fn(() => mockMarker),
+  };
+
+  return { mockMarkersLayer, mockCircleMarker, mockMarker, mockMap, leafletMock };
+});
+
+vi.mock('leaflet', () => leafletMock);
 
 import { MapComponent } from './map.component';
 
 describe('MapComponent', () => {
-   
   let component: any;
-  let mockApi: { get: jest.Mock; thumbnailUrl: jest.Mock };
+  let mockApi: { get: Mock; thumbnailUrl: Mock };
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     mockApi = {
-      get: jest.fn(() => of({ clusters: [], photos: [] })),
-      thumbnailUrl: jest.fn((path: string, size?: number) => `/thumbnail?path=${path}&size=${size}`),
+      get: vi.fn(() => of({ clusters: [], photos: [] })),
+      thumbnailUrl: vi.fn((path: string, size?: number) => `/thumbnail?path=${path}&size=${size}`),
     };
 
     TestBed.configureTestingModule({
@@ -73,7 +81,7 @@ describe('MapComponent', () => {
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe('escapeHtml', () => {
@@ -91,7 +99,7 @@ describe('MapComponent', () => {
 
   describe('initMap', () => {
     it('should create a Leaflet map and set moveend handler', () => {
-      const L = jest.requireMock('leaflet');
+      const L = leafletMock;
 
       component.initMap();
 
@@ -101,7 +109,7 @@ describe('MapComponent', () => {
     });
 
     it('should trigger loadMarkers on init', () => {
-      const spy = jest.spyOn(component, 'loadMarkers');
+      const spy = vi.spyOn(component, 'loadMarkers');
       component.initMap();
       expect(spy).toHaveBeenCalled();
     });
@@ -137,7 +145,7 @@ describe('MapComponent', () => {
     });
 
     it('should create circle markers for clusters', async () => {
-      const L = jest.requireMock('leaflet');
+      const L = leafletMock;
       mockApi.get.mockReturnValue(of({
         clusters: [
           { lat: 48.8, lng: 2.3, count: 10, representative_path: '/photo.jpg' },
@@ -156,7 +164,7 @@ describe('MapComponent', () => {
     });
 
     it('should create standard markers for individual photos', async () => {
-      const L = jest.requireMock('leaflet');
+      const L = leafletMock;
       mockApi.get.mockReturnValue(of({
         clusters: [],
         photos: [
@@ -201,7 +209,7 @@ describe('MapComponent', () => {
   describe('ngOnDestroy', () => {
     it('should remove map and clean up handler', () => {
       component.map = mockMap;
-      component.moveEndHandler = jest.fn();
+      component.moveEndHandler = vi.fn();
 
       component.ngOnDestroy();
 

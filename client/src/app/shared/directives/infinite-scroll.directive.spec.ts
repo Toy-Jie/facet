@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { Component, viewChild } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { InfiniteScrollDirective } from './infinite-scroll.directive';
@@ -5,27 +6,28 @@ import { InfiniteScrollDirective } from './infinite-scroll.directive';
 /** Captured IntersectionObserver instances and their callbacks. */
 let observerInstances: {
   callback: IntersectionObserverCallback;
-  options: IntersectionObserverInit | undefined;
-  observe: jest.Mock;
-  unobserve: jest.Mock;
-  disconnect: jest.Mock;
+  options?: IntersectionObserverInit;
+  observe: Mock;
+  unobserve: Mock;
+  disconnect: Mock;
 }[];
 
 beforeEach(() => {
   observerInstances = [];
 
-   
-  (globalThis as any).IntersectionObserver = jest.fn((callback: IntersectionObserverCallback, options?: IntersectionObserverInit) => {
-    const instance = {
-      callback,
-      options,
-      observe: jest.fn(),
-      unobserve: jest.fn(),
-      disconnect: jest.fn(),
-    };
-    observerInstances.push(instance);
-    return instance;
-  });
+  // Arrow functions cannot be constructors, so use a class for `new IntersectionObserver(...)`.
+  class MockIntersectionObserver {
+    readonly observe = vi.fn();
+    readonly unobserve = vi.fn();
+    readonly disconnect = vi.fn();
+    constructor(
+      public callback: IntersectionObserverCallback,
+      public options?: IntersectionObserverInit,
+    ) {
+      observerInstances.push(this);
+    }
+  }
+  (globalThis as any).IntersectionObserver = MockIntersectionObserver;
 });
 
 @Component({

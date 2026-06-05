@@ -50,20 +50,20 @@ describe('GalleryFilterSidebarComponent', () => {
       compositionPatterns: signal([]),
       config: signal(null),
       activeFilterCount: signal(0),
-      updateFilter: jest.fn(),
-      updateFilters: jest.fn(),
-      resetFilters: jest.fn(),
-      setFilterDrawerOpen: jest.fn(),
+      updateFilter: vi.fn(),
+      updateFilters: vi.fn(),
+      resetFilters: vi.fn(),
+      setFilterDrawerOpen: vi.fn(),
     };
 
     TestBed.configureTestingModule({
       providers: [
         GalleryFilterSidebarComponent,
         { provide: GalleryStore, useValue: mockStore },
-        { provide: I18nService, useValue: { t: jest.fn((k: string) => k), currentLang: jest.fn(() => 'en') } },
-        { provide: AuthService, useValue: { isEdition: jest.fn(() => false) } },
-        { provide: AlbumService, useValue: { list: jest.fn(() => of({ albums: [] })) } },
-        { provide: MatDialog, useValue: { open: jest.fn() } },
+        { provide: I18nService, useValue: { t: vi.fn((k: string) => k), currentLang: vi.fn(() => 'en') } },
+        { provide: AuthService, useValue: { isEdition: vi.fn(() => false) } },
+        { provide: AlbumService, useValue: { list: vi.fn(() => of({ albums: [] })) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } },
       ],
     });
     component = TestBed.inject(GalleryFilterSidebarComponent);

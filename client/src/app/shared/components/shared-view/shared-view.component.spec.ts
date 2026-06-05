@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -14,8 +15,8 @@ function buildMockRoute(
 ) {
   return {
     snapshot: {
-      paramMap: { get: jest.fn((key: string) => key === 'albumId' ? id : null) },
-      queryParamMap: { get: jest.fn((key: string) => key === 'token' ? token : null) },
+      paramMap: { get: vi.fn((key: string) => key === 'albumId' ? id : null) },
+      queryParamMap: { get: vi.fn((key: string) => key === 'token' ? token : null) },
     },
   };
 }
@@ -23,8 +24,8 @@ function buildMockRoute(
 describe('SharedViewComponent', () => {
    
   let component: any;
-  let mockApi: { get: jest.Mock };
-  let mockI18n: { t: jest.Mock };
+  let mockApi: { get: Mock };
+  let mockI18n: { t: Mock };
 
   const sharedAlbumResponse = {
     album: { id: 1, name: 'Shared Album', description: 'A shared album' },
@@ -59,10 +60,10 @@ describe('SharedViewComponent', () => {
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of(sharedAlbumResponse)),
+      get: vi.fn(() => of(sharedAlbumResponse)),
     };
     mockI18n = {
-      t: jest.fn((key: string) => key),
+      t: vi.fn((key: string) => key),
     };
   });
 

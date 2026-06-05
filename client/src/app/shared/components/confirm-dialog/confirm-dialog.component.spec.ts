@@ -1,13 +1,14 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from './confirm-dialog.component';
 
 describe('ConfirmDialogComponent', () => {
   let component: ConfirmDialogComponent;
-  let mockDialogRef: { close: jest.Mock };
+  let mockDialogRef: { close: Mock };
 
   beforeEach(() => {
-    mockDialogRef = { close: jest.fn() };
+    mockDialogRef = { close: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         ConfirmDialogComponent,

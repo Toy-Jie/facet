@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
@@ -6,9 +7,9 @@ import { ApiService } from '../../core/services/api.service';
 import { I18nService } from '../../core/services/i18n.service';
 
 describe('FaceSelectorDialogComponent', () => {
-  const mockDialogRef = { close: jest.fn() };
+  const mockDialogRef = { close: vi.fn() };
   const mockI18n = { t: (key: string) => key };
-  let mockApi: { get: jest.Mock };
+  let mockApi: { get: Mock };
 
   const createComponent = () => {
     TestBed.configureTestingModule({
@@ -23,8 +24,8 @@ describe('FaceSelectorDialogComponent', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockApi = { get: jest.fn() };
+    vi.clearAllMocks();
+    mockApi = { get: vi.fn() };
   });
 
   it('starts in loading state', () => {

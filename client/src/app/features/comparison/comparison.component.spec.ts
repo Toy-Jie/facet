@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
@@ -12,25 +13,25 @@ import { ComparisonComponent } from './comparison.component';
 describe('ComparisonComponent', () => {
    
   let component: any;
-  let mockApi: { get: jest.Mock; post: jest.Mock; delete: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
-  let mockI18n: { t: jest.Mock };
-  let mockAuth: { isEdition: jest.Mock };
-  let mockStore: { types: ReturnType<typeof signal<{ id: string; count: number }[]>>; loadTypeCounts: jest.Mock };
+  let mockApi: { get: Mock; post: Mock; delete: Mock };
+  let mockSnackBar: { open: Mock };
+  let mockI18n: { t: Mock };
+  let mockAuth: { isEdition: Mock };
+  let mockStore: { types: ReturnType<typeof signal<{ id: string; count: number }[]>>; loadTypeCounts: Mock };
   let compareFilters: { selectedCategory: ReturnType<typeof signal<string>> };
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of({})),
-      post: jest.fn(() => of({})),
-      delete: jest.fn(() => of({})),
+      get: vi.fn(() => of({})),
+      post: vi.fn(() => of({})),
+      delete: vi.fn(() => of({})),
     };
-    mockSnackBar = { open: jest.fn() };
-    mockI18n = { t: jest.fn((key: string) => key) };
-    mockAuth = { isEdition: jest.fn(() => true) };
+    mockSnackBar = { open: vi.fn() };
+    mockI18n = { t: vi.fn((key: string) => key) };
+    mockAuth = { isEdition: vi.fn(() => true) };
     mockStore = {
       types: signal([]),
-      loadTypeCounts: jest.fn(() => Promise.resolve()),
+      loadTypeCounts: vi.fn(() => Promise.resolve()),
     };
     compareFilters = { selectedCategory: signal('') };
 

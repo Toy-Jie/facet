@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
@@ -9,18 +10,18 @@ import { ComparisonWeightsTabComponent } from './comparison-weights-tab.componen
 
 describe('ComparisonWeightsTabComponent', () => {
   let component: ComparisonWeightsTabComponent;
-  let mockApi: { get: jest.Mock; post: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
-  let mockI18n: { t: jest.Mock };
+  let mockApi: { get: Mock; post: Mock };
+  let mockSnackBar: { open: Mock };
+  let mockI18n: { t: Mock };
   let compareFilters: { selectedCategory: ReturnType<typeof signal<string>> };
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of({})),
-      post: jest.fn(() => of({})),
+      get: vi.fn(() => of({})),
+      post: vi.fn(() => of({})),
     };
-    mockSnackBar = { open: jest.fn() };
-    mockI18n = { t: jest.fn((key: string) => key) };
+    mockSnackBar = { open: vi.fn() };
+    mockI18n = { t: vi.fn((key: string) => key) };
     compareFilters = { selectedCategory: signal('') };
 
     TestBed.configureTestingModule({

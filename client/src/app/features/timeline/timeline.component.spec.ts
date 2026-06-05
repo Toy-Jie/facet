@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -8,22 +9,22 @@ import { TimelineComponent } from './timeline.component';
 describe('TimelineComponent', () => {
    
   let component: any;
-  let mockRouter: { navigate: jest.Mock };
+  let mockRouter: { navigate: Mock };
   let mockFilters: {
     dateFrom: ReturnType<typeof signal<string>>;
     dateTo: ReturnType<typeof signal<string>>;
     sortDirection: ReturnType<typeof signal<'older' | 'newer'>>;
   };
-  let paramMapSubject: { get: jest.Mock };
+  let paramMapSubject: { get: Mock };
 
   beforeEach(() => {
-    mockRouter = { navigate: jest.fn() };
+    mockRouter = { navigate: vi.fn() };
     mockFilters = {
       dateFrom: signal(''),
       dateTo: signal(''),
       sortDirection: signal<'older' | 'newer'>('older'),
     };
-    paramMapSubject = { get: jest.fn().mockReturnValue(null) };
+    paramMapSubject = { get: vi.fn().mockReturnValue(null) };
 
     TestBed.configureTestingModule({
       providers: [

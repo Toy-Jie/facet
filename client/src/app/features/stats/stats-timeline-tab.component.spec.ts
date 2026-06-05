@@ -13,8 +13,8 @@ describe('StatsTimelineTabComponent', () => {
     TestBed.configureTestingModule({
       providers: [
         StatsTimelineTabComponent,
-        { provide: ApiService, useValue: { get: jest.fn(() => of({})) } },
-        { provide: I18nService, useValue: { t: jest.fn((k: string) => k), currentLang: jest.fn(() => 'en') } },
+        { provide: ApiService, useValue: { get: vi.fn(() => of({})) } },
+        { provide: I18nService, useValue: { t: vi.fn((k: string) => k), currentLang: vi.fn(() => 'en') } },
         { provide: StatsFiltersService, useValue: { filterCategory: signal(''), dateFrom: signal(''), dateTo: signal('') } },
       ],
     });

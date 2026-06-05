@@ -79,7 +79,7 @@ class TestHostComponent {
 
 describe('PhotoCardComponent', () => {
   let fixture: ComponentFixture<TestHostComponent>;
-  const mockI18n = { t: jest.fn((key: string) => key), currentLang: jest.fn(() => 'en'), locale: jest.fn(() => 'en'), translations: jest.fn(() => ({})) };
+  const mockI18n = { t: vi.fn((key: string) => key), currentLang: vi.fn(() => 'en'), locale: vi.fn(() => 'en'), translations: vi.fn(() => ({})) };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -122,7 +122,7 @@ describe('PhotoCardComponent', () => {
   describe('cycleStarRating', () => {
     it('emits next star value (0 → 1)', () => {
       const card = getCard();
-      const spy = jest.fn();
+      const spy = vi.fn();
       card.starClicked.subscribe(spy);
       card.cycleStarRating();
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ star: 1 }));
@@ -132,7 +132,7 @@ describe('PhotoCardComponent', () => {
       fixture.componentInstance.photo.set(makePhoto({ star_rating: 3 }));
       fixture.detectChanges();
       const card = getCard();
-      const spy = jest.fn();
+      const spy = vi.fn();
       card.starClicked.subscribe(spy);
       card.cycleStarRating();
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ star: 4 }));
@@ -142,7 +142,7 @@ describe('PhotoCardComponent', () => {
       fixture.componentInstance.photo.set(makePhoto({ star_rating: 5 }));
       fixture.detectChanges();
       const card = getCard();
-      const spy = jest.fn();
+      const spy = vi.fn();
       card.starClicked.subscribe(spy);
       card.cycleStarRating();
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ star: 0 }));
@@ -152,7 +152,7 @@ describe('PhotoCardComponent', () => {
       fixture.componentInstance.photo.set(makePhoto({ star_rating: null }));
       fixture.detectChanges();
       const card = getCard();
-      const spy = jest.fn();
+      const spy = vi.fn();
       card.starClicked.subscribe(spy);
       card.cycleStarRating();
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ star: 1 }));

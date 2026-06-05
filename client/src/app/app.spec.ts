@@ -19,27 +19,27 @@ function createApp(routerUrl = '/') {
   const mockStore = {
     filters: filtersSignal,
     persons: personsSignal,
-    updateFilter: jest.fn(),
-    resetFilters: jest.fn(() => Promise.resolve()),
+    updateFilter: vi.fn(),
+    resetFilters: vi.fn(() => Promise.resolve()),
     config: signal(null),
     types: signal<{ id: string; count: number }[]>([]),
-    loadTypeCounts: jest.fn(() => Promise.resolve()),
+    loadTypeCounts: vi.fn(() => Promise.resolve()),
   };
 
-  const mockRouter = { url: routerUrl, events: NEVER, navigate: jest.fn() };
+  const mockRouter = { url: routerUrl, events: NEVER, navigate: vi.fn() };
 
   TestBed.configureTestingModule({
     providers: [
       App,
       { provide: Router, useValue: mockRouter },
       { provide: GalleryStore, useValue: mockStore },
-      { provide: AuthService, useValue: { isAuthenticated: jest.fn(() => true), checkStatus: jest.fn(() => Promise.resolve()) } },
-      { provide: I18nService, useValue: { load: jest.fn(() => Promise.resolve()), t: jest.fn((k: string) => k) } },
+      { provide: AuthService, useValue: { isAuthenticated: vi.fn(() => true), checkStatus: vi.fn(() => Promise.resolve()) } },
+      { provide: I18nService, useValue: { load: vi.fn(() => Promise.resolve()), t: vi.fn((k: string) => k) } },
       { provide: StatsFiltersService, useValue: { filterCategory: signal(''), dateFrom: signal(''), dateTo: signal('') } },
       { provide: CompareFiltersService, useValue: { selectedCategory: compareCategorySig } },
-      { provide: MatDialog, useValue: { open: jest.fn() } },
-      { provide: ApiService, useValue: { get: jest.fn(() => NEVER), post: jest.fn(() => NEVER) } },
-      { provide: ThemeService, useValue: { theme: signal(''), darkMode: signal(true), THEMES: [], setTheme: jest.fn(), toggleDarkMode: jest.fn(), accentColor: signal('#ff6600'), complementaryColor: signal('#0099ff') } },
+      { provide: MatDialog, useValue: { open: vi.fn() } },
+      { provide: ApiService, useValue: { get: vi.fn(() => NEVER), post: vi.fn(() => NEVER) } },
+      { provide: ThemeService, useValue: { theme: signal(''), darkMode: signal(true), THEMES: [], setTheme: vi.fn(), toggleDarkMode: vi.fn(), accentColor: signal('#ff6600'), complementaryColor: signal('#0099ff') } },
     ],
   });
 

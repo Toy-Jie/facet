@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
@@ -10,7 +11,7 @@ describe('StatsComponent', () => {
   let component: StatsComponent;
   // Cast to `any` for test access to protected signals
   const c = () => component as any;
-  let mockApi: { get: jest.Mock };
+  let mockApi: { get: Mock };
 
   const mockOverview = {
     total_photos: 1000,
@@ -108,16 +109,16 @@ describe('StatsComponent', () => {
     return of({});
   }
 
-  function createComponent(getMock?: jest.Mock): StatsComponent {
+  function createComponent(getMock?: Mock): StatsComponent {
     mockApi = {
-      get: getMock ?? jest.fn((path: string) => safeDefault(path)),
+      get: getMock ?? vi.fn((path: string) => safeDefault(path)),
     };
 
     TestBed.configureTestingModule({
       providers: [
         { provide: ApiService, useValue: mockApi },
         { provide: I18nService, useValue: { t: (key: string) => key } },
-        { provide: Router, useValue: { navigate: jest.fn() } },
+        { provide: Router, useValue: { navigate: vi.fn() } },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParams: {} } } },
       ],
     });
@@ -130,7 +131,7 @@ describe('StatsComponent', () => {
 
   describe('loadAll()', () => {
     it('should fetch overview and set the signal', async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/overview') return of(mockOverview);
         return safeDefault(path);
       });
@@ -145,7 +146,7 @@ describe('StatsComponent', () => {
     });
 
     it('should set loading to false even when overview fails', async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/overview') return throwError(() => new Error('fail'));
         return safeDefault(path);
       });
@@ -158,7 +159,7 @@ describe('StatsComponent', () => {
     });
 
     it('should kick off parallel loads after overview', async () => {
-      const getMock = jest.fn((path: string) => safeDefault(path));
+      const getMock = vi.fn((path: string) => safeDefault(path));
       component = createComponent(getMock);
 
       await flushPromises();
@@ -173,7 +174,7 @@ describe('StatsComponent', () => {
 
   describe('loadGear()', () => {
     it('should fetch gear stats and set cameras/lenses/combos signals', async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/gear') return of(mockGear);
         return safeDefault(path);
       });
@@ -203,7 +204,7 @@ describe('StatsComponent', () => {
     });
 
     it('should set gearLoading to false on error', async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/gear') return throwError(() => new Error('fail'));
         return safeDefault(path);
       });
@@ -216,7 +217,7 @@ describe('StatsComponent', () => {
 
   describe('loadCategories()', () => {
     it('should fetch categories and set the signal', async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/categories') return of(mockCategories);
         return safeDefault(path);
       });
@@ -230,7 +231,7 @@ describe('StatsComponent', () => {
 
   describe('CategoryStat computed signals', () => {
     beforeEach(async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/categories') return of(mockCategories);
         return safeDefault(path);
       });
@@ -272,7 +273,7 @@ describe('StatsComponent', () => {
 
   describe('loadScoreDistribution()', () => {
     it('should fetch score bins and set the signal', async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/score_distribution') return of(mockScoreBins);
         return safeDefault(path);
       });
@@ -286,7 +287,7 @@ describe('StatsComponent', () => {
 
   describe('loadTopCameras()', () => {
     it('should fetch top cameras and set the signal', async () => {
-      const getMock = jest.fn((path: string) => {
+      const getMock = vi.fn((path: string) => {
         if (path === '/stats/top_cameras') return of(mockTopCameras);
         return safeDefault(path);
       });

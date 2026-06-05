@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -17,9 +18,9 @@ describe('GalleryComponent', () => {
 
    
   let mockStore: any;
-  let mockApi: { thumbnailUrl: jest.Mock };
+  let mockApi: { thumbnailUrl: Mock };
   let mockAuth: Record<string, unknown>;
-  let mockI18n: { t: jest.Mock };
+  let mockI18n: { t: Mock };
 
   beforeEach(() => {
     mockStore = {
@@ -44,26 +45,26 @@ describe('GalleryComponent', () => {
       initializing: signal(false),
       galleryMode: signal('mosaic'),
       cardWidth: signal(300),
-      setFilterDrawerOpen: jest.fn(),
-      loadConfig: jest.fn(() => Promise.resolve()),
-      loadFilterOptions: jest.fn(() => Promise.resolve()),
-      loadTypeCounts: jest.fn(() => Promise.resolve()),
-      loadPhotos: jest.fn(() => Promise.resolve()),
-      updateFilter: jest.fn(() => Promise.resolve()),
-      resetFilters: jest.fn(() => Promise.resolve()),
-      nextPage: jest.fn(() => Promise.resolve()),
-      toggleFavorite: jest.fn(),
-      toggleRejected: jest.fn(),
+      setFilterDrawerOpen: vi.fn(),
+      loadConfig: vi.fn(() => Promise.resolve()),
+      loadFilterOptions: vi.fn(() => Promise.resolve()),
+      loadTypeCounts: vi.fn(() => Promise.resolve()),
+      loadPhotos: vi.fn(() => Promise.resolve()),
+      updateFilter: vi.fn(() => Promise.resolve()),
+      resetFilters: vi.fn(() => Promise.resolve()),
+      nextPage: vi.fn(() => Promise.resolve()),
+      toggleFavorite: vi.fn(),
+      toggleRejected: vi.fn(),
     };
 
     mockApi = {
-      thumbnailUrl: jest.fn((path: string) => `/thumbnail?path=${path}`),
+      thumbnailUrl: vi.fn((path: string) => `/thumbnail?path=${path}`),
     };
 
-    mockAuth = { isEdition: jest.fn(() => false) };
+    mockAuth = { isEdition: vi.fn(() => false) };
 
     mockI18n = {
-      t: jest.fn((key: string) => key),
+      t: vi.fn((key: string) => key),
     };
 
     TestBed.configureTestingModule({
@@ -72,10 +73,10 @@ describe('GalleryComponent', () => {
         { provide: ApiService, useValue: mockApi },
         { provide: AuthService, useValue: mockAuth },
         { provide: I18nService, useValue: mockI18n },
-        { provide: AlbumService, useValue: { list: jest.fn(() => of({ albums: [] })), get: jest.fn(() => of({})) } },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: jest.fn(() => null) } } } },
-        { provide: MatDialog, useValue: { open: jest.fn() } },
-        { provide: MatSnackBar, useValue: { open: jest.fn() } },
+        { provide: AlbumService, useValue: { list: vi.fn(() => of({ albums: [] })), get: vi.fn(() => of({})) } },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: vi.fn(() => null) } } } },
+        { provide: MatDialog, useValue: { open: vi.fn() } },
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     });
     component = TestBed.runInInjectionContext(() => new GalleryComponent());

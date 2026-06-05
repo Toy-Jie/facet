@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
@@ -6,20 +7,20 @@ import { LoginComponent } from './login.component';
 
 describe('LoginComponent', () => {
   let component: LoginComponent;
-  let mockRouter: { navigate: jest.Mock };
+  let mockRouter: { navigate: Mock };
   let mockAuth: {
-    isMultiUser: jest.Mock;
-    login: jest.Mock;
+    isMultiUser: Mock;
+    login: Mock;
   };
-  let mockI18n: { t: jest.Mock };
+  let mockI18n: { t: Mock };
 
   beforeEach(() => {
-    mockRouter = { navigate: jest.fn() };
+    mockRouter = { navigate: vi.fn() };
     mockAuth = {
-      isMultiUser: jest.fn(() => false),
-      login: jest.fn(() => Promise.resolve(true)),
+      isMultiUser: vi.fn(() => false),
+      login: vi.fn(() => Promise.resolve(true)),
     };
-    mockI18n = { t: jest.fn((key: string) => key) };
+    mockI18n = { t: vi.fn((key: string) => key) };
 
     TestBed.configureTestingModule({
       providers: [

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
@@ -10,20 +11,20 @@ import { ComparisonSnapshotsTabComponent } from './comparison-snapshots-tab.comp
 
 describe('ComparisonSnapshotsTabComponent', () => {
   let component: ComparisonSnapshotsTabComponent;
-  let mockApi: { get: jest.Mock; post: jest.Mock };
-  let mockSnackBar: { open: jest.Mock };
-  let mockI18n: { t: jest.Mock };
-  let mockAuth: { isEdition: jest.Mock };
+  let mockApi: { get: Mock; post: Mock };
+  let mockSnackBar: { open: Mock };
+  let mockI18n: { t: Mock };
+  let mockAuth: { isEdition: Mock };
   let compareFilters: { selectedCategory: ReturnType<typeof signal<string>> };
 
   beforeEach(() => {
     mockApi = {
-      get: jest.fn(() => of({ snapshots: [] })),
-      post: jest.fn(() => of({})),
+      get: vi.fn(() => of({ snapshots: [] })),
+      post: vi.fn(() => of({})),
     };
-    mockSnackBar = { open: jest.fn() };
-    mockI18n = { t: jest.fn((key: string) => key) };
-    mockAuth = { isEdition: jest.fn(() => true) };
+    mockSnackBar = { open: vi.fn() };
+    mockI18n = { t: vi.fn((key: string) => key) };
+    mockAuth = { isEdition: vi.fn(() => true) };
     compareFilters = { selectedCategory: signal('portrait') };
 
     TestBed.configureTestingModule({
@@ -107,7 +108,7 @@ describe('ComparisonSnapshotsTabComponent', () => {
 
   describe('restoreSnapshot', () => {
     it('should post correct payload and emit restored', async () => {
-      const emitSpy = jest.spyOn(component.restored, 'emit');
+      const emitSpy = vi.spyOn(component.restored, 'emit');
       mockApi.post.mockReturnValue(of({}));
 
       await component.restoreSnapshot(42);

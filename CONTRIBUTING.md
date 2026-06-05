@@ -1,6 +1,6 @@
 # Contributing to Facet
 
-Facet is a multi-dimensional photo analysis engine with a Python/FastAPI backend and an Angular 20 frontend. This guide covers the essentials for getting started and making changes.
+Facet is a multi-dimensional photo analysis engine with a Python/FastAPI backend and an Angular 21 frontend. This guide covers the essentials for getting started and making changes.
 
 ## Development Setup
 
@@ -46,7 +46,7 @@ python facet.py --doctor
 | `db/` | SQLite schema, connection pool, stats cache, maintenance utilities |
 | `utils/` | Image loading, burst detection, duplicate detection, embedding helpers |
 | `i18n/` | Translations for 5 languages (`en`, `fr`, `de`, `es`, `it`) |
-| `client/` | Angular 20 SPA with standalone components and signal-based state management |
+| `client/` | Angular 21 SPA with standalone components and signal-based state management |
 
 Other entry points: `viewer.py` (FastAPI server), `database.py` (schema migrations, stats, optimization).
 
@@ -92,7 +92,7 @@ Follow the checklist at [`.claude/patterns/new-metric-checklist.md`](.claude/pat
 
 ## Testing
 
-- **Angular**: Jest (`cd client && npx jest`)
+- **Angular**: Vitest (`cd client && npm test`)
 - **Python**: pytest (`pytest`)
 - **System diagnostics**: `python facet.py --doctor` (checks Python, GPU, dependencies, config, database)
 

@@ -1,3 +1,4 @@
+import type { MockInstance } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -7,7 +8,7 @@ import { AuthService, AuthStatus } from './auth.service';
 describe('AuthService', () => {
   let service: AuthService;
   let httpTesting: HttpTestingController;
-  const mockRouter = { navigate: jest.fn() };
+  const mockRouter = { navigate: vi.fn() };
 
   const mockStatus: AuthStatus = {
     authenticated: true,
@@ -18,16 +19,17 @@ describe('AuthService', () => {
     user_role: 'admin',
     display_name: 'Test User',
     features: { face_recognition: true, edition: false },
+    download_profiles: [],
   };
 
-  let getItemSpy: jest.SpyInstance;
-  let setItemSpy: jest.SpyInstance;
-  let removeItemSpy: jest.SpyInstance;
+  let getItemSpy: MockInstance;
+  let setItemSpy: MockInstance;
+  let removeItemSpy: MockInstance;
 
   beforeEach(() => {
-    getItemSpy = jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
-    setItemSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
-    removeItemSpy = jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {});
+    getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
+    removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {});
 
     TestBed.configureTestingModule({
       providers: [
@@ -43,7 +45,7 @@ describe('AuthService', () => {
 
   afterEach(() => {
     httpTesting.verify();
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     mockRouter.navigate.mockClear();
   });
 

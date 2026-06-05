@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -8,9 +9,9 @@ import { MemoriesDialogComponent } from './memories-dialog.component';
 describe('MemoriesDialogComponent', () => {
    
   let component: any;
-  let mockApi: { get: jest.Mock };
-  let mockRouter: { navigate: jest.Mock };
-  let mockDialogRef: { close: jest.Mock };
+  let mockApi: { get: Mock };
+  let mockRouter: { navigate: Mock };
+  let mockDialogRef: { close: Mock };
 
   function createComponent(dialogData: Record<string, string> | null = null) {
     TestBed.resetTestingModule();
@@ -27,9 +28,9 @@ describe('MemoriesDialogComponent', () => {
   }
 
   beforeEach(() => {
-    mockApi = { get: jest.fn(() => of({ years: [], has_memories: false, date: '' })) };
-    mockRouter = { navigate: jest.fn() };
-    mockDialogRef = { close: jest.fn() };
+    mockApi = { get: vi.fn(() => of({ years: [], has_memories: false, date: '' })) };
+    mockRouter = { navigate: vi.fn() };
+    mockDialogRef = { close: vi.fn() };
   });
 
   describe('ngOnInit', () => {

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { of } from 'rxjs';
@@ -7,8 +8,8 @@ import { EditAlbumDialogComponent, EditAlbumDialogData } from './edit-album-dial
 describe('EditAlbumDialogComponent', () => {
    
   let component: any;
-  let mockAlbumService: { update: jest.Mock };
-  let mockDialogRef: { close: jest.Mock };
+  let mockAlbumService: { update: Mock };
+  let mockDialogRef: { close: Mock };
 
   const albumData: EditAlbumDialogData = {
     album: {
@@ -26,9 +27,9 @@ describe('EditAlbumDialogComponent', () => {
 
   beforeEach(() => {
     mockAlbumService = {
-      update: jest.fn(() => of({ ...albumData.album, name: 'Updated' })),
+      update: vi.fn(() => of({ ...albumData.album, name: 'Updated' })),
     };
-    mockDialogRef = { close: jest.fn() };
+    mockDialogRef = { close: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [

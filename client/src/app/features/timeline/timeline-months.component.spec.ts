@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
@@ -7,7 +8,7 @@ import { TimelineMonthsComponent } from './timeline-months.component';
 describe('TimelineMonthsComponent', () => {
    
   let component: any;
-  let mockApi: { get: jest.Mock };
+  let mockApi: { get: Mock };
 
   const monthsResponse = {
     months: [
@@ -17,7 +18,7 @@ describe('TimelineMonthsComponent', () => {
   };
 
   beforeEach(() => {
-    mockApi = { get: jest.fn(() => of(monthsResponse)) };
+    mockApi = { get: vi.fn(() => of(monthsResponse)) };
 
     TestBed.configureTestingModule({
       providers: [
