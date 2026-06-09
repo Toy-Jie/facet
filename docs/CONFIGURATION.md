@@ -1132,6 +1132,9 @@ Web gallery display and behavior.
 | `gallery_mode` | `"mosaic"` | Default gallery layout (`"grid"` or `"mosaic"`) |
 | **allowed_origins** | | |
 | `allowed_origins` | `["http://localhost:4200", "http://localhost:5000"]` | CORS allowed origins for the FastAPI server. Add your domain or reverse proxy URL when hosting remotely. |
+| **security_headers** | | |
+| `security_headers.content_security_policy` | _(SPA-safe default)_ | Content-Security-Policy header value. Defaults to a policy permitting the SPA's own resources (inline theme script/style, Google Fonts, OpenStreetMap tiles, same-origin API). Set to `""` to disable, or supply a stricter policy. |
+| `security_headers.hsts` | `false` | Send `Strict-Transport-Security`. Enable only when the viewer is served over HTTPS. |
 | **Other** | | |
 | `cache_ttl_seconds` | `60` | Query cache TTL |
 | `notification_duration_ms` | `2000` | Toast duration |

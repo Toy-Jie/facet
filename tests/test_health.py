@@ -21,6 +21,27 @@ class TestHealthEndpoint:
         assert resp.json() == {"status": "ok"}
 
 
+class TestSecurityHeaders:
+    def test_safe_headers_always_present(self, client):
+        resp = client.get("/health")
+        assert resp.headers["X-Content-Type-Options"] == "nosniff"
+        assert resp.headers["X-Frame-Options"] == "SAMEORIGIN"
+        assert resp.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+
+    def test_default_csp_present_and_spa_safe(self, client):
+        resp = client.get("/health")
+        csp = resp.headers["Content-Security-Policy"]
+        assert "default-src 'self'" in csp
+        # SPA needs inline script (theme bootstrap) + Google Fonts + OSM tiles.
+        assert "'unsafe-inline'" in csp
+        assert "https://fonts.googleapis.com" in csp
+        assert "img-src 'self' data: blob: https:" in csp
+
+    def test_hsts_off_by_default(self, client):
+        resp = client.get("/health")
+        assert "Strict-Transport-Security" not in resp.headers
+
+
 class TestReadyEndpoint:
     """Tests target the async /ready endpoint that uses get_async_db()."""
 

@@ -73,6 +73,53 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     )
 
 
+# Default Content-Security-Policy that permits exactly the SPA's own surface:
+# the inline theme-bootstrap script and loading-spinner style in index.html
+# ('unsafe-inline'), Google Fonts (Roboto + Material Icons), OpenStreetMap
+# tiles and data/blob thumbnails (img-src), and same-origin API calls. Tighten
+# or disable via viewer.security_headers.content_security_policy.
+DEFAULT_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com data:; "
+    "img-src 'self' data: blob: https:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'self'; "
+    "base-uri 'self'"
+)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach security headers to every response.
+
+    Three headers are always applied (no app-breaking risk): MIME-sniffing
+    protection, same-origin framing, and a referrer policy. The
+    Content-Security-Policy and HSTS headers are configurable via
+    ``viewer.security_headers``. CSP defaults to a policy permitting the SPA's
+    own resources; set it to an empty string to disable. HSTS is opt-in because
+    the viewer often runs over plain HTTP on a LAN/NAS.
+    """
+
+    def __init__(self, app, csp: str = "", hsts: bool = False):
+        super().__init__(app)
+        self.csp = csp
+        self.hsts = hsts
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        if self.csp:
+            response.headers.setdefault("Content-Security-Policy", self.csp)
+        if self.hsts:
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains",
+            )
+        return response
+
+
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Handle request-validation (422) errors.
 
@@ -235,6 +282,15 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+
+    # Security headers — safe headers always on; CSP + HSTS configurable via
+    # viewer.security_headers (CSP defaults to a SPA-safe policy, HSTS opt-in).
+    sec_headers = _FULL_CONFIG.get("viewer", {}).get("security_headers", {})
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        csp=sec_headers.get("content_security_policy", DEFAULT_CSP),
+        hsts=bool(sec_headers.get("hsts", False)),
     )
 
     # Exception handlers — uniform JSON error responses + server-side logging.
