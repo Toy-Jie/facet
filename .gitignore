@@ -6,6 +6,12 @@ venv/
 .venv/
 env/
 
+# Test coverage (pytest-cov)
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
 # IDE
 .idea/
 .vscode/
