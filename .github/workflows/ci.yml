@@ -20,9 +20,9 @@ jobs:
           python-version: "3.12"
           cache: "pip"
       - name: Install test dependencies
-        run: pip install pytest pytest-asyncio fastapi[standard] httpx pyjwt pillow numpy scipy scikit-learn opencv-python-headless tqdm aiosqlite
+        run: pip install pytest pytest-asyncio pytest-cov fastapi[standard] httpx pyjwt pillow numpy scipy scikit-learn opencv-python-headless tqdm aiosqlite
       - name: Run tests
-        run: python -m pytest --tb=short -q
+        run: python -m pytest --tb=short -q --cov=api --cov=processing --cov=analyzers --cov=config --cov=utils --cov-report=term-missing
 
   angular-tests:
     name: Angular Tests
@@ -48,8 +48,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      - run: pip install ruff mypy
       - run: ruff check api/ tests/ --select E,F,W --ignore E501
+      - name: Type check (advisory)
+        continue-on-error: true
+        run: mypy api/
       - name: Forbid broken FastAPI auth mock pattern
         run: |
           # Catches both direct ("api.routers.albums.require_edition") and

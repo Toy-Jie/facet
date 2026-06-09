@@ -96,6 +96,19 @@ Follow the checklist at [`.claude/patterns/new-metric-checklist.md`](.claude/pat
 - **Python**: pytest (`pytest`)
 - **System diagnostics**: `python facet.py --doctor` (checks Python, GPU, dependencies, config, database)
 
+## Pre-commit Hooks
+
+Local hooks mirror the fast CI lint guards (ruff + the FastAPI auth-mock check)
+so failures surface before push:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+CI additionally runs an advisory `mypy api/` type-check; run it locally with
+`mypy api/` (advisory — it is non-blocking in CI).
+
 ## Pull Requests
 
 - Branch from `master`.

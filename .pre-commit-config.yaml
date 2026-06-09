@@ -1,0 +1,32 @@
+# Local mirror of the CI lint guards, so failures surface before push.
+#
+#   pip install pre-commit   # or: pipx install pre-commit
+#   pre-commit install       # registers the git hook
+#
+# Hooks here mirror the *fast, deterministic* CI checks (ruff + the auth-mock
+# guard). CI additionally runs the Dockerfile-COPY guard, `ng lint`, and an
+# advisory `mypy api/` type-check — heavier or non-blocking steps that stay
+# CI-only. Run the type-check locally on demand with: mypy api/
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.1
+    hooks:
+      - id: ruff
+        name: ruff (api/ + tests/)
+        args: [--select, "E,F,W", --ignore, "E501"]
+        files: ^(api|tests)/.*\.py$
+
+  - repo: local
+    hooks:
+      - id: forbid-auth-mock
+        name: Forbid broken FastAPI auth mock pattern
+        # Module-level mock.patch on require_*/get_optional_user is a no-op
+        # against Depends()-captured references; use the conftest fixtures or
+        # app.dependency_overrides instead. Mirrors the CI guard.
+        entry: >-
+          bash -c 'if grep -rEn "mock\.patch\([^)]*\.(require_[a-z_]+|get_optional_user)" tests/; then
+          echo "Use conftest fixtures (edition_client/regular_client/...) or app.dependency_overrides. See tests/conftest.py.";
+          exit 1; fi'
+        language: system
+        pass_filenames: false
+        files: ^tests/.*\.py$
