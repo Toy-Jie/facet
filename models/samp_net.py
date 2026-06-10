@@ -368,14 +368,19 @@ class SaliencyDetector:
         # Initialize model
         self.model = U2NETP(3, 1)
 
-        # Load weights
+        # Load weights. A random model would silently produce garbage
+        # saliency (and therefore garbage composition scores), so a bad
+        # checkpoint is a hard error - the model manager catches it and
+        # skips composition scoring entirely.
         try:
             state_dict = torch.load(self.weights_path, map_location=self.device, weights_only=True)
             self.model.load_state_dict(state_dict)
             logger.info("U2-Net-P saliency model loaded from %s", self.weights_path)
         except Exception as e:
-            logger.warning("Could not load U2-Net-P weights: %s", e)
-            logger.warning("Using randomly initialized saliency model")
+            raise RuntimeError(
+                f"U2-Net-P weights at {self.weights_path} could not be loaded "
+                f"({e}) - delete the file to re-download"
+            ) from e
 
         self.model = self.model.to(self.device).eval()
         self._initialized = True
@@ -855,6 +860,10 @@ class SAMPNetScorer:
         logger.info("Downloading SAMP-Net weights to %s...", self.model_path)
         try:
             urllib.request.urlretrieve(SAMPNET_WEIGHTS_URL, self.model_path)
+            # A 404/error page saved as .pth would poison the next load
+            if os.path.getsize(self.model_path) < 1_000_000:
+                os.remove(self.model_path)
+                raise Exception("download resulted in an invalid file (too small)")
             logger.info("SAMP-Net download complete.")
         except Exception as e:
             # The upstream GitHub release URL has been intermittently 404 since
@@ -907,8 +916,13 @@ class SAMPNetScorer:
             logger.info("SAMP-Net model loaded successfully")
 
         except Exception as e:
-            logger.warning("Could not load SAMP-Net weights: %s", e)
-            logger.warning("Using randomly initialized model (scores may not be accurate)")
+            # Never fall back to random weights - they would silently emit
+            # plausible-looking but meaningless composition scores. The model
+            # manager catches this and skips composition scoring.
+            raise RuntimeError(
+                f"SAMP-Net checkpoint at {self.model_path} could not be loaded "
+                f"({e}) - delete the file to re-download"
+            ) from e
 
         return model.to(self.device).eval()
 

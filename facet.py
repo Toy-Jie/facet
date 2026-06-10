@@ -215,6 +215,11 @@ Configuration:
                         help='Re-process only files that failed during the last scan run (or all runs)')
     scan_group.add_argument('--force-since', type=str, metavar='YYYY-MM-DD',
                         help='Like --force, but only re-process photos last scanned before this date')
+    scan_group.add_argument('--watch', action='store_true',
+                        help='Stay running and re-scan whenever new photos appear in the given '
+                             'directories (requires the optional watchdog package)')
+    scan_group.add_argument('--watch-debounce', type=int, default=30, metavar='SECONDS',
+                        help='Quiet period before a watch-mode scan fires (default: 30)')
 
     # Database operations
     db_group = parser.add_argument_group('Database operations')
@@ -1284,6 +1289,17 @@ Configuration:
         logger.error("photo_paths is required unless using --recompute-average or --compute-percentiles")
         parser.print_help()
         exit(1)
+
+    # Watch mode: long-running daemon spawning incremental scans on changes
+    if args.watch:
+        from processing.watcher import run_watch_loop
+        run_watch_loop(
+            [str(Path(p).resolve()) for p in args.photo_paths],
+            db_path=args.db,
+            config_path=args.config,
+            debounce_seconds=args.watch_debounce,
+        )
+        exit()
 
     # Full mode - initialize with GPU models for photo processing
     # Multi-pass mode skips eager loading of heavy GPU models (CLIP, SAMP-Net)

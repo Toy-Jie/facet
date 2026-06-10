@@ -75,6 +75,9 @@ python facet.py --resume                          # Resume last interrupted/fail
 python facet.py --retry-failed                    # Re-process files that failed last run (or: --retry-failed all)
 python facet.py /path/to/photos --force-since 2026-01-01  # Re-process only photos scanned before date
 
+# Watch mode (daemon re-scanning on new files; optional watchdog package)
+python facet.py /path/to/photos --watch [--watch-debounce 30]
+
 # Preview mode - score sample photos without saving (default: 10 photos)
 python facet.py /path/to/photos --dry-run
 python facet.py /path/to/photos --dry-run --dry-run-count 20

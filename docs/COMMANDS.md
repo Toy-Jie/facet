@@ -21,6 +21,7 @@
 | `python facet.py --resume` | Resume the last interrupted/failed scan (reuses its directories; with `--force`, skips files already re-scored since that run started) |
 | `python facet.py --retry-failed` | Re-process only the files that failed during the last scan run (`--retry-failed all` for failures across all runs) |
 | `python facet.py /path --force-since 2026-01-01` | Like `--force`, but only re-process photos last scanned before the date |
+| `python facet.py /path --watch` | Stay running and re-scan whenever new photos appear (requires `pip install watchdog`; `--watch-debounce N` tunes the quiet period, default 30s) |
 
 ### Scan Bookkeeping
 

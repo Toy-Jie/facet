@@ -70,8 +70,11 @@ gpu-clustering = [
     "cuml",
     "cupy",
 ]
+watch = [
+    "watchdog>=4.0",
+]
 all = [
-    "facet-photo[vlm,saliency]",
+    "facet-photo[vlm,saliency,watch]",
 ]
 
 [project.urls]
