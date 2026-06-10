@@ -188,6 +188,12 @@ Bulk actions require edition mode. Double-click any photo to download it directl
 - **Hide Blinks** - Filter out photos with detected blinks
 - **Best of Burst** - Show only top-scored photo from each burst
 - **Infinite Scroll** - Photos load as you scroll
+- **Fast Scrolling (virtualized)** - Row-windowed rendering: only rows near the
+  viewport are in the DOM, so deep scrolling through tens of thousands of photos
+  stays smooth. On by default; disable in the Display section of the filter
+  sidebar if you hit layout issues (grid mode with details shown always uses
+  full rendering since row heights aren't deterministic there). Persisted in
+  localStorage (`facet_virtual_scroll`).
 
 ### Similar Photos
 

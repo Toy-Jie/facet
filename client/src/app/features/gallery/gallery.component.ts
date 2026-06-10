@@ -39,6 +39,9 @@ import { SlideshowComponent } from './slideshow.component';
 import { GalleryFilterSidebarComponent } from './gallery-filter-sidebar.component';
 import { PhotoCardComponent } from '../../shared/components/photo-card/photo-card.component';
 import { PhotoSkeletonComponent } from '../../shared/components/photo-skeleton/photo-skeleton.component';
+import {
+  GalleryRow, buildGridRows, buildMosaicRows, totalRowsHeight, windowRange,
+} from './gallery-rows.util';
 import { AlbumService, Album } from '../../core/services/album.service';
 import { CreateAlbumDialogComponent } from '../albums/create-album-dialog.component';
 import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll.directive';
@@ -87,7 +90,56 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
 
         <!-- Photo grid / mosaic -->
         @if (store.photos().length) {
-          @if (effectiveGalleryMode() === 'grid') {
+          @if (virtualOn()) {
+            <!-- Windowed rendering: only rows near the viewport are in the DOM,
+                 spacers preserve the scroll geometry -->
+            <div
+              id="gallery-rows-host"
+              role="grid"
+              [attr.aria-label]="'gallery.photo_grid' | translate"
+              [attr.aria-rowcount]="rowsModel().length"
+              class="flex flex-col p-2 md:p-4"
+              (keydown)="onGridKeydown($event)"
+            >
+              <div [style.height.px]="topSpacer()" aria-hidden="true"></div>
+              @for (row of visibleRows(); track row.photos[0].path) {
+                <div class="flex gap-2 mb-2" [style.height.px]="row.height">
+                  @for (photo of row.photos; track photo.path; let i = $index) {
+                    <app-photo-card
+                      [photo]="photo"
+                      [attr.data-pidx]="row.startIndex + i"
+                      [style.width.px]="row.widths[i]"
+                      [style.height.px]="row.height"
+                      class="shrink-0"
+                      [hideDetails]="true"
+                      [mosaicMode]="effectiveGalleryMode() === 'mosaic'"
+                      [config]="store.config()"
+                      [isSelected]="selectedPaths().has(photo.path)"
+                      [currentSort]="store.filters().sort"
+                      [thumbSize]="thumbSize()"
+                      [isEditionMode]="auth.isEdition()"
+                      [personFilterId]="store.filters().person_id"
+                      [tooltipMode]="tooltipMode()"
+                      (selectionChange)="toggleSelection($event.photo, $event.event)"
+                      (tooltipShow)="showTooltip($event.event, $event.photo)"
+                      (tooltipHide)="hideTooltip()"
+                      (tagClicked)="store.updateFilter('tag', $event)"
+                      (personFilterClicked)="filterByPerson($event)"
+                      (personRemoveClicked)="removePerson($event.photo, $event.personId)"
+                      (openSimilarClicked)="openSimilar($event.photo, $event.mode)"
+                      (openCritiqueClicked)="openCritique($event)"
+                      (openAddPersonClicked)="openAddPerson($event)"
+                      (favoriteToggled)="store.toggleFavorite($event)"
+                      (rejectedToggled)="store.toggleRejected($event)"
+                      (starClicked)="store.setRating($event.photo.path, $event.star)"
+                      (doubleClicked)="downloadPhoto($event)"
+                    />
+                  }
+                </div>
+              }
+              <div [style.height.px]="bottomSpacer()" aria-hidden="true"></div>
+            </div>
+          } @else if (effectiveGalleryMode() === 'grid') {
             <div
               role="grid"
               [attr.aria-label]="'gallery.photo_grid' | translate"
@@ -407,6 +459,80 @@ export class GalleryComponent implements OnInit, OnDestroy {
   /** Container width for mosaic layout (updated via ResizeObserver) */
   protected readonly containerWidth = signal(0);
 
+  // --- Virtual scrolling (row windowing with top/bottom spacers) ---
+
+  /** Gap between cards/rows in pixels (matches the gap-2 Tailwind class). */
+  private static readonly ROW_GAP = 8;
+  /** Pixels rendered beyond the viewport in both directions. */
+  private static readonly OVERSCAN = 1200;
+
+  /** Scroll offset relative to the rows container, and viewport height. */
+  protected readonly relScrollTop = signal(0);
+  protected readonly viewportH = signal(0);
+
+  /**
+   * Windowing active: user flag on, AND heights are deterministic - mosaic
+   * always is; grid only with details hidden (the default). Grid with
+   * details shown falls back to full rendering.
+   */
+  readonly virtualOn = computed(() =>
+    this.store.virtualScroll()
+    && this.containerWidth() > 0
+    && (this.effectiveGalleryMode() === 'mosaic' || this.effectiveHideDetails()),
+  );
+
+  /** Unified row model for the active mode. */
+  readonly rowsModel = computed<GalleryRow[]>(() => {
+    const photos = this.store.photos();
+    // Rows live inside the p-2 md:p-4 container - subtract its padding
+    const width = this.containerWidth() - (this.isDesktop() ? 32 : 16);
+    if (!photos.length || width <= 0) return [];
+    if (this.effectiveGalleryMode() === 'mosaic') {
+      return buildMosaicRows(photos, width, this.cardWidth(), GalleryComponent.ROW_GAP);
+    }
+    return buildGridRows(
+      photos, width, this.cardWidth(), GalleryComponent.ROW_GAP,
+      this.effectiveHideDetails(), !this.isDesktop(),
+    );
+  });
+
+  readonly totalRowsHeight = computed(() => totalRowsHeight(this.rowsModel()));
+
+  private readonly visibleRange = computed(() =>
+    windowRange(this.rowsModel(), this.relScrollTop(), this.viewportH() || 900, GalleryComponent.OVERSCAN),
+  );
+
+  readonly visibleRows = computed(() => {
+    const { first, last } = this.visibleRange();
+    return last < first ? [] : this.rowsModel().slice(first, last + 1);
+  });
+
+  readonly topSpacer = computed(() => {
+    const { first, last } = this.visibleRange();
+    const rows = this.rowsModel();
+    return last < first || !rows.length ? 0 : rows[first].offset;
+  });
+
+  readonly bottomSpacer = computed(() => {
+    const { last } = this.visibleRange();
+    const rows = this.rowsModel();
+    if (!rows.length || last < 0 || last >= rows.length) return 0;
+    const bottomEdge = rows[last].offset + rows[last].height;
+    return Math.max(0, this.totalRowsHeight() - bottomEdge);
+  });
+
+  /** Update the window position from the live DOM geometry (rAF-throttled). */
+  private updateWindowPosition(): void {
+    const viewport = this.scrollContent()?.getElementRef().nativeElement as HTMLElement | undefined;
+    const rowsHost = document.getElementById('gallery-rows-host');
+    if (!viewport) return;
+    this.viewportH.set(viewport.clientHeight);
+    if (rowsHost) {
+      const rel = viewport.getBoundingClientRect().top - rowsHost.getBoundingClientRect().top;
+      this.relScrollTop.set(Math.max(0, rel));
+    }
+  }
+
   /** Mosaic row layout: justified rows of photos preserving aspect ratios */
   readonly mosaicRows = computed(() => {
     const photos = this.store.photos();
@@ -480,6 +606,8 @@ export class GalleryComponent implements OnInit, OnDestroy {
       this.scrollDirective()?.recheck();
       // Clear tooltip when photos change (prevents stale tooltips after filter changes)
       untracked(() => this.tooltipPhoto.set(null));
+      // Re-measure the virtual window once the new rows are in the DOM
+      requestAnimationFrame(() => this.updateWindowPosition());
     });
   }
 
@@ -790,6 +918,7 @@ export class GalleryComponent implements OnInit, OnDestroy {
       for (const entry of entries) {
         this.containerWidth.set(Math.floor(entry.contentRect.width));
       }
+      this.updateWindowPosition();
     });
 
     // Observe the sidenav-content area for width changes
@@ -820,11 +949,11 @@ export class GalleryComponent implements OnInit, OnDestroy {
   /** Vertical step for the active index: grid = ±columns, mosaic = same offset in adjacent row. */
   private verticalTarget(index: number, dir: 1 | -1): number {
     const count = this.store.photos().length;
-    if (this.effectiveGalleryMode() === 'grid') {
+    if (this.effectiveGalleryMode() === 'grid' && !this.virtualOn()) {
       const next = index + dir * this.gridColumns();
       return Math.max(0, Math.min(count - 1, next));
     }
-    const rows = this.mosaicRows();
+    const rows = this.virtualOn() ? this.rowsModel() : this.mosaicRows();
     const rowIdx = rows.findIndex(r => index >= r.startIndex && index < r.startIndex + r.photos.length);
     const targetRow = rows[rowIdx + dir];
     if (rowIdx < 0 || !targetRow) return index;
@@ -856,19 +985,51 @@ export class GalleryComponent implements OnInit, OnDestroy {
 
     event.preventDefault();
     this.activeIndex.set(next);
-    const host = document.querySelector(`[data-pidx="${next}"]`) as HTMLElement | null;
-    const focusable = (host?.querySelector('[tabindex]') as HTMLElement | null) ?? host;
-    focusable?.focus();
-    focusable?.scrollIntoView({ block: 'nearest' });
+    this.focusCard(next);
   }
 
-  /** Toggle the scroll-to-top button based on how far the gallery content is scrolled. */
+  /** Focus a card by photo index; if windowed out of the DOM, scroll its row
+   * into view first and retry once the window has rendered it. */
+  private focusCard(index: number, retried = false): void {
+    const host = document.querySelector(`[data-pidx="${index}"]`) as HTMLElement | null;
+    if (host) {
+      const focusable = (host.querySelector('[tabindex]') as HTMLElement | null) ?? host;
+      focusable.focus();
+      focusable.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (retried || !this.virtualOn()) return;
+    const row = this.rowsModel().find(r =>
+      index >= r.startIndex && index < r.startIndex + r.photos.length);
+    const content = this.scrollContent();
+    if (!row || !content) return;
+    // row.offset is relative to the rows host - convert to viewport scrollTop
+    const absolute = content.measureScrollOffset('top') + row.offset - this.relScrollTop();
+    content.scrollTo({ top: Math.max(0, absolute) });
+    requestAnimationFrame(() => {
+      this.updateWindowPosition();
+      requestAnimationFrame(() => this.focusCard(index, true));
+    });
+  }
+
+  /** Track scrolling: scroll-to-top button + virtual window position. */
   private setupScrollTracking(): void {
     const content = this.scrollContent();
     if (!content) return;
+    let rafPending = false;
     content.elementScrolled()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.showScrollTop.set(content.measureScrollOffset('top') > 800));
+      .subscribe(() => {
+        this.showScrollTop.set(content.measureScrollOffset('top') > 800);
+        if (!rafPending) {
+          rafPending = true;
+          requestAnimationFrame(() => {
+            rafPending = false;
+            this.updateWindowPosition();
+          });
+        }
+      });
+    requestAnimationFrame(() => this.updateWindowPosition());
   }
 
   /** Smoothly scroll the gallery content back to the top. */

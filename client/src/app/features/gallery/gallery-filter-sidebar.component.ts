@@ -404,6 +404,10 @@ function saveSectionStates(states: Record<string, boolean>): void {
             >{{ 'gallery.hide_details' | translate }}</mat-checkbox>
           }
           <mat-checkbox
+            [checked]="store.virtualScroll()"
+            (change)="store.setVirtualScroll($event.checked)"
+          >{{ 'gallery.sidebar.virtual_scroll' | translate }}</mat-checkbox>
+          <mat-checkbox
             [checked]="store.filters().hide_blinks"
             (change)="store.updateFilter('hide_blinks', $event.checked)"
           >{{ 'gallery.hide_blinks' | translate }}</mat-checkbox>

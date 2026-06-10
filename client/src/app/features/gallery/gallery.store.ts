@@ -142,6 +142,8 @@ export class GalleryStore {
   readonly slideshowActive = signal(false);
   readonly cardWidth = signal(parseInt(localStorage.getItem(CARD_WIDTH_KEY) ?? '', 10) || 0);
   readonly galleryMode = signal<GalleryMode>((localStorage.getItem(GALLERY_MODE_KEY) as GalleryMode) || 'grid');
+  /** Row-windowed rendering for large galleries; 'off' opts back into full DOM rendering. */
+  readonly virtualScroll = signal(localStorage.getItem('facet_virtual_scroll') !== 'off');
 
   // Hidden-photo summary (populated from /photos response)
   readonly hiddenSummary = signal<HiddenSummary>({ total: 0, blinks: 0, bursts: 0, duplicates: 0 });
@@ -486,6 +488,11 @@ export class GalleryStore {
   setGalleryMode(mode: GalleryMode): void {
     this.galleryMode.set(mode);
     try { localStorage.setItem(GALLERY_MODE_KEY, mode); } catch { /* ignore */ }
+  }
+
+  setVirtualScroll(enabled: boolean): void {
+    this.virtualScroll.set(enabled);
+    try { localStorage.setItem('facet_virtual_scroll', enabled ? 'on' : 'off'); } catch { /* ignore */ }
   }
 
   /** Load type counts (for the type toggle bar) */

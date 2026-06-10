@@ -1085,7 +1085,8 @@
       "semantic_search": "Semantic Search",
       "location": "Location",
       "persons": "Persons",
-      "smart_album_filter_notice": "Smart album — filter changes are saved automatically."
+      "smart_album_filter_notice": "Smart album — filter changes are saved automatically.",
+      "virtual_scroll": "Fast scrolling (virtualized)"
     },
     "semantic_search_info": "Semantic search loads embeddings into RAM on first use. This may take a moment for large libraries.",
     "select_on_map": "Select on map",
