@@ -71,7 +71,8 @@ Multiple ways to explore your library:
 - **Albums** — manual collections with drag-and-drop, or smart albums that auto-populate from saved filter combinations
 - **Ratings & favorites** — star ratings (1–5), favorites, and reject flags. Cycle through ratings with a single click.
 - **Tags** — AI-generated content tags with configurable vocabulary. Click any tag to filter the gallery.
-- **Batch operations** — multi-select with Shift+click and Ctrl+click. Set ratings, toggle favorites, mark rejects, or add to albums in bulk.
+- **Batch operations** — multi-select with Shift+click, Ctrl+click, or Ctrl+A (select all). Set ratings, toggle favorites, mark rejects, or add to albums in bulk — with a 7-second undo for every batch action.
+- **Keyboard-first** — arrow keys navigate the gallery, Enter opens, Space selects; press `?` anywhere for the shortcut reference.
 
 <table><tr>
 <td><img src="docs/screenshots/persons-manage.jpg" alt="Manage Persons page" width="100%"></td>
@@ -83,7 +84,9 @@ Multiple ways to explore your library:
 - **Statistics** — interactive dashboards: equipment usage, category breakdown, shooting timeline, and custom metric correlations
 - **AI critique** — detailed score breakdown showing each metric's contribution. VLM-powered natural-language assessment available with 16+ GB VRAM.
 - **Weight tuning** — per-category weight editor with live score preview. A/B photo comparison learns from your choices and suggests optimized weights.
+- **Learning from your labels** — culling decisions, star ratings, favorites and rejections feed the weight optimizer as additional training signal (`--sync-label-comparisons`, `--mine-insights`)
 - **Snapshots** — save, restore, and compare weight configurations
+- **Histogram** — luminance histogram in the photo tooltip and detail view
 - **AI captions** — natural-language photo descriptions, editable and translatable to 5 languages
 
 <table><tr>
@@ -110,7 +113,10 @@ Multiple ways to explore your library:
 ### More
 
 - **Dark & light mode** with 10 accent color themes, respects system preference
-- **Responsive** — adapts from mobile to desktop
+- **Responsive** — adapts from mobile to desktop, with a touch-friendly bulk-actions sheet on small screens
+- **Installable PWA** — web app manifest + service worker: install to home screen, offline app shell, cached thumbnails
+- **Smooth at scale** — virtualized gallery keeps deep scrolling through 100k+ photos fast (a handful of DOM nodes regardless of library size)
+- **Resilient scans** — interrupted scans resume (`--resume`), failed files are tracked and retryable (`--retry-failed`), structured progress streams to the web UI
 - **5 languages** — English, French, German, Spanish, Italian
 - **Multi-user** — per-user directories, ratings, and role-based access for family NAS setups
 - **Plugins & webhooks** — extend Facet with custom actions on scoring events

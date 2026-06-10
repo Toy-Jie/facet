@@ -581,10 +581,39 @@ All stats are user-aware in multi-user mode — each user sees analytics for the
 
 | Key | Action |
 |-----|--------|
-| `Escape` | Close filter drawer or clear selections |
-| `Enter` | Submit search |
+| `←` `→` `↑` `↓` | Move keyboard focus between photo cards (grid columns and mosaic rows) |
+| `Enter` | Open the focused photo |
+| `Space` | Select / deselect the focused photo |
+| `Ctrl+A` | Select all loaded photos |
+| `Escape` | Clear selection / close filter drawer |
 | `Shift+Click` | Range-select photos between last selected and clicked |
-| `Double-click` | Download photo |
+| `Double-click` | Open photo |
+| `?` | Show the keyboard shortcuts reference (works on every page) |
+
+## Undo
+
+Batch favorite/reject/rating operations and culling confirms show a snackbar
+with an **Undo** action for ~7 seconds. Batch flag operations are committed
+immediately and undone via inverse API calls (capped at 500 photos); culling
+confirms are deferred — the group disappears instantly but the API call only
+fires once the undo window elapses.
+
+## Progressive Web App
+
+The viewer ships a web app manifest and an Angular service worker (production
+builds only): it can be installed to the home screen, the app shell loads
+offline, and up to 1000 thumbnails are LRU-cached for 7 days. API responses
+are never cached (except i18n bundles with a freshness strategy), and logout
+clears the thumbnail cache so multi-user setups sharing a browser can't leak
+previews across accounts. A snackbar offers a reload when a new version has
+been deployed.
+
+## Mobile
+
+On small screens the bulk-selection bar collapses to the selection count,
+clear, select-all and a single **Actions** button that opens a touch-friendly
+bottom sheet with all bulk operations (favorite, reject, rate, albums, copy,
+download).
 
 ## Configuration
 
