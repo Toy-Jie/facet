@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiService } from '../../core/services/api.service';
 import { I18nService } from '../../core/services/i18n.service';
+import { UndoService } from '../../core/services/undo.service';
 import { BurstCullingComponent, IsKeptPipe, IsDecidedPipe, IsConfirmedPipe, IsPassingPipe, PassCountdownPipe } from './burst-culling.component';
 
 describe('BurstCullingComponent', () => {
@@ -11,6 +12,7 @@ describe('BurstCullingComponent', () => {
   let mockApi: { get: Mock; post: Mock };
   let mockSnackBar: { open: Mock };
   let mockI18n: { t: Mock };
+  let mockUndo: { register: Mock; flushPending: Mock };
 
   const mockCullingGroupsResponse = {
     groups: [
@@ -51,6 +53,7 @@ describe('BurstCullingComponent', () => {
     };
     mockSnackBar = { open: vi.fn() };
     mockI18n = { t: vi.fn((key: string) => key) };
+    mockUndo = { register: vi.fn(), flushPending: vi.fn(() => Promise.resolve()) };
 
     TestBed.configureTestingModule({
       providers: [
@@ -58,6 +61,7 @@ describe('BurstCullingComponent', () => {
         { provide: ApiService, useValue: mockApi },
         { provide: MatSnackBar, useValue: mockSnackBar },
         { provide: I18nService, useValue: mockI18n },
+        { provide: UndoService, useValue: mockUndo },
       ],
     });
     component = TestBed.inject(BurstCullingComponent);
@@ -206,15 +210,30 @@ describe('BurstCullingComponent', () => {
     });
   });
 
-  describe('confirmGroup', () => {
+  describe('confirmGroup (deferred commit via UndoService)', () => {
     beforeEach(async () => {
       await (component as any).loadGroups();
       mockApi.post.mockReturnValue(of({}));
     });
 
-    it('should post selected paths to API', async () => {
+    it('should hide the group instantly and register an undoable command', async () => {
       const group = component['groups']()[0];
       await component['confirmGroup'](group);
+
+      expect(component['confirmedGroups']().has('1_burst')).toBe(true);
+      expect(mockUndo.register).toHaveBeenCalledWith(
+        expect.objectContaining({ labelKey: 'culling.confirmed' }),
+      );
+      // No API call until the undo window elapses
+      expect(mockApi.post).not.toHaveBeenCalled();
+    });
+
+    it('commit posts the selected paths to the API', async () => {
+      const group = component['groups']()[0];
+      await component['confirmGroup'](group);
+
+      const cmd = mockUndo.register.mock.calls[0][0];
+      await cmd.commit();
 
       expect(mockApi.post).toHaveBeenCalledWith('/culling-groups/confirm', {
         group_id: 1,
@@ -222,59 +241,41 @@ describe('BurstCullingComponent', () => {
         paths: ['/photo1.jpg', '/photo2.jpg', '/photo3.jpg'],
         keep_paths: ['/photo1.jpg'],
       });
-    });
-
-    it('should show snackbar on success', async () => {
-      const group = component['groups']()[0];
-      await component['confirmGroup'](group);
-
-      expect(mockSnackBar.open).toHaveBeenCalledWith('culling.confirmed', '', { duration: 2000, horizontalPosition: 'right', verticalPosition: 'bottom' });
-    });
-
-    it('should add group to confirmedGroups on success', async () => {
-      const group = component['groups']()[0];
-      await component['confirmGroup'](group);
-
       expect(component['confirmedGroups']().has('1_burst')).toBe(true);
     });
 
-    it('should set confirming to true during request', async () => {
-      let confirmingDuringRequest = false;
-      mockApi.post.mockImplementation(() => {
-        confirmingDuringRequest = component['confirming']();
-        return of({});
-      });
-
+    it('undo re-shows the group without any API call', async () => {
       const group = component['groups']()[0];
       await component['confirmGroup'](group);
 
-      expect(confirmingDuringRequest).toBe(true);
+      const cmd = mockUndo.register.mock.calls[0][0];
+      await cmd.undo();
+
+      expect(component['confirmedGroups']().has('1_burst')).toBe(false);
+      expect(mockApi.post).not.toHaveBeenCalled();
     });
 
-    it('should set confirming back to false after request', async () => {
+    it('commit failure re-shows the group and notifies', async () => {
+      mockApi.post.mockReturnValue(throwError(() => new Error('Server error')));
       const group = component['groups']()[0];
       await component['confirmGroup'](group);
 
-      expect(component['confirming']()).toBe(false);
+      const cmd = mockUndo.register.mock.calls[0][0];
+      await cmd.commit();
+
+      expect(component['confirmedGroups']().has('1_burst')).toBe(false);
+      expect(mockSnackBar.open).toHaveBeenCalledWith('culling.error_confirming', '', expect.anything());
     });
 
-    it('should not post if no photos are selected', async () => {
+    it('should not register a command if no photos are selected', async () => {
       // Clear the auto-selection
       component['selectionsMap'].set(new Map());
       const group = component['groups']()[0];
 
       await component['confirmGroup'](group);
 
+      expect(mockUndo.register).not.toHaveBeenCalled();
       expect(mockApi.post).not.toHaveBeenCalled();
-    });
-
-    it('should set confirming false on API error', async () => {
-      mockApi.post.mockReturnValue(throwError(() => new Error('Server error')));
-      const group = component['groups']()[0];
-
-      await component['confirmGroup'](group);
-
-      expect(component['confirming']()).toBe(false);
     });
   });
 

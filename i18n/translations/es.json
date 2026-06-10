@@ -1822,5 +1822,26 @@
   "download": {
     "type_original": "Original",
     "type_raw": "Archivo RAW"
+  },
+  "undo": {
+    "action": "Deshacer",
+    "restored": "Acción deshecha",
+    "restore_failed": "No se pudo deshacer"
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "navigate": "Moverse entre fotos",
+    "open_detail": "Abrir foto",
+    "toggle_select": "Seleccionar / deseleccionar",
+    "select_all": "Seleccionar todo lo cargado",
+    "clear_selection": "Borrar selección",
+    "show_help": "Mostrar esta ayuda",
+    "close": "Cerrar",
+    "section_gallery": "Galería",
+    "section_detail": "Vista de foto",
+    "section_comparison": "Comparación",
+    "section_global": "Global",
+    "comp_left_wins": "Gana la foto izquierda",
+    "comp_right_wins": "Gana la foto derecha"
   }
 }

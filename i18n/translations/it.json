@@ -1822,5 +1822,26 @@
   "download": {
     "type_original": "Originale",
     "type_raw": "File RAW"
+  },
+  "undo": {
+    "action": "Annulla",
+    "restored": "Azione annullata",
+    "restore_failed": "Impossibile annullare"
+  },
+  "shortcuts": {
+    "title": "Scorciatoie da tastiera",
+    "navigate": "Spostarsi tra le foto",
+    "open_detail": "Apri foto",
+    "toggle_select": "Seleziona / deseleziona",
+    "select_all": "Seleziona tutti i caricati",
+    "clear_selection": "Annulla selezione",
+    "show_help": "Mostra questa guida",
+    "close": "Chiudi",
+    "section_gallery": "Galleria",
+    "section_detail": "Vista foto",
+    "section_comparison": "Confronto",
+    "section_global": "Globale",
+    "comp_left_wins": "Vince la foto a sinistra",
+    "comp_right_wins": "Vince la foto a destra"
   }
 }

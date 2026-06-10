@@ -1820,5 +1820,26 @@
   "download": {
     "type_original": "Original",
     "type_raw": "RAW file"
+  },
+  "undo": {
+    "action": "Undo",
+    "restored": "Action undone",
+    "restore_failed": "Could not undo"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "navigate": "Move between photos",
+    "open_detail": "Open photo",
+    "toggle_select": "Select / deselect",
+    "select_all": "Select all loaded",
+    "clear_selection": "Clear selection",
+    "show_help": "Show this help",
+    "close": "Close",
+    "section_gallery": "Gallery",
+    "section_detail": "Photo view",
+    "section_comparison": "Comparison",
+    "section_global": "Global",
+    "comp_left_wins": "Left photo wins",
+    "comp_right_wins": "Right photo wins"
   }
 }

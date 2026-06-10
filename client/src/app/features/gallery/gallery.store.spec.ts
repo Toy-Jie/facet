@@ -876,3 +876,74 @@ describe('GalleryStore optimistic mutations', () => {
     expect(store.photos()[0].star_rating).toBe(3);
   });
 });
+
+describe('GalleryStore restoreSnapshot', () => {
+  let store: GalleryStore;
+  let apiPost: Mock;
+
+  beforeEach(() => {
+    apiPost = vi.fn(() => of({}));
+    TestBed.configureTestingModule({
+      providers: [
+        GalleryStore,
+        { provide: ApiService, useValue: { get: vi.fn(), post: apiPost } },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParams: {} } } },
+        { provide: AuthService, useValue: { isEdition: vi.fn(() => false) } },
+        { provide: AlbumService, useValue: { list: vi.fn(() => of({ albums: [] })), update: vi.fn(() => of({})) } },
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+        { provide: I18nService, useValue: { t: (k: string) => k } },
+      ],
+    });
+    store = TestBed.inject(GalleryStore);
+  });
+
+  it('undoes a batch reject: clears rejected, restores favorite and rating', async () => {
+    store.photos.set([
+      makePhoto({ path: '/a.jpg', is_rejected: true, is_favorite: false, star_rating: null }),
+      makePhoto({ path: '/b.jpg', is_rejected: true, is_favorite: false, star_rating: null }),
+    ]);
+    const snap = new Map([
+      ['/a.jpg', { is_favorite: true, is_rejected: false, star_rating: 4 }],
+      ['/b.jpg', { is_favorite: false, is_rejected: false, star_rating: null }],
+    ]);
+
+    await store.restoreSnapshot(snap);
+
+    const calls = apiPost.mock.calls.map(c => [c[0], c[1]]);
+    expect(calls).toContainEqual(['/photo/toggle_rejected', { photo_path: '/a.jpg' }]);
+    expect(calls).toContainEqual(['/photo/toggle_rejected', { photo_path: '/b.jpg' }]);
+    expect(calls).toContainEqual(['/photos/batch_favorite', { photo_paths: ['/a.jpg'] }]);
+    expect(calls).toContainEqual(['/photos/batch_rating', { photo_paths: ['/a.jpg'], rating: 4 }]);
+    expect(store.photos()[0].is_rejected).toBe(false);
+    expect(store.photos()[0].is_favorite).toBe(true);
+    expect(store.photos()[0].star_rating).toBe(4);
+    expect(store.photos()[1].is_rejected).toBe(false);
+  });
+
+  it('undoes a batch favorite: un-favorites only previously-unfavorited photos', async () => {
+    store.photos.set([
+      makePhoto({ path: '/a.jpg', is_favorite: true }),
+      makePhoto({ path: '/b.jpg', is_favorite: true }),
+    ]);
+    const snap = new Map([
+      ['/a.jpg', { is_favorite: true, is_rejected: false, star_rating: null }],
+      ['/b.jpg', { is_favorite: false, is_rejected: false, star_rating: null }],
+    ]);
+
+    await store.restoreSnapshot(snap);
+
+    const calls = apiPost.mock.calls.map(c => [c[0], c[1]]);
+    expect(calls).toEqual([['/photo/toggle_favorite', { photo_path: '/b.jpg' }]]);
+    expect(store.photos()[0].is_favorite).toBe(true);
+    expect(store.photos()[1].is_favorite).toBe(false);
+  });
+
+  it('no-ops when state already matches the snapshot', async () => {
+    store.photos.set([makePhoto({ path: '/a.jpg', is_favorite: false, is_rejected: false, star_rating: null })]);
+    await store.restoreSnapshot(new Map([
+      ['/a.jpg', { is_favorite: false, is_rejected: false, star_rating: null }],
+    ]));
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+});

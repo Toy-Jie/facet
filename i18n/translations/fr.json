@@ -1822,5 +1822,26 @@
   "download": {
     "type_original": "Original",
     "type_raw": "Fichier RAW"
+  },
+  "undo": {
+    "action": "Annuler",
+    "restored": "Action annulée",
+    "restore_failed": "Annulation impossible"
+  },
+  "shortcuts": {
+    "title": "Raccourcis clavier",
+    "navigate": "Naviguer entre les photos",
+    "open_detail": "Ouvrir la photo",
+    "toggle_select": "Sélectionner / désélectionner",
+    "select_all": "Tout sélectionner (chargé)",
+    "clear_selection": "Effacer la sélection",
+    "show_help": "Afficher cette aide",
+    "close": "Fermer",
+    "section_gallery": "Galerie",
+    "section_detail": "Vue photo",
+    "section_comparison": "Comparaison",
+    "section_global": "Global",
+    "comp_left_wins": "La photo de gauche gagne",
+    "comp_right_wins": "La photo de droite gagne"
   }
 }

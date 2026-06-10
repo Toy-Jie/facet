@@ -105,7 +105,10 @@ export class EditionDialogComponent {
     DateRangeFilterComponent,
   ],
   templateUrl: './app.html',
-  host: { class: 'block h-full' },
+  host: {
+    class: 'block h-full',
+    '(document:keydown)': 'onGlobalKeydown($event)',
+  },
 })
 export class App implements OnInit {
   private readonly router = inject(Router);
@@ -299,6 +302,23 @@ export class App implements OnInit {
     }
   }
 
+
+  /** Open the keyboard shortcuts reference with '?' unless typing in a field. */
+  protected onGlobalKeydown(event: KeyboardEvent): void {
+    if (event.key !== '?') return;
+    const target = event.target as HTMLElement | null;
+    if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+    if (target?.isContentEditable) return;
+    if (document.querySelector('mat-dialog-container')) return;
+    event.preventDefault();
+    this.openShortcutsDialog();
+  }
+
+  protected openShortcutsDialog(): void {
+    import('./shared/components/shortcuts-dialog/shortcuts-dialog.component').then(m => {
+      this.dialog.open(m.ShortcutsDialogComponent, { autoFocus: false });
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     await this.i18n.load();

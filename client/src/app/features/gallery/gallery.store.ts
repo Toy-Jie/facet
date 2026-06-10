@@ -146,6 +146,14 @@ export class GalleryStore {
   // Hidden-photo summary (populated from /photos response)
   readonly hiddenSummary = signal<HiddenSummary>({ total: 0, blinks: 0, bursts: 0, duplicates: 0 });
 
+  // --- View snapshot for back-navigation restoration ---
+  readonly viewSnapshot = signal<{ scrollTop: number; albumId: string | null; filterKey: string } | null>(null);
+
+  /** Cheap equality token for the current query state. */
+  filterKey(): string {
+    return JSON.stringify(buildApiParams(this.filters(), this.currentAlbum()?.is_smart ?? false));
+  }
+
   // --- Selection state (store-level so it survives navigation and is visible to services) ---
   readonly selectedPaths = signal<Set<string>>(new Set());
   readonly selectionCount = computed(() => this.selectedPaths().size);
@@ -671,6 +679,59 @@ export class GalleryStore {
       this.notifyActionFailed();
       return null;
     }
+  }
+
+  /** Run up to `limit` async tasks concurrently. */
+  private async runChunked(tasks: (() => Promise<unknown>)[], limit = 10): Promise<void> {
+    for (let i = 0; i < tasks.length; i += limit) {
+      await Promise.allSettled(tasks.slice(i, i + limit).map(t => t()));
+    }
+  }
+
+  /**
+   * Restore photos to a previously captured flag snapshot via inverse API
+   * calls, then patch local state. Powers undo of batch operations.
+   */
+  async restoreSnapshot(snap: Map<string, PhotoFlagSnapshot>): Promise<void> {
+    const current = new Map(this.photos().map(p => [p.path, p]));
+    const toUnreject: string[] = [];
+    const toReject: string[] = [];
+    const toFavorite: string[] = [];
+    const toUnfavorite: string[] = [];
+    const ratingGroups = new Map<number, string[]>();
+
+    for (const [path, want] of snap) {
+      const now = current.get(path);
+      if (!now) continue;
+      if (!want.is_rejected && now.is_rejected) toUnreject.push(path);
+      if (want.is_rejected && !now.is_rejected) toReject.push(path);
+      if (want.is_favorite && !now.is_favorite) toFavorite.push(path);
+      if (!want.is_favorite && now.is_favorite) toUnfavorite.push(path);
+      const wantRating = want.star_rating ?? 0;
+      if (wantRating !== (now.star_rating ?? 0)) {
+        const group = ratingGroups.get(wantRating) ?? [];
+        group.push(path);
+        ratingGroups.set(wantRating, group);
+      }
+    }
+
+    // Order matters: clear rejected first (rejecting wipes rating+favorite
+    // server-side), then re-apply rejected/favorite/rating states
+    await this.runChunked(toUnreject.map(path => () =>
+      firstValueFrom(this.api.post('/photo/toggle_rejected', { photo_path: path }))));
+    if (toReject.length) {
+      await firstValueFrom(this.api.post('/photos/batch_reject', { photo_paths: toReject }));
+    }
+    if (toFavorite.length) {
+      await firstValueFrom(this.api.post('/photos/batch_favorite', { photo_paths: toFavorite }));
+    }
+    await this.runChunked(toUnfavorite.map(path => () =>
+      firstValueFrom(this.api.post('/photo/toggle_favorite', { photo_path: path }))));
+    for (const [rating, paths] of ratingGroups) {
+      await firstValueFrom(this.api.post('/photos/batch_rating', { photo_paths: paths, rating }));
+    }
+
+    this.revertSnapshot(snap);
   }
 
   /** Unassign a person from a photo */

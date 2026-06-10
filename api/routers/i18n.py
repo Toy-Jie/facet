@@ -13,24 +13,30 @@ router = APIRouter(tags=["i18n"])
 _TRANSLATIONS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'i18n', 'translations')
 SUPPORTED_LANGUAGES = ['en', 'fr', 'de', 'it', 'es']
 
-_translations_cache: dict[str, dict] = {}
+_translations_cache: dict[str, tuple[float, dict]] = {}
 
 
 def _load_translations(lang: str) -> dict:
-    """Load translation file for the specified language (cached in memory)."""
+    """Load translation file for the specified language.
+
+    Cached in memory, invalidated when the file's mtime changes so updated
+    translations are served without a server restart.
+    """
     if lang not in SUPPORTED_LANGUAGES:
         return {}
-    if lang in _translations_cache:
-        return _translations_cache[lang]
     filepath = os.path.join(_TRANSLATIONS_DIR, f'{lang}.json')
     real_filepath = os.path.realpath(filepath)
     real_dir = os.path.realpath(_TRANSLATIONS_DIR)
     if not real_filepath.startswith(real_dir + os.sep):
         return {}
     try:
+        mtime = os.path.getmtime(real_filepath)
+        cached = _translations_cache.get(lang)
+        if cached and cached[0] == mtime:
+            return cached[1]
         with open(real_filepath, 'r', encoding='utf-8') as f:
             translations = json.load(f)
-            _translations_cache[lang] = translations
+            _translations_cache[lang] = (mtime, translations)
             return translations
     except (FileNotFoundError, json.JSONDecodeError):
         return {}

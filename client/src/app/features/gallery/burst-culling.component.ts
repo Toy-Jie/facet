@@ -12,6 +12,7 @@ import { ApiService } from '../../core/services/api.service';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 import { ThumbnailUrlPipe } from '../../shared/pipes/thumbnail-url.pipe';
 import { I18nService } from '../../core/services/i18n.service';
+import { UndoService } from '../../core/services/undo.service';
 import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll.directive';
 import { firstValueFrom } from 'rxjs';
 
@@ -312,6 +313,7 @@ export class BurstCullingComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly snackBar = inject(MatSnackBar);
   private readonly i18n = inject(I18nService);
+  private readonly undoService = inject(UndoService);
 
   protected readonly showHelp = signal(false);
   protected readonly similarityThreshold = signal(85);
@@ -585,21 +587,38 @@ export class BurstCullingComponent implements OnDestroy {
     const kept = this.selectionsMap().get(group.group_id);
     if (!kept || kept.size === 0) return;
 
-    this.confirming.set(true);
-    try {
-      await firstValueFrom(this.api.post('/culling-groups/confirm', {
-        group_id: group.group_id,
-        type: group.type,
-        paths: group.photos.map(p => p.path),
-        keep_paths: [...kept],
-      }));
-      this.addToSetSignal(this.confirmedGroups, this.groupKey(group));
-      this.snackBar.open(this.i18n.t('culling.confirmed'), '', { duration: 2000, horizontalPosition: 'right', verticalPosition: 'bottom' });
-    } catch {
-      this.snackBar.open(this.i18n.t('culling.error_confirming'), '', { duration: 2000, horizontalPosition: 'right', verticalPosition: 'bottom' });
-    } finally {
-      this.confirming.set(false);
-    }
+    // Deferred commit: the group disappears instantly and the API call only
+    // fires when the undo window elapses - culling confirms have no inverse
+    // endpoint, so this is the only way to offer undo
+    const key = this.groupKey(group);
+    this.addToSetSignal(this.confirmedGroups, key);
+    this.undoService.register({
+      labelKey: 'culling.confirmed',
+      commit: async () => {
+        try {
+          await firstValueFrom(this.api.post('/culling-groups/confirm', {
+            group_id: group.group_id,
+            type: group.type,
+            paths: group.photos.map(p => p.path),
+            keep_paths: [...kept],
+          }));
+        } catch {
+          this.unconfirmGroup(key);
+          this.snackBar.open(this.i18n.t('culling.error_confirming'), '', { duration: 2000, horizontalPosition: 'right', verticalPosition: 'bottom' });
+        }
+      },
+      undo: async () => {
+        this.unconfirmGroup(key);
+      },
+    });
+  }
+
+  private unconfirmGroup(key: string): void {
+    this.confirmedGroups.update(s => {
+      const next = new Set(s);
+      next.delete(key);
+      return next;
+    });
   }
 
   protected skipGroup(group: CullingGroup): void {

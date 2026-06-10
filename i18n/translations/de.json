@@ -1826,5 +1826,26 @@
   "download": {
     "type_original": "Original",
     "type_raw": "RAW-Datei"
+  },
+  "undo": {
+    "action": "Rückgängig",
+    "restored": "Aktion rückgängig gemacht",
+    "restore_failed": "Rückgängig machen fehlgeschlagen"
+  },
+  "shortcuts": {
+    "title": "Tastenkürzel",
+    "navigate": "Zwischen Fotos wechseln",
+    "open_detail": "Foto öffnen",
+    "toggle_select": "Auswählen / abwählen",
+    "select_all": "Alle geladenen auswählen",
+    "clear_selection": "Auswahl aufheben",
+    "show_help": "Diese Hilfe anzeigen",
+    "close": "Schließen",
+    "section_gallery": "Galerie",
+    "section_detail": "Fotoansicht",
+    "section_comparison": "Vergleich",
+    "section_global": "Global",
+    "comp_left_wins": "Linkes Foto gewinnt",
+    "comp_right_wins": "Rechtes Foto gewinnt"
   }
 }

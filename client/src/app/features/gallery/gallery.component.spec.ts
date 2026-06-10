@@ -55,6 +55,21 @@ describe('GalleryComponent', () => {
       nextPage: vi.fn(() => Promise.resolve()),
       toggleFavorite: vi.fn(),
       toggleRejected: vi.fn(),
+      selectedPaths: signal(new Set<string>()),
+      selectionCount: signal(0),
+      toggleSelection: vi.fn(),
+      selectAllLoaded: vi.fn(),
+      clearSelection: vi.fn(),
+      restoreSelection: vi.fn(),
+      restoreSnapshot: vi.fn(() => Promise.resolve()),
+      viewSnapshot: signal(null),
+      filterKey: vi.fn(() => '{}'),
+      hiddenSummary: signal({ total: 0, blinks: 0, bursts: 0, duplicates: 0 }),
+      updateFilters: vi.fn(() => Promise.resolve()),
+      setRating: vi.fn(),
+      batchFavorite: vi.fn(() => Promise.resolve(new Map())),
+      batchReject: vi.fn(() => Promise.resolve(new Map())),
+      batchRating: vi.fn(() => Promise.resolve(new Map())),
     };
 
     mockApi = {

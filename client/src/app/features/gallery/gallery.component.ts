@@ -10,6 +10,7 @@ import {
   effect,
   untracked,
   DestroyRef,
+  Injector,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSidenav, MatSidenavModule, MatSidenavContent } from '@angular/material/sidenav';
@@ -22,8 +23,9 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { GalleryStore } from './gallery.store';
+import { GalleryStore, PhotoFlagSnapshot } from './gallery.store';
 import { Photo } from '../../shared/models/photo.model';
+import { UndoService } from '../../core/services/undo.service';
 import { AuthService } from '../../core/services/auth.service';
 import { useDesktopSignal } from '../../shared/utils/media-query';
 import { downloadAll } from '../../shared/utils/download';
@@ -91,10 +93,12 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
               [attr.aria-label]="'gallery.photo_grid' | translate"
               class="grid grid-cols-1 gap-2 p-2 md:p-4 gallery-grid"
               [style.--gallery-cols]="'repeat(auto-fill, minmax(' + cardWidth() + 'px, 1fr))'"
+              (keydown)="onGridKeydown($event)"
             >
-              @for (photo of store.photos(); track photo.path) {
+              @for (photo of store.photos(); track photo.path; let i = $index) {
                 <app-photo-card
                   [photo]="photo"
+                  [attr.data-pidx]="i"
                   [config]="store.config()"
                   [isSelected]="selectedPaths().has(photo.path)"
                   [hideDetails]="effectiveHideDetails()"
@@ -122,12 +126,13 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
               }
             </div>
           } @else {
-            <div class="flex flex-col gap-2 p-2 md:p-4">
+            <div class="flex flex-col gap-2 p-2 md:p-4" (keydown)="onGridKeydown($event)">
               @for (row of mosaicRows(); track row.photos[0]?.path ?? $index) {
                 <div class="flex gap-2" style="content-visibility: auto; contain-intrinsic-size: auto 300px">
                   @for (photo of row.photos; track photo.path; let i = $index) {
                     <app-photo-card
                       [photo]="photo"
+                      [attr.data-pidx]="row.startIndex + i"
                       [style.width.px]="row.widths[i]"
                       [style.height.px]="row.height"
                       [hideDetails]="true"
@@ -307,6 +312,7 @@ export class GalleryComponent implements OnInit, OnDestroy {
   private readonly dialog = inject(MatDialog);
   private readonly albumService = inject(AlbumService);
   private readonly photoActions = inject(PhotoActionsService);
+  private readonly undoService = inject(UndoService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly api = inject(ApiService);
@@ -319,6 +325,7 @@ export class GalleryComponent implements OnInit, OnDestroy {
   private readonly scrollDirective = viewChild(InfiniteScrollDirective);
   private readonly filterDrawer = viewChild<MatSidenav>('filterDrawer');
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly scrollContent = viewChild(MatSidenavContent);
 
   /** True once the gallery content is scrolled far enough to show the scroll-to-top button. */
@@ -409,9 +416,10 @@ export class GalleryComponent implements OnInit, OnDestroy {
 
     if (!photos.length || width <= 0) return [];
 
-    const rows: { photos: Photo[]; widths: number[]; height: number }[] = [];
+    const rows: { photos: Photo[]; widths: number[]; height: number; startIndex: number }[] = [];
     let rowPhotos: Photo[] = [];
     let rowAspects: number[] = [];
+    let rowStart = 0;
 
     for (const photo of photos) {
       const aspect = (photo.image_width && photo.image_height)
@@ -430,7 +438,8 @@ export class GalleryComponent implements OnInit, OnDestroy {
         // Distribute rounding remainder to last photo
         const usedWidth = widths.reduce((a, b) => a + b, 0) + (widths.length - 1) * gap;
         widths[widths.length - 1] += width - usedWidth;
-        rows.push({ photos: [...rowPhotos], widths, height: Math.floor(rowHeight) });
+        rows.push({ photos: [...rowPhotos], widths, height: Math.floor(rowHeight), startIndex: rowStart });
+        rowStart += rowPhotos.length;
         rowPhotos = [];
         rowAspects = [];
       }
@@ -439,7 +448,7 @@ export class GalleryComponent implements OnInit, OnDestroy {
     // Last incomplete row: use target height, left-aligned
     if (rowPhotos.length) {
       const widths = rowAspects.map(a => Math.floor(a * targetHeight));
-      rows.push({ photos: [...rowPhotos], widths, height: targetHeight });
+      rows.push({ photos: [...rowPhotos], widths, height: targetHeight, startIndex: rowStart });
     }
 
     return rows;
@@ -475,6 +484,7 @@ export class GalleryComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    if (this.tryRestoreView()) return;
     // Reset album state to avoid stale singleton data; loadConfig() resets filters from scratch
     this.store.currentAlbum.set(null);
     this.store.initializing.set(true);
@@ -509,8 +519,39 @@ export class GalleryComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.saveViewSnapshot();
     this.resizeObserver?.disconnect();
     this.desktop.cleanup();
+  }
+
+  /** Capture scroll + query state so back-navigation can skip the reload. */
+  private saveViewSnapshot(): void {
+    if (!this.store.photos().length) return;
+    this.store.viewSnapshot.set({
+      scrollTop: this.scrollContent()?.measureScrollOffset('top') ?? 0,
+      albumId: this.route.snapshot.paramMap.get('albumId'),
+      filterKey: this.store.filterKey(),
+    });
+  }
+
+  /**
+   * Restore the previous gallery view if the route + filters are unchanged.
+   * Skips loadConfig/loadPhotos entirely; background data stays fresh via
+   * loadTypeCounts/loadFilterOptions.
+   */
+  private tryRestoreView(): boolean {
+    const snap = this.store.viewSnapshot();
+    this.store.viewSnapshot.set(null);
+    if (!snap || !this.store.photos().length) return false;
+    if (snap.albumId !== this.route.snapshot.paramMap.get('albumId')) return false;
+    if (snap.filterKey !== this.store.filterKey()) return false;
+    afterNextRender(() => {
+      this.scrollContent()?.scrollTo({ top: snap.scrollTop });
+      requestAnimationFrame(() => setTimeout(() => this.scrollDirective()?.recheck()));
+    }, { injector: this.injector });
+    void this.store.loadTypeCounts();
+    void this.store.loadFilterOptions();
+    return true;
   }
 
   /** Save/restore sidebar scroll position on drawer open/close */
@@ -558,16 +599,31 @@ export class GalleryComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Above this size, undo (chunked per-photo inverse calls) is not offered. */
+  private static readonly UNDO_MAX_PHOTOS = 500;
+
   private async executeBatchAction(
-    action: (paths: string[]) => Promise<unknown | null>,
+    action: (paths: string[]) => Promise<Map<string, PhotoFlagSnapshot> | null>,
     i18nKey: string,
-    extraParams?: Record<string, unknown>,
+    extraParams?: Record<string, string | number>,
   ): Promise<void> {
     const paths = [...this.selectedPaths()];
-    const result = await action(paths);
-    if (result === null) return; // store reverted and notified
+    const snapshot = await action(paths);
+    if (snapshot === null) return; // store reverted and notified
     this.clearSelection();
-    this.snackBar.open(this.i18n.t(i18nKey, { count: paths.length, ...extraParams }), '', { duration: 2000 });
+    const params = { count: paths.length, ...extraParams };
+    if (snapshot.size > 0 && snapshot.size <= GalleryComponent.UNDO_MAX_PHOTOS) {
+      this.undoService.register({
+        labelKey: i18nKey,
+        labelParams: params,
+        undo: async () => {
+          await this.store.restoreSnapshot(snapshot);
+          this.store.restoreSelection(paths);
+        },
+      });
+    } else {
+      this.snackBar.open(this.i18n.t(i18nKey, params), '', { duration: 2000 });
+    }
   }
 
   protected async batchFavorite(): Promise<void> {
@@ -747,6 +803,63 @@ export class GalleryComponent implements OnInit, OnDestroy {
     if (this.store.hasMore() && !this.store.loading() && !this.store.initializing()) {
       this.store.nextPage().then(() => this.scrollDirective()?.recheck());
     }
+  }
+
+  // --- Keyboard navigation (roving focus over the photo grid) ---
+
+  /** Index of the keyboard-focused photo; -1 when keyboard nav is inactive. */
+  protected readonly activeIndex = signal(-1);
+
+  /** Columns per row in grid mode (mirrors the CSS auto-fill column math). */
+  private gridColumns(): number {
+    const width = this.containerWidth() || 0;
+    if (width <= 0 || !this.isDesktop()) return 1;
+    return Math.max(1, Math.floor((width + 8) / (this.cardWidth() + 8)));
+  }
+
+  /** Vertical step for the active index: grid = ±columns, mosaic = same offset in adjacent row. */
+  private verticalTarget(index: number, dir: 1 | -1): number {
+    const count = this.store.photos().length;
+    if (this.effectiveGalleryMode() === 'grid') {
+      const next = index + dir * this.gridColumns();
+      return Math.max(0, Math.min(count - 1, next));
+    }
+    const rows = this.mosaicRows();
+    const rowIdx = rows.findIndex(r => index >= r.startIndex && index < r.startIndex + r.photos.length);
+    const targetRow = rows[rowIdx + dir];
+    if (rowIdx < 0 || !targetRow) return index;
+    const offset = index - rows[rowIdx].startIndex;
+    return targetRow.startIndex + Math.min(offset, targetRow.photos.length - 1);
+  }
+
+  protected onGridKeydown(event: KeyboardEvent): void {
+    const photos = this.store.photos();
+    if (!photos.length) return;
+    const index = Math.max(0, this.activeIndex());
+    let next: number | null = null;
+
+    switch (event.key) {
+      case 'ArrowRight': next = Math.min(photos.length - 1, index + 1); break;
+      case 'ArrowLeft': next = Math.max(0, index - 1); break;
+      case 'ArrowDown': next = this.verticalTarget(index, 1); break;
+      case 'ArrowUp': next = this.verticalTarget(index, -1); break;
+      case 'Home': next = 0; break;
+      case 'End': next = photos.length - 1; break;
+      case 'Escape':
+        if (this.selectionCount()) {
+          event.preventDefault();
+          this.clearSelection();
+        }
+        return;
+      default: return;
+    }
+
+    event.preventDefault();
+    this.activeIndex.set(next);
+    const host = document.querySelector(`[data-pidx="${next}"]`) as HTMLElement | null;
+    const focusable = (host?.querySelector('[tabindex]') as HTMLElement | null) ?? host;
+    focusable?.focus();
+    focusable?.scrollIntoView({ block: 'nearest' });
   }
 
   /** Toggle the scroll-to-top button based on how far the gallery content is scrolled. */

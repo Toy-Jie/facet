@@ -52,7 +52,7 @@ interface AppConfig {
       [attr.aria-label]="photo().filename"
       [attr.aria-pressed]="isSelected()"
       (click)="onSelect($event)"
-      (keydown.enter)="onKeySelect($event)"
+      (keydown.enter)="onKeyOpen($event)"
       (keydown.space)="onKeySelect($event)"
       (dblclick)="doubleClicked.emit(photo()); $event.stopPropagation()"
       (mouseenter)="onMouseEnter($event)"
@@ -309,6 +309,11 @@ export class PhotoCardComponent {
   onKeySelect(event: Event): void {
     event.preventDefault();
     this.selectionChange.emit({ photo: this.photo(), event: event as MouseEvent });
+  }
+
+  onKeyOpen(event: Event): void {
+    event.preventDefault();
+    this.doubleClicked.emit(this.photo());
   }
 
   onMouseEnter(event: MouseEvent): void {
