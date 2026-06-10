@@ -70,6 +70,11 @@ python facet.py /path/to/photos --pass saliency      # BiRefNet subject saliency
 # Force re-scan of already processed files
 python facet.py /path/to/photos --force
 
+# Resume / selective re-processing
+python facet.py --resume                          # Resume last interrupted/failed scan run
+python facet.py --retry-failed                    # Re-process files that failed last run (or: --retry-failed all)
+python facet.py /path/to/photos --force-since 2026-01-01  # Re-process only photos scanned before date
+
 # Preview mode - score sample photos without saving (default: 10 photos)
 python facet.py /path/to/photos --dry-run
 python facet.py /path/to/photos --dry-run --dry-run-count 20
@@ -317,7 +322,7 @@ SQLite table `photos` with columns:
 
 **Tags/Recognition:** tags (JSON), person_id, face_embedding (BLOB)
 
-**Raw data (for recalculation):** clip_embedding (BLOB), histogram_data (BLOB), raw_sharpness_variance, config_version
+**Raw data (for recalculation):** clip_embedding (BLOB), histogram_data (BLOB), raw_sharpness_variance, config_version, scanned_at
 
 **Lookup tables:**
 - `photo_tags(photo_path, tag)` - Normalized tag lookup for fast exact-match queries (replaces `LIKE '%tag%'`)
@@ -332,7 +337,9 @@ SQLite table `photos` with columns:
 - `weight_config_snapshots(id, timestamp, category, weights, description, accuracy_before, accuracy_after, comparisons_used, created_by)` - Saved weight configurations
 - `recommendation_history(id, run_timestamp, config_version_hash, issue_type, target_category, target_key, old_value, proposed_value, was_applied)` - Scoring recommendation audit trail
 - `user_preferences(user_id, photo_path, star_rating, is_favorite, is_rejected)` - Per-user photo ratings (multi-user mode)
-- `stats_cache(key, value, updated_at)` - Precomputed statistics with TTL
+- `scan_runs(id, started_at, finished_at, status, mode, args_json, total_files, processed_files, failed_files)` - One row per scan invocation (status: running/completed/interrupted/failed; powers `--resume`)
+- `scan_failures(scan_run_id, path, stage, error, timestamp)` - Per-file scan errors (powers `--retry-failed`)
+- `stats_cache(key, value, updated_at)` - Precomputed statistics with TTL (also holds the persisted percentile snapshot for drift tracking)
 - `photos_fts(path, caption, tags)` - FTS5 virtual table for BM25-ranked text search on captions/tags (content-sync with `photos`)
 - `photos_vec(path, embedding)` - sqlite-vec virtual table for KNN vector search on CLIP/SigLIP embeddings (requires `sqlite-vec`)
 
@@ -409,7 +416,7 @@ See [docs/FACE_RECOGNITION.md](docs/FACE_RECOGNITION.md) for the complete workfl
 
 **Burst Culling:** `GET /api/burst-groups`, `POST /api/burst-groups/select`, `GET /api/culling-groups`, `POST /api/culling-groups/confirm` — burst and similar group culling workflow.
 
-**Scan:** `POST /api/scan/start`, `GET /api/scan/status`, `GET /api/scan/stream?token=<jwt>` (SSE), `GET /api/scan/directories` — trigger and monitor scoring scans (superadmin only). The `/stream` endpoint uses Server-Sent Events for real-time progress with automatic fallback to polling.
+**Scan:** `POST /api/scan/start`, `GET /api/scan/status`, `GET /api/scan/stream?token=<jwt>` (SSE), `GET /api/scan/directories` — trigger and monitor scoring scans (superadmin only). The `/stream` endpoint uses Server-Sent Events for real-time progress with automatic fallback to polling. Status payloads include a structured `progress` field (`{phase, current, total, eta_seconds}`) parsed from the CLI's `@FACET_PROGRESS` lines.
 
 **Face Management:** `GET /api/person/{id}/faces`, `POST /api/person/{id}/avatar`, `GET /api/photo/faces`, `POST /api/face/{id}/assign`, `POST /api/photo/assign_all_faces`, `POST /api/photo/unassign_person` — face-to-person assignment and avatar management.
 

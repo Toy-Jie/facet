@@ -114,6 +114,9 @@ PHOTOS_COLUMNS = [
     # GPS coordinates
     ('gps_latitude', 'REAL'),
     ('gps_longitude', 'REAL'),
+
+    # Scan bookkeeping (ISO timestamp of last successful scoring)
+    ('scanned_at', 'TEXT'),
 ]
 
 FACES_COLUMNS = [
@@ -144,6 +147,7 @@ PERSONS_COLUMNS = [
 # Index definitions as (name, table, column_expression)
 INDEXES = [
     ('idx_date_taken', 'photos', 'date_taken'),
+    ('idx_scanned_at', 'photos', 'scanned_at'),
     ('idx_aggregate', 'photos', 'aggregate DESC'),
     ('idx_camera_model', 'photos', 'camera_model'),
     ('idx_lens_model', 'photos', 'lens_model'),
@@ -255,6 +259,32 @@ WEIGHT_OPTIMIZATION_RUNS_COLUMNS = [
 WEIGHT_OPTIMIZATION_RUNS_INDEXES = [
     ('idx_optimization_timestamp', 'weight_optimization_runs', 'timestamp DESC'),
     ('idx_optimization_category', 'weight_optimization_runs', 'category'),
+]
+
+# Scan run bookkeeping: one row per scan invocation, plus per-file failures
+SCAN_RUNS_COLUMNS = [
+    ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+    ('started_at', "TEXT DEFAULT (datetime('now'))"),
+    ('finished_at', 'TEXT'),
+    ('status', "TEXT NOT NULL DEFAULT 'running'"),  # running|completed|interrupted|failed
+    ('mode', 'TEXT'),          # multi-pass|single-pass|pass:<name>
+    ('args_json', 'TEXT'),     # directories + relevant flags for --resume
+    ('total_files', 'INTEGER'),
+    ('processed_files', 'INTEGER DEFAULT 0'),
+    ('failed_files', 'INTEGER DEFAULT 0'),
+]
+
+SCAN_FAILURES_COLUMNS = [
+    ('scan_run_id', 'INTEGER NOT NULL REFERENCES scan_runs(id) ON DELETE CASCADE'),
+    ('path', 'TEXT NOT NULL'),
+    ('stage', 'TEXT'),         # load|decode_timeout|score|save
+    ('error', 'TEXT'),
+    ('timestamp', "TEXT DEFAULT (datetime('now'))"),
+]
+
+SCAN_RUNS_INDEXES = [
+    ('idx_scan_runs_status', 'scan_runs', 'status'),
+    ('idx_scan_failures_run', 'scan_failures', 'scan_run_id'),
 ]
 
 # Stats cache table for precomputed aggregations (performance optimization)
@@ -573,6 +603,17 @@ def init_database(db_path='photo_scores_pro.db'):
         # Create photos_vec virtual table for vector search (requires sqlite-vec)
         if HAS_SQLITE_VEC:
             _init_vec_table(conn)
+
+        # Create scan bookkeeping tables
+        conn.execute(_build_create_table_sql('scan_runs', SCAN_RUNS_COLUMNS))
+        conn.execute(_build_create_table_sql(
+            'scan_failures', SCAN_FAILURES_COLUMNS,
+            constraints=['PRIMARY KEY (scan_run_id, path)']
+        ))
+        for idx_name, table, column_expr in SCAN_RUNS_INDEXES:
+            conn.execute(
+                f'CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({column_expr})'
+            )
 
         # Migrate existing tables before index creation - new indexes may
         # target columns added here (e.g., comparisons.source)

@@ -19,6 +19,7 @@ from starlette.responses import StreamingResponse
 
 from api.auth import CurrentUser, decode_access_token, require_superadmin
 from api.config import VIEWER_CONFIG, FACET_SCRIPT, get_all_scan_directories, get_user_directories, _photo_types_cache, _stats_cache
+from processing.progress import parse_progress_line
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 logger = logging.getLogger(__name__)
@@ -32,13 +33,23 @@ _scan_state = {
     'started_at': None,
     'directories': [],
     'exit_code': None,
+    'progress': None,
 }
 
 
 def _read_scan_output(proc):
-    """Background thread to read subprocess output."""
+    """Background thread to read subprocess output.
+
+    Structured @FACET_PROGRESS lines are parsed into _scan_state['progress']
+    and kept out of the human-readable log ring buffer.
+    """
     for line in proc.stdout:
-        _scan_state['output_lines'].append(line.rstrip('\n'))
+        line = line.rstrip('\n')
+        event = parse_progress_line(line)
+        if event is not None:
+            _scan_state['progress'] = event
+        else:
+            _scan_state['output_lines'].append(line)
     proc.wait()
     _scan_state['exit_code'] = proc.returncode
     _scan_state['running'] = False
@@ -98,6 +109,7 @@ def start_scan(
         _scan_state['started_at'] = time.time()
         _scan_state['directories'] = directories
         _scan_state['exit_code'] = None
+        _scan_state['progress'] = None
 
         reader = threading.Thread(target=_read_scan_output, args=(proc,), daemon=True)
         reader.start()
@@ -150,6 +162,7 @@ def _build_scan_snapshot(lines: int) -> dict:
         'output': output_lines,
         'elapsed_seconds': elapsed,
         'exit_code': _scan_state['exit_code'],
+        'progress': _scan_state.get('progress'),
     }
 
 
@@ -168,6 +181,7 @@ async def scan_stream(
     async def event_generator():
         import time as _time
         last_output_len = -1
+        last_progress = None
         was_running = None
         # Emit a comment-line heartbeat every HEARTBEAT_SECONDS so reverse
         # proxies (nginx, Cloudflare, ingress controllers) don't close the
@@ -180,12 +194,16 @@ async def scan_stream(
         while True:
             snapshot = _build_scan_snapshot(lines)
             current_output_len = len(_scan_state['output_lines'])
+            current_progress = _scan_state.get('progress')
             current_running = snapshot['running']
             now = _time.monotonic()
-            changed = current_output_len != last_output_len or current_running != was_running
+            changed = (current_output_len != last_output_len
+                       or current_progress != last_progress
+                       or current_running != was_running)
             if changed:
                 yield f"data: {json.dumps(snapshot)}\n\n"
                 last_output_len = current_output_len
+                last_progress = current_progress
                 if not current_running and was_running in (True, None):
                     break
                 was_running = current_running

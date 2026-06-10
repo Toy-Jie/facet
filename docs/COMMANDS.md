@@ -18,6 +18,19 @@
 | `python facet.py /path --pass saliency` | Run BiRefNet subject saliency detection only |
 | `python facet.py /path --db custom.db` | Use custom database file |
 | `python facet.py /path --config my.json` | Use custom scoring config |
+| `python facet.py --resume` | Resume the last interrupted/failed scan (reuses its directories; with `--force`, skips files already re-scored since that run started) |
+| `python facet.py --retry-failed` | Re-process only the files that failed during the last scan run (`--retry-failed all` for failures across all runs) |
+| `python facet.py /path --force-since 2026-01-01` | Like `--force`, but only re-process photos last scanned before the date |
+
+### Scan Bookkeeping
+
+Every scan records a row in `scan_runs` (status, mode, directories, counters)
+and per-file errors in `scan_failures` (path, stage, error). Interrupting a
+scan with Ctrl+C marks the run `interrupted` so `--resume` can pick it up;
+failed files are visible and retryable instead of being silently retried on
+every incremental scan. The CLI also emits structured `@FACET_PROGRESS` JSON
+lines (phase, current/total, ETA) which the viewer's scan API surfaces in the
+`progress` field of `/api/scan/status` and the SSE stream.
 
 ### Processing Modes
 

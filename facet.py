@@ -208,6 +208,13 @@ Configuration:
                         help='Score sample photos without saving to database (preview mode)')
     scan_group.add_argument('--dry-run-count', type=int, default=10,
                         help='Number of photos to process in dry-run mode (default: 10, requires --dry-run)')
+    scan_group.add_argument('--resume', action='store_true',
+                        help='Resume the last interrupted/failed scan run (reuses its directories; '
+                             'with --force, skips files already re-scored since that run started)')
+    scan_group.add_argument('--retry-failed', nargs='?', const='last', metavar='last|all',
+                        help='Re-process only files that failed during the last scan run (or all runs)')
+    scan_group.add_argument('--force-since', type=str, metavar='YYYY-MM-DD',
+                        help='Like --force, but only re-process photos last scanned before this date')
 
     # Database operations
     db_group = parser.add_argument_group('Database operations')
@@ -1220,7 +1227,25 @@ Configuration:
         logger.info("Exported %d photos to %s", len(photos), output_file)
         exit()
 
-    if not args.photo_paths:
+    # --resume reuses the directories recorded by the last interrupted run;
+    # --retry-failed needs no directories at all (worklist comes from the DB)
+    resumed_run = None
+    if args.resume and not args.photo_paths:
+        from processing.scan_state import get_last_resumable_run
+        resumed_run = get_last_resumable_run(args.db)
+        if not resumed_run:
+            logger.error("No interrupted or failed scan run found to resume")
+            exit(1)
+        try:
+            args.photo_paths = json.loads(resumed_run['args_json']).get('directories', [])
+        except (json.JSONDecodeError, TypeError):
+            args.photo_paths = []
+        logger.info("Resuming scan run #%d (%s)", resumed_run['id'], resumed_run['started_at'])
+    elif args.resume:
+        from processing.scan_state import get_last_resumable_run
+        resumed_run = get_last_resumable_run(args.db)
+
+    if not args.photo_paths and not args.retry_failed:
         logger.error("photo_paths is required unless using --recompute-average or --compute-percentiles")
         parser.print_help()
         exit(1)
@@ -1269,11 +1294,33 @@ Configuration:
     # Deduplicate (needed for case-insensitive filesystems like Windows)
     all_files = list({f.resolve(): f for f in all_files}.values())
 
+    # --retry-failed: the worklist comes from scan_failures, not the dir walk
+    if args.retry_failed:
+        from processing.scan_state import get_failed_paths
+        scope = 'all' if args.retry_failed == 'all' else 'last'
+        failed = [Path(p) for p in get_failed_paths(args.db, scope)]
+        all_files = [p for p in failed if p.exists()]
+        missing = len(failed) - len(all_files)
+        logger.info("Retrying %d failed files (%d no longer on disk)", len(all_files), missing)
+
     # Identify JPEGs to avoid double-processing if RAW+JPEG pairs exist
     jpeg_like = {'.jpg', '.jpeg'} | HEIF_EXTENSIONS
     jpegs_stems = {f.stem.lower() for f in all_files if f.suffix.lower() in jpeg_like}
-    if args.force:
+    if args.retry_failed:
         unscanned = {str(f.resolve()) for f in all_files}
+    elif args.force_since:
+        from processing.scan_state import filter_paths_scanned_before
+        unscanned = filter_paths_scanned_before(
+            args.db, (str(f.resolve()) for f in all_files), args.force_since,
+        )
+    elif args.force:
+        unscanned = {str(f.resolve()) for f in all_files}
+        if args.resume and resumed_run:
+            from processing.scan_state import filter_paths_scanned_since
+            unscanned = filter_paths_scanned_since(
+                args.db, unscanned, resumed_run['started_at'],
+                scorer.config.version_hash,
+            )
     else:
         unscanned = scorer.filter_unscanned_paths(str(f.resolve()) for f in all_files)
 
@@ -1341,11 +1388,29 @@ Configuration:
 
     # 2. Main Processing Loop
     from utils import configure_raw_decoding
+    from processing.scan_state import ScanRun
+    from processing.progress import emit_progress
     _proc = scorer.config.get_processing_settings()
     configure_raw_decoding(
         concurrency=_proc.get('raw_decode_concurrency', 0),
         timeout_seconds=_proc.get('raw_decode_timeout_seconds', 120),
     )
+    scan_mode = (f"pass:{args.single_pass_name}" if args.single_pass_name
+                 else 'single-pass' if args.single_pass else 'multi-pass')
+    scan_run = ScanRun.start(
+        args.db, scan_mode,
+        {'directories': [str(p) for p in args.photo_paths], 'force': args.force},
+        len(todo_list),
+    )
+    _scan_t0 = time.time()
+
+    def _on_scan_progress(processed, total):
+        scan_run.update_progress(processed)
+        elapsed = time.time() - _scan_t0
+        eta = (total - processed) * elapsed / processed if processed else None
+        emit_progress('scoring', processed, total, eta_seconds=eta)
+
+    emit_progress('scoring', 0, len(todo_list), force=True)
     try:
         # Check for single-pass mode or specific pass
         if args.single_pass_name:
@@ -1383,7 +1448,9 @@ Configuration:
             processor = BatchProcessor(
                 scorer,
                 batch_size=current_settings['batch_size'],
-                num_workers=current_settings['num_workers']
+                num_workers=current_settings['num_workers'],
+                on_error=scan_run.record_failure,
+                on_progress=_on_scan_progress,
             )
 
             calibration_done = [False]
@@ -1419,7 +1486,9 @@ Configuration:
                     scorer,
                     batch_size=current_settings['batch_size'],
                     num_workers=current_settings['num_workers'],
-                    prefetch_multiplier=current_settings.get('prefetch_queue_multiplier', 2)
+                    prefetch_multiplier=current_settings.get('prefetch_queue_multiplier', 2),
+                    on_error=scan_run.record_failure,
+                    on_progress=_on_scan_progress,
                 )
                 processor.process_stream(
                     iter(remaining_paths), len(remaining_paths),
@@ -1442,7 +1511,9 @@ Configuration:
 
             if mode != 'single-pass':
                 processor = ChunkedMultiPassProcessor(
-                    scorer, model_manager, scorer.config.config
+                    scorer, model_manager, scorer.config.config,
+                    on_error=scan_run.record_failure,
+                    on_progress=_on_scan_progress,
                 )
                 processor.process_directory(todo_paths)
             else:
@@ -1452,21 +1523,31 @@ Configuration:
                 processor = BatchProcessor(
                     scorer,
                     batch_size=proc_settings.get('gpu_batch_size', 16),
-                    num_workers=proc_settings.get('num_workers', 4)
+                    num_workers=proc_settings.get('num_workers', 4),
+                    on_error=scan_run.record_failure,
+                    on_progress=_on_scan_progress,
                 )
                 processor.process_files(todo_paths)
 
     except KeyboardInterrupt:
         logger.info("Interrupted.")
+        scan_run.finish('interrupted')
+    except Exception:
+        scan_run.finish('failed')
+        raise
+    else:
+        scan_run.finish('completed')
 
     # 3. Finalization
     scorer.commit()
 
     # 4. Process bursts
     # Note: Run --cluster-faces-incremental separately if person_ids are needed for grouping
+    emit_progress('bursts', force=True)
     process_bursts(scorer.db_path, scorer.config.config_path)
 
     # 6. Auto-tag photos using stored CLIP embeddings
+    emit_progress('tagging', force=True)
     from tag_existing import run_tagging
     from models.tagger import CLIPTagger
 
@@ -1488,12 +1569,14 @@ Configuration:
     # Auto-populate sqlite-vec table so semantic search is fast on first viewer
     # load after a scan. Idempotent: skips when already up-to-date, no-ops when
     # sqlite-vec isn't installed.
+    emit_progress('vec', force=True)
     try:
         from db.vec import populate_vec_table
         populate_vec_table(scorer.db_path)
     except Exception:
         logger.warning("Auto-populate of photos_vec failed (non-fatal)", exc_info=True)
 
+    emit_progress('done', force=True)
     logger.info("All tasks complete.")
 
 

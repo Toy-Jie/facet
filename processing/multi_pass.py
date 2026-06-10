@@ -61,7 +61,7 @@ class ChunkedMultiPassProcessor:
         (None, 'compute_aggregate'),  # CPU-only pass
     ]
 
-    def __init__(self, scorer, model_manager, config=None):
+    def __init__(self, scorer, model_manager, config=None, on_error=None, on_progress=None):
         """
         Initialize the multi-pass processor.
 
@@ -69,10 +69,14 @@ class ChunkedMultiPassProcessor:
             scorer: Facet instance for database access
             model_manager: ModelManager instance for model loading
             config: Optional dict with processing settings
+            on_error: Optional callback(path, stage, error) for per-file failures
+            on_progress: Optional callback(processed, total) called per chunk
         """
         self.scorer = scorer
         self.model_manager = model_manager
         self.config = config or {}
+        self.on_error = on_error
+        self.on_progress = on_progress
 
         # Get settings from unified 'processing' config
         proc_config = self.config.get('processing', {})
@@ -311,6 +315,9 @@ class ChunkedMultiPassProcessor:
                 offset = chunk_end
                 chunk_idx += 1
 
+                if self.on_progress:
+                    self.on_progress(offset, total)
+
         finally:
             self._ram_monitor.stop()
             if pbar:
@@ -513,20 +520,28 @@ class ChunkedMultiPassProcessor:
                         data = future.result()
                         if data is not None:
                             images[path] = data
+                        elif self.on_error:
+                            self.on_error(path, 'load', 'failed to load image')
                     except RuntimeError:
                         raise  # decode abandonment budget exhausted - fail fast
                     except Exception as e:
                         logger.error("Failed to load %s: %s", path, e)
+                        if self.on_error:
+                            self.on_error(path, 'load', e)
         else:
             for path in paths:
                 try:
                     data = _load_one(path)
                     if data is not None:
                         images[path] = data
+                    elif self.on_error:
+                        self.on_error(path, 'load', 'failed to load image')
                 except RuntimeError:
                     raise
                 except Exception as e:
                     logger.error("Failed to load %s: %s", path, e)
+                    if self.on_error:
+                        self.on_error(path, 'load', e)
 
         return images
 

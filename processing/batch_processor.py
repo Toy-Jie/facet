@@ -36,13 +36,15 @@ class BatchProcessor:
     """
 
     def __init__(self, scorer, batch_size=16, num_workers=4, batch_save_size=50,
-                 prefetch_multiplier=2, config=None):
+                 prefetch_multiplier=2, config=None, on_error=None, on_progress=None):
         self.scorer = scorer
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.batch_save_size = batch_save_size
         self.prefetch_multiplier = prefetch_multiplier
         self.config = config
+        self.on_error = on_error      # callback(path, stage, error)
+        self.on_progress = on_progress  # callback(processed, total)
 
         # Queues for producer-consumer pattern
         self.image_queue = queue.Queue(maxsize=batch_size * prefetch_multiplier)
@@ -462,6 +464,8 @@ class BatchProcessor:
                         item = self.result_queue.get(timeout=1.0)
                         if 'error' in item:
                             logger.error("Error on %s: %s", item.get('path', 'unknown'), item['error'])
+                            if self.on_error:
+                                self.on_error(item.get('path', 'unknown'), 'load', item['error'])
                         else:
                             pending_saves.append((item['result'], item['pil_img']))
 
@@ -480,6 +484,8 @@ class BatchProcessor:
                                     )
 
                         processed += 1
+                        if self.on_progress:
+                            self.on_progress(processed, total)
                     except queue.Empty:
                         continue
 
@@ -602,6 +608,8 @@ class BatchProcessor:
                         item = self.result_queue.get(timeout=1.0)
                         if 'error' in item:
                             logger.error("Error on %s: %s", item.get('path', 'unknown'), item['error'])
+                            if self.on_error:
+                                self.on_error(item.get('path', 'unknown'), 'load', item['error'])
                         else:
                             pending_saves.append((item['result'], item['pil_img']))
 
@@ -620,6 +628,8 @@ class BatchProcessor:
                                     )
 
                         processed += 1
+                        if self.on_progress:
+                            self.on_progress(processed, total)
                     except queue.Empty:
                         continue
 

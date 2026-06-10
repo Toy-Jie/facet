@@ -3,12 +3,21 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
 import { AuthService } from './auth.service';
 
+export interface ScanProgress {
+  phase: string;
+  current?: number;
+  total?: number;
+  current_file?: string;
+  eta_seconds?: number;
+}
+
 export interface ScanStatus {
   running: boolean;
   directories: string[];
   output: string[];
   elapsed_seconds: number | null;
   exit_code: number | null;
+  progress?: ScanProgress | null;
 }
 
 export interface ScanDirectory {
