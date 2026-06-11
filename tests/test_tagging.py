@@ -93,15 +93,21 @@ class TestBuildClipTagger:
         # model.to(device).eval() chaining must return a model
         fake_model.to.return_value.eval.return_value = fake_model
 
+        # Inject a fake `transformers` so the test runs without the heavy dep
+        # installed (CI has no torch/transformers).
+        fake_transformers = types.ModuleType("transformers")
+        fake_transformers.AutoModel = mock.MagicMock()
+        fake_transformers.AutoModel.from_pretrained.return_value = fake_model
+
         with (
-            mock.patch("transformers.AutoModel.from_pretrained",
-                       return_value=fake_model) as auto_model,
+            mock.patch.dict(sys.modules, {"transformers": fake_transformers}),
             mock.patch.object(tag_existing, "CLIPTagger") as CLIPTaggerMock,
         ):
             tag_existing.build_clip_tagger(cfg, device="cpu")
 
-        auto_model.assert_called_once()
-        assert auto_model.call_args.args[0] == "google/siglip2-so400m-patch16-naflex"
+        from_pretrained = fake_transformers.AutoModel.from_pretrained
+        from_pretrained.assert_called_once()
+        assert from_pretrained.call_args.args[0] == "google/siglip2-so400m-patch16-naflex"
         _, kwargs = CLIPTaggerMock.call_args
         assert kwargs["model_name"] == "google/siglip2-so400m-patch16-naflex"
         assert kwargs["backend"] == "transformers"

@@ -153,6 +153,11 @@ class TestDecodeTimeout:
 
 class TestMultiPassParallelLoader:
     def _make_processor(self, load_workers):
+        # The parallel loader itself is torch-free, but constructing the
+        # processor runs multi_pass._ensure_imports(), which eagerly imports
+        # torch. CI installs no torch, so skip there; runs locally where torch
+        # is present.
+        pytest.importorskip("torch")
         from processing.multi_pass import ChunkedMultiPassProcessor
         scorer = mock.MagicMock()
         scorer.config.get_exposure_settings.return_value = {}
