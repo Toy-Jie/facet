@@ -266,6 +266,11 @@ Configuration:
     db_group.add_argument('--optimize-sources', type=str, metavar='vote,culling,rating',
                         help='Restrict --optimize-weights training data to these comparison '
                              'sources (default: all, with per-source reliability weighting)')
+    db_group.add_argument('--optimize-category', type=str, metavar='CATEGORY',
+                        help='Category for --optimize-weights: trains only on that category\'s '
+                             'comparisons and writes the result into the v4 categories[].weights '
+                             'block (default: pool all comparisons and write to the legacy '
+                             "'others' block, which the v4 config does not read)")
 
     # Face recognition
     face_group = parser.add_argument_group('Face recognition')
@@ -403,6 +408,7 @@ Configuration:
             db_path=args.db,
             config_path=config_path,
             sources=sources,
+            category=args.optimize_category,
         )
         exit()
 

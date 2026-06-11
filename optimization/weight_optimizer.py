@@ -922,22 +922,36 @@ def run_weight_optimization(
     config_path: str = 'scoring_config.json',
     min_comparisons: int = 30,
     sources: Optional[List[str]] = None,
+    category: Optional[str] = None,
 ):
     """Run weight optimization from CLI. Optimizes and saves weights automatically.
 
     Args:
         sources: Restrict training data to these comparison sources
                  (vote/culling/rating); None uses all with reliability weighting
+        category: Category to train on and write weights to. When set, only
+                  that category's comparisons are used and the result lands in
+                  the v4 categories[].weights block. When None, all comparisons
+                  are pooled and the result is written to the legacy 'others'
+                  block (which v4 config does NOT read - pass an explicit
+                  category to actually affect scoring).
     """
     optimizer = WeightOptimizer(db_path, config_path)
 
     logger.info("=" * 60)
-    logger.info("WEIGHT OPTIMIZATION")
+    logger.info("WEIGHT OPTIMIZATION%s", f" - category: {category}" if category else " - all comparisons (pooled)")
     logger.info("=" * 60)
+
+    if category is None:
+        logger.warning(
+            "No --optimize-category given: training on all comparisons and writing to "
+            "the legacy 'others' block, which the v4 config does not read. Pass "
+            "--optimize-category <name> to actually change scoring."
+        )
 
     logger.info("Optimizing weights via direct preference optimization...")
     result = optimizer.optimize_weights_direct(
-        category=None,
+        category=category,
         min_comparisons=min_comparisons,
         sources=sources,
     )
@@ -963,7 +977,7 @@ def run_weight_optimization(
     logger.info("Applying weights to config...")
     backup_path = optimizer.apply_optimized_weights(
         result['new_weights'],
-        category='others',
+        category=category or 'others',
     )
     if backup_path:
         logger.info("  Backup created: %s", backup_path)
