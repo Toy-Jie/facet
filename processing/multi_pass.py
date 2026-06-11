@@ -727,11 +727,16 @@ class ChunkedMultiPassProcessor:
                 for i, path in enumerate(paths):
                     results[path][column] = scores[i]
             else:
-                # Primary quality model stores to aesthetic/quality_score
+                # Primary quality model stores to aesthetic/quality_score. When
+                # that model is TOPIQ, also fill the dedicated topiq_score column
+                # (free — already computed) so the viewer's TOPIQ range filter
+                # works after a normal scan instead of only after --score-topiq.
                 for i, path in enumerate(paths):
                     results[path]['aesthetic'] = scores[i]
                     results[path]['scoring_model'] = model_name
                     results[path]['quality_score'] = scores[i]
+                    if model_name == 'topiq':
+                        results[path]['topiq_score'] = scores[i]
         except Exception as e:
             logger.error("PyIQA %s pass failed: %s", model_name, e)
 
