@@ -15,6 +15,7 @@ All settings are in `scoring_config.json`. After modifying, run `python facet.py
 - [Penalties](#penalties)
 - [Normalization](#normalization)
 - [Models](#models)
+- [Quality Assessment Models](#quality-assessment-models)
 - [Processing](#processing)
 - [Burst Detection](#burst-detection)
 - [Burst Scoring](#burst-scoring)

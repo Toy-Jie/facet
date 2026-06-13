@@ -1,5 +1,9 @@
 # Commands Reference
 
+[Scanning](#scanning) · [Preview & Export](#preview--export) · [Recompute Operations](#recompute-operations) · [Face Recognition](#face-recognition) · [Thumbnail Management](#thumbnail-management) · [Diagnostics](#diagnostics) · [Model Information](#model-information) · [Weight Optimization](#weight-optimization-pairwise-comparison) · [Configuration](#configuration) · [Tagging](#tagging) · [Database Validation](#database-validation) · [Database Maintenance](#database-maintenance) · [Web Viewer](#web-viewer) · [Common Workflows](#common-workflows)
+
+> Requirement tags used below: `[GPU]` · `[8gb/16gb/24gb]` / `[16gb/24gb]` / `[24gb]` (VRAM profile). See the [feature matrix](../README.md#feature-availability--requirements).
+
 ## Scanning
 
 | Command | Description |
@@ -78,15 +82,15 @@ These commands update specific metrics without full photo reprocessing.
 | `python facet.py --recompute-category portrait` | Recompute scores for a single category only |
 | `python facet.py --recompute-tags` | Re-tag all photos using configured model |
 | `python facet.py --recompute-tags-vlm` | Re-tag all photos using VLM tagger |
-| `python facet.py --recompute-saliency` | Recompute subject saliency metrics (BiRefNet_dynamic, GPU) |
-| `python facet.py --recompute-composition-cpu` | Recompute composition (rule-based, CPU) |
-| `python facet.py --recompute-composition-gpu` | Rescan with SAMP-Net (GPU required) |
-| `python facet.py --recompute-iqa` | Recompute supplementary IQA metrics (TOPIQ IAA, NR-Face, LIQE) from thumbnails |
+| `python facet.py --recompute-saliency` | `[GPU]` `[16gb/24gb]` Recompute subject saliency metrics (BiRefNet_dynamic) |
+| `python facet.py --recompute-composition-cpu` | Recompute composition (rule-based, CPU — any profile) |
+| `python facet.py --recompute-composition-gpu` | `[GPU]` Rescan with SAMP-Net; uses Qwen2-VL on the `[24gb]` profile |
+| `python facet.py --recompute-iqa` | `[GPU]` `[8gb/16gb/24gb]` Recompute supplementary IQA metrics (TOPIQ IAA, NR-Face, LIQE) from thumbnails |
 | `python facet.py --upgrade-db` | Backfill all metric columns on an older DB by running recompute-iqa / saliency / composition-cpu / burst / blinks / average in sequence. Each step is idempotent. |
 | `python facet.py --recompute-blinks` | Recompute blink detection |
 | `python facet.py --recompute-burst` | Recompute burst detection groups |
 | `python facet.py --detect-duplicates` | Detect duplicate photos using pHash comparison |
-| `python facet.py --generate-captions` | Generate AI captions for photos using VLM (requires 16gb/24gb) |
+| `python facet.py --generate-captions` | `[GPU]` `[16gb/24gb]` Generate AI captions for photos using VLM |
 | `python facet.py --translate-captions` | Translate English captions to configured target language (CPU, MarianMT) |
 | `python facet.py --extract-gps` | Extract GPS coordinates from EXIF data into database columns |
 | `python facet.py --rescan-gps` | Re-extract GPS coordinates from EXIF for all photos (overwrites existing) |
@@ -267,7 +271,10 @@ Checks: Score ranges, face metrics, BLOB corruption, embedding sizes, orphaned f
 | Command | Description |
 |---------|-------------|
 | `python viewer.py` | Start server on http://localhost:5000 (API + Angular SPA) |
-| `python viewer.py --production` | Production mode with 4 workers |
+| `python viewer.py --port 5001` | Bind a different port (or set the `PORT` env var; default 5000) |
+| `python viewer.py --host 127.0.0.1` | Bind a specific interface (default `0.0.0.0`) |
+| `python viewer.py --production` | Production mode (uvicorn workers) |
+| `python viewer.py --production --workers 4` | Production mode with N workers (default 1) |
 
 ## Common Workflows
 
