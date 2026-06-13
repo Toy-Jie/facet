@@ -54,6 +54,13 @@ RUN useradd --create-home --shell /bin/bash facet \
     && chown -R facet:facet /app \
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Pin HOME so the HuggingFace / InsightFace caches are deterministic. They pick
+# their dir from os.path.expanduser("~"), which is $HOME when set and otherwise
+# the passwd home. gosu does not reset $HOME on the privilege drop, so without
+# this the cache landed in /root or /home/facet depending on the environment's
+# inherited $HOME — and the bind mounts only catch one of them.
+ENV HOME=/home/facet
+
 EXPOSE 5000
 
 # Entrypoint fixes ownership of the writable bind mounts (created root-owned by
