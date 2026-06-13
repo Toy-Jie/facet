@@ -802,6 +802,15 @@ class WeightOptimizer:
         for component, weight in new_weights.items():
             cat_weights[f"{component}_percent"] = round(weight * 100, 1)
 
+        # Drop stale '<base>_percent' keys whose base is not a real scoring metric
+        # (e.g. DB-column-named keys a pre-alignment apply may have left behind).
+        # get_weights treats every '*_percent' as a weight and renormalizes over
+        # them, so cruft would silently dilute the real metrics.
+        valid_metric_keys = set(SCORING_METRIC_KEYS) | {'quality'}
+        for key in [k for k in cat_weights
+                    if k.endswith('_percent') and k[:-len('_percent')] not in valid_metric_keys]:
+            del cat_weights[key]
+
         # Post-rounding normalization to ensure weights sum to exactly 100%
         percent_keys = [f"{c}_percent" for c in new_weights.keys()]
         total = sum(cat_weights[k] for k in percent_keys if k in cat_weights)

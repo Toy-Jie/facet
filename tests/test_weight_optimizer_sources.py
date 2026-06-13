@@ -197,6 +197,24 @@ class TestApplyWritesConfigKeys:
         assert weights["liqe_percent"] == 40.0
         assert weights["subject_sharpness_percent"] == 60.0
 
+    def test_apply_strips_stale_db_column_keys(self, tmp_path):
+        # A pre-alignment apply could leave DB-column-named keys that the scorer
+        # never reads but get_weights would still renormalize over, diluting the
+        # real metrics. apply must remove them.
+        cfg = tmp_path / "cfg.json"
+        cfg.write_text(json.dumps({"categories": [{"name": "portrait", "weights": {
+            "aesthetic_percent": 50,
+            "noise_sigma_percent": 30,      # stale DB-column name
+            "mean_saturation_percent": 20,  # stale DB-column name
+        }}]}))
+        opt = WeightOptimizer("unused.db", str(cfg))
+        opt.apply_optimized_weights({"aesthetic": 0.5, "liqe": 0.5}, category="portrait", backup=False)
+        weights = json.loads(cfg.read_text())["categories"][0]["weights"]
+        assert "noise_sigma_percent" not in weights
+        assert "mean_saturation_percent" not in weights
+        # quality is a real (redistributed) metric key and must be preserved if present
+        assert weights["liqe_percent"] == 50.0
+
 
 class TestHeldOutGate:
     def _setup(self, tmp_path):
