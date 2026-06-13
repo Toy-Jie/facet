@@ -8,8 +8,8 @@ services:
       - ./data:/app/data
       - ./scoring_config.json:/app/scoring_config.json
       - ./storage:/app/storage
-      - ./model-cache/huggingface:/root/.cache/huggingface
-      - ./model-cache/insightface:/root/.insightface
+      - ./model-cache/huggingface:/home/facet/.cache/huggingface
+      - ./model-cache/insightface:/home/facet/.insightface
       - ./model-cache/pretrained:/app/pretrained_models
     environment:
       - FACET_LOG_LEVEL=INFO
