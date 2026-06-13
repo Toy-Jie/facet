@@ -353,6 +353,7 @@ class ChunkedMultiPassProcessor:
         # Supplementary/optional models — load failures skip rather than abort
         supplementary = set(self.model_manager.get_active_profile().get('supplementary_pyiqa', []))
         supplementary.add('saliency')  # BiRefNet is optional (may require HF auth)
+        supplementary.add('samp_net')  # SAMP-Net is optional (weights may be unavailable — composition is skipped)
 
         # Run each pass group
         for group_idx, model_group in enumerate(self.pass_groups):
