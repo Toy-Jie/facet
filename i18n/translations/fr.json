@@ -1092,7 +1092,9 @@
       "any": "Tous",
       "find_filter": "Rechercher un filtre…",
       "no_filters_match": "Aucun filtre ne correspond",
-      "advanced_metrics": "Métriques avancées"
+      "advanced_metrics": "Métriques avancées",
+      "refine": "Affiner",
+      "view": "Affichage"
     },
     "semantic_search_info": "La recherche sémantique charge les embeddings en mémoire au premier usage. Cela peut prendre un moment pour les grandes bibliothèques.",
     "select_on_map": "Sélectionner sur la carte",

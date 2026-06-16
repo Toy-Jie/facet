@@ -429,31 +429,21 @@ function saveSectionStates(states: Record<string, boolean>): void {
         </mat-expansion-panel>
       }
 
-      <!-- Display Options -->
-      <mat-expansion-panel class="!mb-1" [expanded]="sectionStates()['display'] !== false"
-                           (opened)="onSectionToggle('display', true)"
-                           (closed)="onSectionToggle('display', false)"
-                           [style.background-color]="sectionStates()['display'] !== false ? 'var(--mat-sys-surface-container)' : null">
+      <!-- Refine (result-affecting filters) -->
+      <mat-expansion-panel class="!mb-1" [expanded]="sectionStates()['refine'] !== false"
+                           (opened)="onSectionToggle('refine', true)"
+                           (closed)="onSectionToggle('refine', false)"
+                           [style.background-color]="sectionStates()['refine'] !== false ? 'var(--mat-sys-surface-container)' : null">
         <mat-expansion-panel-header>
           <mat-panel-title class="flex items-center gap-2">
-            <mat-icon class="!text-base !w-5 !h-5 !leading-5 opacity-60">display_settings</mat-icon>
-            {{ 'gallery.sidebar.display' | translate }}
-            @if (sectionActiveCounts()['display']) {
-              <span class="text-xs rounded-full min-w-[1.25rem] h-5 px-1.5 flex items-center justify-center bg-[var(--mat-sys-primary)] text-[var(--mat-sys-on-primary)] leading-none">{{ sectionActiveCounts()['display'] }}</span>
+            <mat-icon class="!text-base !w-5 !h-5 !leading-5 opacity-60">filter_alt</mat-icon>
+            {{ 'gallery.sidebar.refine' | translate }}
+            @if (sectionActiveCounts()['refine']) {
+              <span class="text-xs rounded-full min-w-[1.25rem] h-5 px-1.5 flex items-center justify-center bg-[var(--mat-sys-primary)] text-[var(--mat-sys-on-primary)] leading-none">{{ sectionActiveCounts()['refine'] }}</span>
             }
           </mat-panel-title>
         </mat-expansion-panel-header>
         <div class="flex flex-col gap-2 pb-2">
-          @if (store.galleryMode() !== 'mosaic') {
-            <mat-checkbox
-              [checked]="store.filters().hide_details"
-              (change)="store.updateFilter('hide_details', $event.checked)"
-            >{{ 'gallery.hide_details' | translate }}</mat-checkbox>
-          }
-          <mat-checkbox
-            [checked]="store.virtualScroll()"
-            (change)="store.setVirtualScroll($event.checked)"
-          >{{ 'gallery.sidebar.virtual_scroll' | translate }}</mat-checkbox>
           <mat-checkbox
             [checked]="store.filters().hide_blinks"
             (change)="store.updateFilter('hide_blinks', $event.checked)"
@@ -478,6 +468,31 @@ function saveSectionStates(states: Record<string, boolean>): void {
             [checked]="store.filters().is_monochrome"
             (change)="store.updateFilter('is_monochrome', $event.checked)"
           >{{ 'gallery.monochrome_only' | translate }}</mat-checkbox>
+        </div>
+      </mat-expansion-panel>
+
+      <!-- View (display preferences, not filters) -->
+      <mat-expansion-panel class="!mb-1" [expanded]="sectionStates()['view'] !== false"
+                           (opened)="onSectionToggle('view', true)"
+                           (closed)="onSectionToggle('view', false)"
+                           [style.background-color]="sectionStates()['view'] !== false ? 'var(--mat-sys-surface-container)' : null">
+        <mat-expansion-panel-header>
+          <mat-panel-title class="flex items-center gap-2">
+            <mat-icon class="!text-base !w-5 !h-5 !leading-5 opacity-60">display_settings</mat-icon>
+            {{ 'gallery.sidebar.view' | translate }}
+          </mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="flex flex-col gap-2 pb-2">
+          @if (store.galleryMode() !== 'mosaic') {
+            <mat-checkbox
+              [checked]="store.filters().hide_details"
+              (change)="store.updateFilter('hide_details', $event.checked)"
+            >{{ 'gallery.hide_details' | translate }}</mat-checkbox>
+          }
+          <mat-checkbox
+            [checked]="store.virtualScroll()"
+            (change)="store.setVirtualScroll($event.checked)"
+          >{{ 'gallery.sidebar.virtual_scroll' | translate }}</mat-checkbox>
           <div class="hidden md:flex items-center gap-2 mt-2">
             <span class="text-sm opacity-70 shrink-0">{{ 'gallery.layout_mode' | translate }}</span>
             <div class="flex gap-1 ml-auto">
@@ -752,7 +767,7 @@ export class GalleryFilterSidebarComponent {
       content: (f.type ? 1 : 0) + (f.tag ? 1 : 0) + (f.composition_pattern ? 1 : 0),
       equipment: (f.camera ? 1 : 0) + (f.lens ? 1 : 0),
       persons: f.person_id ? f.person_id.split(',').length : 0,
-      display: (f.favorites_only ? 1 : 0) + (f.is_monochrome ? 1 : 0) + (f.hide_rejected ? 1 : 0),
+      refine: (f.favorites_only ? 1 : 0) + (f.is_monochrome ? 1 : 0) + (f.hide_rejected ? 1 : 0),
     };
     const fAny = f as Record<string, any>;
     for (const sectionKey of SECTION_ORDER) {

@@ -82,7 +82,7 @@ describe('GalleryFilterSidebarComponent', () => {
       expect(counts['date']).toBe(0);
       expect(counts['content']).toBe(0);
       expect(counts['equipment']).toBe(0);
-      expect(counts['display']).toBe(0);
+      expect(counts['refine']).toBe(0);
       expect(counts['gallery.sidebar.quality']).toBe(0);
       expect(counts['gallery.sidebar.face']).toBe(0);
     });
@@ -109,10 +109,10 @@ describe('GalleryFilterSidebarComponent', () => {
       expect(component.sectionActiveCounts()['equipment']).toBe(2);
     });
 
-    it('counts favorites_only, is_monochrome, hide_rejected for display section', () => {
+    it('counts favorites_only, is_monochrome, hide_rejected for refine section', () => {
       const mockStore = (component as any).store;
       mockStore.filters.set({ ...mockStore.filters(), favorites_only: true, is_monochrome: true, hide_rejected: true });
-      expect(component.sectionActiveCounts()['display']).toBe(3);
+      expect(component.sectionActiveCounts()['refine']).toBe(3);
     });
 
     it('counts active metric filters by min/max key', () => {
