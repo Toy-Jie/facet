@@ -167,6 +167,7 @@ function saveSectionStates(states: Record<string, boolean>): void {
       <mat-form-field subscriptSizing="dynamic" class="w-full !mb-1">
         <mat-icon matPrefix class="mr-1 opacity-60">manage_search</mat-icon>
         <input matInput [placeholder]="'gallery.sidebar.find_filter' | translate"
+               [attr.aria-label]="'gallery.sidebar.find_filter' | translate"
                [value]="filterQuery()" (input)="filterQuery.set($any($event.target).value)" />
         @if (filterQuery()) {
           <button matSuffix mat-icon-button class="!w-6 !h-6 !p-0" (click)="filterQuery.set('')">
