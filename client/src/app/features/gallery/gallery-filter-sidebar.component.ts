@@ -128,7 +128,7 @@ function saveSectionStates(states: Record<string, boolean>): void {
 @Component({
   selector: 'app-gallery-filter-sidebar',
   standalone: true,
-  host: { class: 'block h-full' },
+  host: { class: 'flex flex-col h-full' },
   imports: [
     DecimalPipe,
     NgTemplateOutlet,
@@ -150,7 +150,7 @@ function saveSectionStates(states: Record<string, boolean>): void {
     PersonThumbnailUrlPipe,
   ],
   template: `
-<div data-scroll class="overflow-y-auto px-2 pb-4 h-full">
+<div data-scroll class="flex-1 min-h-0 overflow-y-auto px-2 pb-4">
 
       <div class="sticky top-0 z-20 -mx-2 px-2 pt-3 pb-2 bg-[var(--mat-sys-surface)] flex items-center gap-2">
         <span class="text-sm font-medium opacity-80">{{ 'gallery.filters' | translate }}</span>
@@ -615,16 +615,6 @@ function saveSectionStates(states: Record<string, boolean>): void {
       </mat-expansion-panel>
       }
 
-      <!-- Save as smart album -->
-      @if (store.config()?.features?.show_albums && auth.isEdition() && store.activeFilterCount() > 0 && !store.filters().album_id) {
-        <div class="py-3 px-1">
-          <button mat-stroked-button class="w-full" (click)="saveAsSmartAlbum()">
-            <mat-icon>bookmark_add</mat-icon>
-            {{ 'albums.save_smart' | translate }}
-          </button>
-        </div>
-      }
-
       <ng-template #metricPanel let-group>
         <mat-expansion-panel class="!mb-1" [expanded]="sectionStates()[group.sectionKey] === true"
                              (opened)="onSectionToggle(group.sectionKey, true)"
@@ -681,6 +671,16 @@ function saveSectionStates(states: Record<string, boolean>): void {
         </div>
       </ng-template>
     </div>
+
+    <!-- Save as smart album (pinned footer, shown only when relevant) -->
+    @if (store.config()?.features?.show_albums && auth.isEdition() && store.activeFilterCount() > 0 && !store.filters().album_id) {
+      <div class="shrink-0 px-2 py-2 border-t border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
+        <button mat-stroked-button class="w-full" (click)="saveAsSmartAlbum()">
+          <mat-icon>bookmark_add</mat-icon>
+          {{ 'albums.save_smart' | translate }}
+        </button>
+      </div>
+    }
   `,
 })
 export class GalleryFilterSidebarComponent {
