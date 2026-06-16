@@ -48,6 +48,7 @@ describe('GalleryFilterSidebarComponent', () => {
       tags: signal([]),
       persons: signal([]),
       compositionPatterns: signal([]),
+      metricRanges: signal({}),
       config: signal(null),
       activeFilterCount: signal(0),
       updateFilter: vi.fn(),

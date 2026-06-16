@@ -318,3 +318,47 @@ def location_name(lat: float, lng: float):
     with get_db() as conn:
         name = geocode_grid(conn, lat, lng)
         return {"display_name": name}
+
+
+def _compute_metric_ranges():
+    """Observed min/max and a value histogram per numeric metric column.
+
+    Powers data-driven slider bounds (clamping) and the distribution sparkline
+    in the gallery filter sidebar. Computed in a single scan and cached; values
+    are global (not visibility-filtered) since they are only a UI hint.
+    """
+    import numpy as np
+    from api.routers.gallery import SCORE_RANGE_COLUMNS, EXIF_RANGE_COLUMNS
+
+    metrics = SCORE_RANGE_COLUMNS + EXIF_RANGE_COLUMNS
+    columns = [m[0] for m in metrics]
+    n_bins = 20
+    with get_db() as conn:
+        cur = conn.execute(f"SELECT {', '.join(columns)} FROM photos")
+        rows = cur.fetchall()
+
+    result = {}
+    for idx, (_column, min_key, _max_key, _is_float) in enumerate(metrics):
+        values = np.fromiter(
+            (row[idx] for row in rows if row[idx] is not None),
+            dtype=float,
+        )
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            continue
+        v_min = float(values.min())
+        v_max = float(values.max())
+        if v_max <= v_min:
+            buckets = [int(values.size)]
+        else:
+            counts, _edges = np.histogram(values, bins=n_bins, range=(v_min, v_max))
+            buckets = [int(c) for c in counts]
+        result[min_key] = {'min': v_min, 'max': v_max, 'buckets': buckets}
+    return result
+
+
+@router.get("/metric_ranges")
+def metric_ranges():
+    """Per-metric observed range and distribution for slider clamping + histograms."""
+    from api.config import _get_stats_cached
+    return {'ranges': _get_stats_cached('metric_ranges', _compute_metric_ranges)}

@@ -651,16 +651,25 @@ function saveSectionStates(states: Record<string, boolean>): void {
         <div class="flex flex-col gap-0">
           <span class="text-xs opacity-60 px-1">{{ def.labelKey | translate }}</span>
           <div class="flex items-center gap-1">
-            <mat-slider [min]="def.sliderMin" [max]="def.sliderMax" [step]="def.step" class="flex-1">
-              <input matSliderStartThumb
-                [value]="$any(store.filters())[def.minKey] ? +$any(store.filters())[def.minKey] : def.sliderMin"
-                (valueChange)="onDynamicRangeChange(def, 'min', $event)"
-                [attr.aria-label]="(def.labelKey | translate) + ' min'" />
-              <input matSliderEndThumb
-                [value]="$any(store.filters())[def.maxKey] ? +$any(store.filters())[def.maxKey] : def.sliderMax"
-                (valueChange)="onDynamicRangeChange(def, 'max', $event)"
-                [attr.aria-label]="(def.labelKey | translate) + ' max'" />
-            </mat-slider>
+            <div class="flex-1 flex flex-col">
+              @if (metricHistograms()[def.minKey]; as bars) {
+                <div class="flex items-end gap-px h-3 px-2" aria-hidden="true">
+                  @for (h of bars; track $index) {
+                    <span class="flex-1 rounded-sm bg-[var(--mat-sys-primary)] opacity-25" [style.height.%]="h"></span>
+                  }
+                </div>
+              }
+              <mat-slider [min]="def.sliderMin" [max]="def.sliderMax" [step]="def.step" class="w-full">
+                <input matSliderStartThumb
+                  [value]="$any(store.filters())[def.minKey] ? +$any(store.filters())[def.minKey] : def.sliderMin"
+                  (valueChange)="onDynamicRangeChange(def, 'min', $event)"
+                  [attr.aria-label]="(def.labelKey | translate) + ' min'" />
+                <input matSliderEndThumb
+                  [value]="$any(store.filters())[def.maxKey] ? +$any(store.filters())[def.maxKey] : def.sliderMax"
+                  (valueChange)="onDynamicRangeChange(def, 'max', $event)"
+                  [attr.aria-label]="(def.labelKey | translate) + ' max'" />
+              </mat-slider>
+            </div>
             <span class="text-xs opacity-60 text-right" [class]="def.spanWidth">
               @if ($any(store.filters())[def.minKey] || $any(store.filters())[def.maxKey]) {
                 {{ store.filters() | filterDisplay:def }}
@@ -736,16 +745,28 @@ export class GalleryFilterSidebarComponent {
     return m;
   });
 
+  private clampDef(def: AdditionalFilterDef): AdditionalFilterDef {
+    const r = this.store.metricRanges()[def.minKey];
+    if (!r) return def;
+    const lo = Number((Math.floor(r.min / def.step + 1e-9) * def.step).toFixed(6));
+    const hi = Number((Math.ceil(r.max / def.step - 1e-9) * def.step).toFixed(6));
+    if (!(hi > lo)) return def;
+    return { ...def, sliderMin: lo, sliderMax: hi };
+  }
+
   private matchGroups(order: string[]): FilterGroup[] {
     const q = this.filterQuery().trim().toLowerCase();
-    if (!q) return order.map(sectionKey => ({ sectionKey, filters: FILTERS_BY_SECTION[sectionKey] }));
-    const tr = this.translatedDefs();
+    const tr = q ? this.translatedDefs() : null;
     const out: FilterGroup[] = [];
     for (const sectionKey of order) {
       const all = FILTERS_BY_SECTION[sectionKey];
-      const sectionMatches = all.length > 0 && tr[all[0].id].section.includes(q);
-      const filters = sectionMatches ? all : all.filter(d => tr[d.id].label.includes(q));
-      if (filters.length) out.push({ sectionKey, filters });
+      let defs = all;
+      if (q && tr) {
+        const sectionMatches = all.length > 0 && tr[all[0].id].section.includes(q);
+        defs = sectionMatches ? all : all.filter(d => tr[d.id].label.includes(q));
+      }
+      if (!defs.length) continue;
+      out.push({ sectionKey, filters: defs.map(d => this.clampDef(d)) });
     }
     return out;
   }
@@ -754,6 +775,17 @@ export class GalleryFilterSidebarComponent {
   readonly advancedFilterGroups = computed(() => this.matchGroups(ADVANCED_SECTION_ORDER));
   readonly searchResultGroups = computed(() => [...this.commonFilterGroups(), ...this.advancedFilterGroups()]);
   readonly noFilterMatches = computed(() => !!this.filterQuery().trim() && this.searchResultGroups().length === 0);
+
+  readonly metricHistograms = computed(() => {
+    const ranges = this.store.metricRanges();
+    const out: Record<string, number[]> = {};
+    for (const key of Object.keys(ranges)) {
+      const buckets = ranges[key].buckets;
+      const max = Math.max(1, ...buckets);
+      out[key] = buckets.map(b => Math.round((b / max) * 100));
+    }
+    return out;
+  });
 
   readonly advancedActiveCount = computed(() => {
     const counts = this.sectionActiveCounts();
