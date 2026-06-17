@@ -12,10 +12,12 @@ import sqlite3
 import numpy as np
 import pytest
 
-import sqlite_vec
+# sqlite-vec is an optional dependency; skip this whole module (rather than
+# error collection) on environments that don't install it.
+sqlite_vec = pytest.importorskip("sqlite_vec")
 
-from api.routers.gallery import _find_similar_visual, _vec_knn_similar
-from utils.embedding import embedding_to_bytes
+from api.routers.gallery import _find_similar_visual, _vec_knn_similar  # noqa: E402
+from utils.embedding import embedding_to_bytes  # noqa: E402
 
 
 DIM = 16

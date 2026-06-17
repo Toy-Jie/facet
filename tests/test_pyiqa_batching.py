@@ -9,7 +9,12 @@ mismatched sizes split into per-shape forwards.
 """
 
 import numpy as np
+import pytest
 from PIL import Image
+
+# PyIQAScorer imports torch at module load; skip (don't error) where torch is
+# absent, e.g. the lightweight CI test env.
+pytest.importorskip("torch")
 
 from models.pyiqa_scorer import PyIQAScorer
 
