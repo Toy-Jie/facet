@@ -32,7 +32,8 @@ _PERSONS_SCHEMA = """
         representative_face_id INTEGER,
         face_count INTEGER DEFAULT 0,
         face_thumbnail BLOB,
-        auto_clustered INTEGER DEFAULT 0
+        auto_clustered INTEGER DEFAULT 0,
+        is_hidden INTEGER DEFAULT 0
     );
     CREATE TABLE faces (
         id INTEGER PRIMARY KEY,

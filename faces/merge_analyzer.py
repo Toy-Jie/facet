@@ -15,12 +15,14 @@ def get_merge_groups(db_path, threshold=0.6):
       - persons: list of {id, name, face_count}
       - min_similarity, max_similarity, avg_similarity
     """
-    # Load all persons with centroids
+    # Load all persons with centroids. Hidden persons (is_hidden = 1) are
+    # excluded so they are never proposed for merging.
     with get_connection(db_path) as conn:
         cursor = conn.execute("""
             SELECT id, name, face_count, centroid
             FROM persons
             WHERE centroid IS NOT NULL
+              AND (is_hidden = 0 OR is_hidden IS NULL)
             ORDER BY face_count DESC
         """)
         persons = []

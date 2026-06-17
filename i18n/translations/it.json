@@ -1452,7 +1452,22 @@
     "share_link_error": "Questo link di condivisione non è valido.",
     "load_error": "Impossibile caricare la persona.",
     "created": "Persona creata",
-    "create_error": "Impossibile creare la persona"
+    "create_error": "Impossibile creare la persona",
+    "hidden": "Nascosta",
+    "hide": "Nascondi",
+    "unhide": "Mostra",
+    "show_hidden": "Mostra nascoste",
+    "hidden_done": "Persona nascosta",
+    "unhidden_done": "Persona mostrata",
+    "hide_error": "Impossibile aggiornare la visibilità della persona",
+    "split": "Dividi in una nuova persona",
+    "split_action": "Dividi ({count})",
+    "split_dialog_title": "Dividi in una nuova persona",
+    "split_dialog_desc": "Seleziona i volti da spostare in una nuova persona.",
+    "split_name_placeholder": "Nome della nuova persona (facoltativo)",
+    "no_faces": "Nessun volto trovato per questa persona",
+    "split_done": "Persona divisa",
+    "split_error": "Impossibile dividere la persona"
   },
   "person_selector": {
     "create_new": "Crea nuova persona"

@@ -171,7 +171,7 @@ async def persons(ids: Optional[str] = None, user: Optional[CurrentUser] = Depen
                 SELECT p.id, p.name, COUNT(DISTINCT f.photo_path) as photo_count
                 FROM persons p
                 JOIN faces f ON f.person_id = p.id
-                WHERE 1=1{vis_join}
+                WHERE (p.is_hidden = 0 OR p.is_hidden IS NULL){vis_join}
                 GROUP BY p.id HAVING photo_count >= ?
                 ORDER BY photo_count DESC LIMIT ?
                 """,

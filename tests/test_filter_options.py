@@ -16,11 +16,11 @@ def _make_db(path: str, persons: list, faces: list):
     """Create a minimal test DB with persons, faces, and photos tables."""
     conn = sqlite3.connect(path)
     conn.executescript("""
-        CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT, is_hidden INTEGER DEFAULT 0);
         CREATE TABLE faces (id INTEGER PRIMARY KEY, person_id INTEGER, photo_path TEXT);
         CREATE TABLE photos (path TEXT PRIMARY KEY);
     """)
-    conn.executemany("INSERT INTO persons VALUES (?, ?)", persons)
+    conn.executemany("INSERT INTO persons (id, name) VALUES (?, ?)", persons)
     conn.executemany("INSERT INTO faces VALUES (?, ?, ?)", faces)
     photos = {f[2] for f in faces}
     conn.executemany("INSERT INTO photos VALUES (?)", [(p,) for p in photos])

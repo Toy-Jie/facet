@@ -1456,7 +1456,22 @@
     "share_link_error": "Dieser Freigabelink ist ungültig.",
     "load_error": "Person konnte nicht geladen werden.",
     "created": "Person erstellt",
-    "create_error": "Person konnte nicht erstellt werden"
+    "create_error": "Person konnte nicht erstellt werden",
+    "hidden": "Ausgeblendet",
+    "hide": "Ausblenden",
+    "unhide": "Einblenden",
+    "show_hidden": "Ausgeblendete anzeigen",
+    "hidden_done": "Person ausgeblendet",
+    "unhidden_done": "Person eingeblendet",
+    "hide_error": "Sichtbarkeit der Person konnte nicht aktualisiert werden",
+    "split": "In neue Person aufteilen",
+    "split_action": "Aufteilen ({count})",
+    "split_dialog_title": "In neue Person aufteilen",
+    "split_dialog_desc": "Wählen Sie die Gesichter aus, die in eine neue Person verschoben werden sollen.",
+    "split_name_placeholder": "Name der neuen Person (optional)",
+    "no_faces": "Keine Gesichter für diese Person gefunden",
+    "split_done": "Person aufgeteilt",
+    "split_error": "Person konnte nicht aufgeteilt werden"
   },
   "person_selector": {
     "create_new": "Neue Person erstellen"

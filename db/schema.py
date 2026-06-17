@@ -155,6 +155,7 @@ PERSONS_COLUMNS = [
     ('centroid', 'BLOB'),
     ('auto_clustered', 'INTEGER DEFAULT 1'),
     ('face_thumbnail', 'BLOB'),
+    ('is_hidden', 'INTEGER DEFAULT 0'),
 ]
 
 # Index definitions as (name, table, column_expression)
@@ -585,6 +586,9 @@ def init_database(db_path='photo_scores_pro.db'):
 
         # Create persons table
         conn.execute(_build_create_table_sql('persons', PERSONS_COLUMNS))
+
+        # Migrate existing persons table - add any missing columns (e.g. is_hidden)
+        _migrate_add_missing_columns(conn, 'persons', PERSONS_COLUMNS)
 
         # Create photo_tags lookup table for fast tag queries
         conn.execute(_build_create_table_sql(

@@ -8,11 +8,12 @@ import { PersonCardComponent, Person } from './person-card.component';
   selector: 'test-host',
   standalone: true,
   imports: [PersonCardComponent],
-  template: `<app-person-card [person]="person()" [isEditing]="isEditing()" />`,
+  template: `<app-person-card [person]="person()" [isEditing]="isEditing()" [canEdit]="canEdit()" />`,
 })
 class TestHostComponent {
   person = signal<Person>({ id: 1, name: 'Alice', face_count: 5, face_thumbnail: true });
   isEditing = signal(false);
+  canEdit = signal(false);
 }
 
 describe('PersonCardComponent', () => {
@@ -78,5 +79,40 @@ describe('PersonCardComponent', () => {
 
     card.onSave();
     expect(emitted).toEqual([{ id: 1, name: '' }]);
+  });
+
+  it('emits hidden / split outputs with the person id', () => {
+    const card = getCard();
+    const hidden: number[] = [];
+    const split: number[] = [];
+    card.hidden.subscribe(v => hidden.push(v));
+    card.split.subscribe(v => split.push(v));
+
+    card.hidden.emit(card.person().id);
+    card.split.emit(card.person().id);
+
+    expect(hidden).toEqual([1]);
+    expect(split).toEqual([1]);
+  });
+
+  it('emits unhidden output for a hidden person', () => {
+    host.person.set({ id: 7, name: 'Bob', face_count: 2, face_thumbnail: false, is_hidden: true });
+    fixture.detectChanges();
+
+    const card = getCard();
+    const unhidden: number[] = [];
+    card.unhidden.subscribe(v => unhidden.push(v));
+
+    card.unhidden.emit(card.person().id);
+
+    expect(unhidden).toEqual([7]);
+  });
+
+  it('renders the hidden chip when the person is hidden', () => {
+    host.canEdit.set(true);
+    host.person.set({ id: 7, name: 'Bob', face_count: 2, face_thumbnail: false, is_hidden: true });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('persons.hidden');
   });
 });

@@ -1452,7 +1452,22 @@
     "share_link_error": "Este enlace para compartir no es válido.",
     "load_error": "No se pudo cargar la persona.",
     "created": "Persona creada",
-    "create_error": "No se pudo crear la persona"
+    "create_error": "No se pudo crear la persona",
+    "hidden": "Oculta",
+    "hide": "Ocultar",
+    "unhide": "Mostrar",
+    "show_hidden": "Mostrar ocultas",
+    "hidden_done": "Persona oculta",
+    "unhidden_done": "Persona mostrada",
+    "hide_error": "No se pudo actualizar la visibilidad de la persona",
+    "split": "Separar en una nueva persona",
+    "split_action": "Separar ({count})",
+    "split_dialog_title": "Separar en una nueva persona",
+    "split_dialog_desc": "Seleccione las caras que se moverán a una nueva persona.",
+    "split_name_placeholder": "Nombre de la nueva persona (opcional)",
+    "no_faces": "No se encontraron caras para esta persona",
+    "split_done": "Persona separada",
+    "split_error": "No se pudo separar la persona"
   },
   "person_selector": {
     "create_new": "Crear nueva persona"

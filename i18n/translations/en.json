@@ -1450,7 +1450,22 @@
     "share_link_error": "This share link is invalid.",
     "load_error": "Failed to load person.",
     "created": "Person created",
-    "create_error": "Failed to create person"
+    "create_error": "Failed to create person",
+    "hidden": "Hidden",
+    "hide": "Hide",
+    "unhide": "Unhide",
+    "show_hidden": "Show hidden",
+    "hidden_done": "Person hidden",
+    "unhidden_done": "Person shown",
+    "hide_error": "Failed to update person visibility",
+    "split": "Split into new person",
+    "split_action": "Split ({count})",
+    "split_dialog_title": "Split into new person",
+    "split_dialog_desc": "Select the faces to move into a new person.",
+    "split_name_placeholder": "New person name (optional)",
+    "no_faces": "No faces found for this person",
+    "split_done": "Person split",
+    "split_error": "Failed to split person"
   },
   "person_selector": {
     "create_new": "Create new person"
