@@ -145,6 +145,12 @@ FACES_COLUMNS = [
     ('person_id', 'INTEGER'),
     ('face_thumbnail', 'BLOB'),  # Pre-generated face crop from detection time
     ('landmark_2d_106', 'BLOB'),  # 106x2 float32 = 848 bytes for blink detection
+    # Embedding-space marker: which recognition model produced `embedding`.
+    # Embeddings from different models are NOT comparable, so clustering loads
+    # only the active space (see faces/clusterer.py) — a future model swap can't
+    # silently mix spaces. The constant default backfills existing rows (all
+    # ArcFace/buffalo_l) on migration and tags new inserts with no code change.
+    ('embedding_model', "TEXT DEFAULT 'arcface_buffalo_l'"),
 ]
 
 PERSONS_COLUMNS = [
