@@ -52,3 +52,19 @@ def test_missing_fields_fall_back_to_aggregate():
     a = {'aggregate': 8.0}
     b = {'aggregate': 6.0}
     assert pick_lead([a, b]) is a
+
+
+def test_learned_score_influences_when_present():
+    # Equal aggregate; the higher learned_score wins (Topic 4 step 7).
+    low = _p(7.0, face_count=0, learned_score=2.0)
+    high = _p(7.0, face_count=0, learned_score=9.0)
+    assert pick_lead([low, high]) is high
+
+
+def test_learned_score_inert_when_absent():
+    # No learned_score key -> identical to the eyes/expression-only behavior.
+    a = {'aggregate': 7.0, 'face_count': 1, 'eyes_open_score': 10.0}
+    b = {'aggregate': 7.0, 'face_count': 1, 'eyes_open_score': 1.0}
+    assert pick_lead([a, b]) is a
+    # And a None learned_score must not change the score.
+    assert composite_lead_score({'aggregate': 7.0, 'learned_score': None}) == 7.0

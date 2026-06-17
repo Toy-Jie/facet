@@ -137,7 +137,10 @@ def detect_duplicates(db_path, config_path=None):
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(
             "SELECT path, phash, aggregate, clip_embedding, "
-            "face_count, eyes_open_score, expression_score, tech_sharpness "
+            "face_count, eyes_open_score, expression_score, tech_sharpness, "
+            "(SELECT ls.learned_score FROM learned_scores ls "
+            " WHERE ls.photo_path = photos.path AND ls.user_id IS NULL "
+            " AND ls.category IS NULL) AS learned_score "
             "FROM photos WHERE phash IS NOT NULL ORDER BY path"
         )
         rows = cursor.fetchall()
@@ -155,6 +158,7 @@ def detect_duplicates(db_path, config_path=None):
             'eyes_open_score': r['eyes_open_score'],
             'expression_score': r['expression_score'],
             'tech_sharpness': r['tech_sharpness'],
+            'learned_score': r['learned_score'],
         }
         for r in rows
     ]

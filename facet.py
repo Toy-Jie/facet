@@ -474,11 +474,11 @@ Configuration:
 
     # Report unreviewed burst groups (read-only, no GPU)
     if args.report_unreviewed_bursts:
-        from db import get_connection
+        import sqlite3 as _sqlite3
         from api.routers.burst_culling import _count_unreviewed_burst_groups
         init_database(args.db)
         with get_connection(args.db or DEFAULT_DB_PATH) as conn:
-            conn.row_factory = __import__('sqlite3').Row
+            conn.row_factory = _sqlite3.Row
             total = _count_unreviewed_burst_groups(conn, '1=1', [])
             unreviewed = conn.execute(
                 "SELECT COUNT(DISTINCT burst_group_id) FROM photos "

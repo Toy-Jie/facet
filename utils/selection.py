@@ -24,14 +24,19 @@ score degrades to aggregate plus the sharpness nudge.
 _EYES_W = 0.03
 _EXPR_W = 0.015
 _SHARP_W = 0.01
+_LEARNED_W = 0.05   # personal-ranker nudge (Topic 4 step 7); inert when learned_score absent
 _NEUTRAL = 5.0
 
 
 def composite_lead_score(photo):
-    """Composite best-of score: aggregate (dominant) + bounded eyes/expression/sharpness tie-break.
+    """Composite best-of score: aggregate (dominant) + bounded tie-break terms.
 
     ``photo`` is a mapping with optional keys: aggregate, face_count,
-    eyes_open_score, expression_score, tech_sharpness/face_sharpness.
+    eyes_open_score, expression_score, tech_sharpness, learned_score.
+
+    The optional ``learned_score`` (personal-ranker output, Topic 4 step 7) only
+    contributes when present and non-None — when no learned_scores rows exist it
+    is simply absent, so selection is identical to the eyes/expression behavior.
     """
     score = float(photo.get('aggregate') or 0.0)
     face_count = photo.get('face_count') or 0
@@ -47,6 +52,10 @@ def composite_lead_score(photo):
     sharp = photo.get('tech_sharpness')
     if sharp is not None:
         score += (float(sharp) - _NEUTRAL) * _SHARP_W
+
+    learned = photo.get('learned_score')
+    if learned is not None:
+        score += (float(learned) - _NEUTRAL) * _LEARNED_W
 
     return score
 

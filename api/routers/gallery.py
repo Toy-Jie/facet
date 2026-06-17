@@ -453,7 +453,13 @@ async def api_photos(
 
     sort_col = params['sort'] if params['sort'] in VALID_SORT_COLS else 'aggregate'
     sort_dir = 'ASC' if params['dir'] == 'ASC' else 'DESC'
-    order_by_clause = f"{sort_col} {sort_dir}, path ASC"
+    if sort_col == 'learned_score':
+        # Personal-ranker sort: untrained photos (NULL learned_score) always sink,
+        # regardless of direction, so the gallery degrades gracefully to a stable
+        # path order on an untrained DB.
+        order_by_clause = f"(learned_score IS NULL) ASC, learned_score {sort_dir}, path ASC"
+    else:
+        order_by_clause = f"{sort_col} {sort_dir}, path ASC"
 
     try:
         async with get_async_db() as conn:
@@ -513,6 +519,17 @@ async def api_photos(
             if needs_top_picks_score:
                 top_picks_expr = get_top_picks_score_sql()
                 select_cols.append(f"({top_picks_expr}) as top_picks_score")
+
+            if sort_col == 'learned_score':
+                # Opt-in alternate sort from the personal ranker. Correlated
+                # subquery (not a JOIN) avoids ambiguity with photos.category /
+                # photos.user_id; scoped to the global pooled ranker (category
+                # NULL, user_id NULL). NULL when untrained -> sorts last.
+                select_cols.append(
+                    "(SELECT ls.learned_score FROM learned_scores ls "
+                    "WHERE ls.photo_path = photos.path AND ls.user_id IS NULL "
+                    "AND ls.category IS NULL) AS learned_score"
+                )
 
             if total_count:
                 query = f"SELECT {', '.join(select_cols)} FROM {from_clause}{where_str} ORDER BY {order_by_clause} LIMIT ? OFFSET ?"
