@@ -41,8 +41,14 @@ class MergeRequest(BaseModel):
 
 
 class MergeBatchRequest(BaseModel):
-    source_ids: List[int]
-    target_id: int
+    # Arbitrary (source -> target) pairs, as produced by the "Accept all" UI.
+    # Different pairs may have different targets; chains are resolved server-side.
+    merges: List[MergeRequest]
+
+
+class RejectMergeRequest(BaseModel):
+    person1_id: int
+    person2_id: int
 
 
 class DeleteBatchRequest(BaseModel):
@@ -177,55 +183,107 @@ def _do_merge(source_id: int, target_id: int):
             raise HTTPException(status_code=500, detail='Internal server error')
 
 
+def _resolve_merge_chains(pairs):
+    """Collapse (source -> target) pairs into {final_target: set(ids_to_fold)}.
+
+    Follows chains transitively (e.g. 2->1 and 1->4 means both 1 and 2 fold into
+    4) and is cycle-safe — a visited set breaks any accidental loop.
+    """
+    direct = {}
+    for source_id, target_id in pairs:
+        if source_id != target_id:
+            direct[source_id] = target_id
+
+    def final_target(node):
+        seen = set()
+        cur = node
+        while cur in direct and cur not in seen:
+            seen.add(cur)
+            cur = direct[cur]
+        return cur
+
+    groups = {}
+    for source_id in direct:
+        target = final_target(source_id)
+        if target != source_id:
+            groups.setdefault(target, set()).add(source_id)
+    return groups
+
+
 @router.post("/api/persons/merge_batch")
 def merge_persons_batch(
     body: MergeBatchRequest,
     user: CurrentUser = Depends(require_edition),
 ):
-    """Merge multiple persons into a target person."""
-    if not body.source_ids:
-        raise HTTPException(status_code=400, detail="Missing source_ids")
-    if body.target_id in body.source_ids:
-        raise HTTPException(status_code=400, detail="Target cannot be in source list")
+    """Merge arbitrary (source -> target) person pairs in one transaction.
+
+    The "Accept all" UI sends pairs that may target different persons and may
+    chain (2->1, 1->4); chains are collapsed to their final target so every
+    folded person ends up under the surviving one.
+    """
+    pairs = [(m.source_id, m.target_id) for m in body.merges]
+    groups = _resolve_merge_chains(pairs)
+    if not groups:
+        raise HTTPException(status_code=400, detail="No valid merges")
 
     with get_db() as conn:
         try:
-            # Move all faces from sources to target
-            placeholders = ",".join("?" * len(body.source_ids))
-            conn.execute(
-                f"UPDATE faces SET person_id = ? WHERE person_id IN ({placeholders})",
-                [body.target_id] + body.source_ids,
-            )
+            merged_total = 0
+            for target_id, source_ids in groups.items():
+                ids = sorted(source_ids)
+                placeholders = ",".join("?" * len(ids))
+                # Move every folded person's faces onto the surviving target
+                conn.execute(
+                    f"UPDATE faces SET person_id = ? WHERE person_id IN ({placeholders})",
+                    [target_id, *ids],
+                )
+                # Refresh the target's face_count from the faces table
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM faces WHERE person_id = ?", (target_id,)
+                ).fetchone()
+                conn.execute(
+                    "UPDATE persons SET face_count = ? WHERE id = ?",
+                    (row[0] if row else 0, target_id),
+                )
+                # Delete the folded persons
+                conn.execute(
+                    f"DELETE FROM persons WHERE id IN ({placeholders})", ids
+                )
+                merged_total += len(ids)
 
-            # Update target face_count
-            row = conn.execute(
-                "SELECT COUNT(*) FROM faces WHERE person_id = ?",
-                (body.target_id,),
-            ).fetchone()
-            new_count = row[0] if row else 0
-            conn.execute(
-                "UPDATE persons SET face_count = ? WHERE id = ?",
-                (new_count, body.target_id),
-            )
-
-            # Delete source persons
-            conn.execute(
-                f"DELETE FROM persons WHERE id IN ({placeholders})",
-                body.source_ids,
-            )
             conn.commit()
             invalidate_stats_cache()
-
             return {
                 "success": True,
-                "target_id": body.target_id,
-                "merged_count": len(body.source_ids),
-                "new_count": new_count,
+                "targets": sorted(groups),
+                "merged_count": merged_total,
             }
-        except HTTPException:
-            raise
         except sqlite3.Error:
-            logger.exception("Database error in batch merge to person %d", body.target_id)
+            logger.exception("Database error in batch merge (%d pairs)", len(pairs))
+            conn.rollback()
+            raise HTTPException(status_code=500, detail='Internal server error')
+
+
+@router.post("/api/persons/merge_suggestions/reject")
+def reject_merge_suggestion(
+    body: RejectMergeRequest,
+    user: CurrentUser = Depends(require_edition),
+):
+    """Remember a dismissed merge suggestion so it is not proposed again."""
+    person_a, person_b = sorted((body.person1_id, body.person2_id))
+    if person_a == person_b:
+        raise HTTPException(status_code=400, detail="Cannot reject a person against itself")
+    with get_db() as conn:
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO rejected_merge_suggestions "
+                "(person_a_id, person_b_id) VALUES (?, ?)",
+                (person_a, person_b),
+            )
+            conn.commit()
+            return {"success": True}
+        except sqlite3.Error:
+            logger.exception("Database error rejecting merge %d/%d", person_a, person_b)
             conn.rollback()
             raise HTTPException(status_code=500, detail='Internal server error')
 

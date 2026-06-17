@@ -279,6 +279,14 @@ LEARNED_SCORES_INDEXES = [
     ('idx_learned_scores_category', 'learned_scores', 'category'),
 ]
 
+# Rejected merge suggestions — person-merge pairs the user dismissed, so the
+# merge analyzer stops re-proposing them. Stored canonically (person_a_id < person_b_id).
+REJECTED_MERGE_SUGGESTIONS_COLUMNS = [
+    ('person_a_id', 'INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE'),
+    ('person_b_id', 'INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE'),
+    ('rejected_at', "TEXT DEFAULT (datetime('now'))"),
+]
+
 # Weight optimization history
 WEIGHT_OPTIMIZATION_RUNS_COLUMNS = [
     ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
@@ -584,6 +592,13 @@ def init_database(db_path='photo_scores_pro.db'):
         conn.execute(_build_create_table_sql(
             'learned_scores',
             LEARNED_SCORES_COLUMNS
+        ))
+
+        # Create rejected_merge_suggestions table (dismissed person-merge pairs)
+        conn.execute(_build_create_table_sql(
+            'rejected_merge_suggestions',
+            REJECTED_MERGE_SUGGESTIONS_COLUMNS,
+            constraints=['PRIMARY KEY (person_a_id, person_b_id)']
         ))
 
         # Create weight_optimization_runs table for tracking optimization history
