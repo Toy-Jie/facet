@@ -3,7 +3,7 @@
 **Your photos deserve more than a star rating.** Facet is a local photo analysis engine that scores every image across 9 dimensions — from aesthetic appeal to face sharpness — then lets you browse, cull, and organize through an interactive web gallery. No cloud, no subscriptions, no API keys. Your photos stay on your machine.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
-![Angular](https://img.shields.io/badge/Angular-20-dd0031)
+![Angular](https://img.shields.io/badge/Angular-21-dd0031)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Docker-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
