@@ -212,6 +212,7 @@ Use `--simulate-gpu NAME` and `--simulate-vram GB` to test how Facet would behav
 | `python facet.py --train-ranker --ranker-category portrait` | Train the ranker on one category only |
 | `python facet.py --train-ranker --train-ranker-force` | Write learned_scores even if the accuracy gate is not met |
 | `python facet.py --report-unreviewed-bursts` | Report how many burst groups remain unreviewed (read-only) |
+| `python facet.py --eval-iqa-srcc` | Report Spearman SRCC of each IQA/aesthetic metric vs your star ratings (read-only) |
 | `python facet.py --mine-insights` | Data-mining report: label inventory, metric-label correlations, category distribution, percentile drift, comparison health |
 | `python facet.py --mine-insights report.json` | Same, also writes the full report as JSON |
 

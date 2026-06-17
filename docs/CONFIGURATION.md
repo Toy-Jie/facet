@@ -753,6 +753,30 @@ Run `python facet.py --detect-duplicates` to detect and group duplicates. Run `p
 
 ---
 
+## Extended IQA tier (optional)
+
+Heavy/experimental quality scorers, **OFF by default** and **never a replacement for TOPIQ** — they add supplementary columns only when explicitly enabled. Q-Align and DeQA-Score need a 16GB+ GPU to run; Aesthetic V2.5 is light.
+
+```json
+{
+  "iqa_extended": {
+    "qalign": false,
+    "aesthetic_v25": false,
+    "deqa": false
+  }
+}
+```
+
+| Setting | Default | Column | Description |
+|---------|---------|--------|-------------|
+| `qalign` | `false` | `qalign_score` | Q-Align LLM-based IQA (pyiqa-backed; full precision ~14GB VRAM) |
+| `aesthetic_v25` | `false` | `aesthetic_v25` | Aesthetic Predictor V2.5 (SigLIP head, ~2GB) |
+| `deqa` | `false` | `deqa_score` | DeQA-Score VLM IQA (16GB+ GPU; skipped & left NULL otherwise) |
+
+When enabled, each metric is exposed to the weighted aggregate but defaults to weight 0, so `--recompute-average` is byte-identical until you give it a weight. Run `python facet.py --eval-iqa-srcc` to measure how well each metric ranks your library against your own star ratings.
+
+---
+
 ## Face Detection
 
 InsightFace face detection settings.
