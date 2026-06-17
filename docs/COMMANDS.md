@@ -208,6 +208,10 @@ Use `--simulate-gpu NAME` and `--simulate-vram GB` to test how Facet would behav
 | `python facet.py --optimize-weights` | Optimize and save weights based on comparisons (all sources, reliability-weighted) |
 | `python facet.py --optimize-weights --optimize-sources vote,culling` | Restrict training data to specific comparison sources |
 | `python facet.py --sync-label-comparisons` | Rebuild rating-derived pairs (source=rating) from star ratings/favorites/rejections |
+| `python facet.py --train-ranker` | Train the personal ranker over [embedding + scores] and write learned_scores (gated on held-out k-fold accuracy vs the aggregate baseline) |
+| `python facet.py --train-ranker --ranker-category portrait` | Train the ranker on one category only |
+| `python facet.py --train-ranker --train-ranker-force` | Write learned_scores even if the accuracy gate is not met |
+| `python facet.py --report-unreviewed-bursts` | Report how many burst groups remain unreviewed (read-only) |
 | `python facet.py --mine-insights` | Data-mining report: label inventory, metric-label correlations, category distribution, percentile drift, comparison health |
 | `python facet.py --mine-insights report.json` | Same, also writes the full report as JSON |
 
