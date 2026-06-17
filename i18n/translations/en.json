@@ -1100,7 +1100,8 @@
       "no_filters_match": "No filters match",
       "advanced_metrics": "Advanced metrics",
       "refine": "Refine",
-      "view": "View"
+      "view": "View",
+      "color_quality": "Color & Quality"
     },
     "semantic_search_info": "Semantic search loads embeddings into RAM on first use. This may take a moment for large libraries.",
     "select_on_map": "Select on map",
@@ -1146,7 +1147,31 @@
     "subject_placement_range": "Subject Placement",
     "bg_separation_range": "BG Separation",
     "gps_clear": "Clear location",
-    "loading_photos": "Loading photos…"
+    "loading_photos": "Loading photos…",
+    "quality_tier": "Quality Tier",
+    "quality_tiers": {
+      "excellent": "Excellent",
+      "good": "Good",
+      "fair": "Fair",
+      "poor": "Poor"
+    },
+    "color_temp": "Color Temperature",
+    "color_temps": {
+      "warm": "Warm",
+      "cool": "Cool",
+      "neutral": "Neutral"
+    },
+    "hue": "Hue",
+    "hue_buckets": {
+      "red": "Red",
+      "orange": "Orange",
+      "yellow": "Yellow",
+      "green": "Green",
+      "cyan": "Cyan",
+      "blue": "Blue",
+      "purple": "Purple",
+      "magenta": "Magenta"
+    }
   },
   "composition_patterns": {
     "none": "None",

@@ -1100,7 +1100,8 @@
       "no_filters_match": "Ningún filtro coincide",
       "advanced_metrics": "Métricas avanzadas",
       "refine": "Refinar",
-      "view": "Vista"
+      "view": "Vista",
+      "color_quality": "Color y calidad"
     },
     "semantic_search_info": "La búsqueda semántica carga los embeddings en la RAM en el primer uso. Esto puede tardar un momento para bibliotecas grandes.",
     "select_on_map": "Seleccionar en el mapa",
@@ -1146,7 +1147,31 @@
     "saturation_range": "Saturación",
     "star_rating_range": "Valoración por estrellas",
     "gps_clear": "Borrar ubicación",
-    "loading_photos": "Cargando fotos…"
+    "loading_photos": "Cargando fotos…",
+    "quality_tier": "Nivel de calidad",
+    "quality_tiers": {
+      "excellent": "Excelente",
+      "good": "Bueno",
+      "fair": "Regular",
+      "poor": "Bajo"
+    },
+    "color_temp": "Temperatura de color",
+    "color_temps": {
+      "warm": "Cálida",
+      "cool": "Fría",
+      "neutral": "Neutra"
+    },
+    "hue": "Tono",
+    "hue_buckets": {
+      "red": "Rojo",
+      "orange": "Naranja",
+      "yellow": "Amarillo",
+      "green": "Verde",
+      "cyan": "Cian",
+      "blue": "Azul",
+      "purple": "Púrpura",
+      "magenta": "Magenta"
+    }
   },
   "composition_patterns": {
     "none": "Ninguno",

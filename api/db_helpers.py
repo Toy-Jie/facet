@@ -100,7 +100,8 @@ PHOTO_OPTIONAL_COLS = [
     'subject_sharpness', 'subject_prominence', 'subject_placement', 'bg_separation',
     'star_rating', 'is_favorite', 'is_rejected',
     'duplicate_group_id', 'is_duplicate_lead',
-    'caption', 'caption_translated', 'gps_latitude', 'gps_longitude'
+    'caption', 'caption_translated', 'gps_latitude', 'gps_longitude',
+    'dominant_hue', 'color_temp',
 ]
 
 

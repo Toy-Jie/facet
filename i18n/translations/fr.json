@@ -1100,7 +1100,8 @@
       "no_filters_match": "Aucun filtre ne correspond",
       "advanced_metrics": "Métriques avancées",
       "refine": "Affiner",
-      "view": "Affichage"
+      "view": "Affichage",
+      "color_quality": "Couleur et qualité"
     },
     "semantic_search_info": "La recherche sémantique charge les embeddings en mémoire au premier usage. Cela peut prendre un moment pour les grandes bibliothèques.",
     "select_on_map": "Sélectionner sur la carte",
@@ -1146,7 +1147,31 @@
     "subject_placement_range": "Placement du sujet",
     "bg_separation_range": "Séparation fond",
     "gps_clear": "Supprimer la position",
-    "loading_photos": "Chargement des photos…"
+    "loading_photos": "Chargement des photos…",
+    "quality_tier": "Niveau de qualité",
+    "quality_tiers": {
+      "excellent": "Excellent",
+      "good": "Bon",
+      "fair": "Moyen",
+      "poor": "Faible"
+    },
+    "color_temp": "Température de couleur",
+    "color_temps": {
+      "warm": "Chaude",
+      "cool": "Froide",
+      "neutral": "Neutre"
+    },
+    "hue": "Teinte",
+    "hue_buckets": {
+      "red": "Rouge",
+      "orange": "Orange",
+      "yellow": "Jaune",
+      "green": "Vert",
+      "cyan": "Cyan",
+      "blue": "Bleu",
+      "purple": "Violet",
+      "magenta": "Magenta"
+    }
   },
   "composition_patterns": {
     "none": "Aucun",

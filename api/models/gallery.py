@@ -153,6 +153,11 @@ class GalleryParams(BaseModel):
     # Content flags
     is_monochrome: str = ''
     category: str = ''
+    # Color facet (opt-in extraction, always-on filter)
+    color_temp: str = ''        # warm | cool | neutral
+    hue_bucket: str = ''        # red | orange | yellow | green | cyan | blue | purple | magenta
+    # Quality tier (on-the-fly, derived from aggregate thresholds; no schema column)
+    quality_tier: str = ''      # excellent | good | fair | poor
     min_aggregate: str = ''
     is_silhouette: str = ''
     require_tags: str = ''

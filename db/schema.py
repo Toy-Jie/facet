@@ -117,6 +117,13 @@ PHOTOS_COLUMNS = [
     ('caption', 'TEXT'),
     ('caption_translated', 'TEXT'),
 
+    # OCR text-in-image (opt-in --recompute-ocr; NULL until that pass runs)
+    ('ocr_text', 'TEXT'),
+
+    # Color facet (opt-in --recompute-colors; NULL until that pass runs)
+    ('dominant_hue', 'REAL'),       # 0-360 dominant hue, NULL for monochrome/unknown
+    ('color_temp', 'TEXT'),         # 'warm' | 'cool' | 'neutral'
+
     # GPS coordinates
     ('gps_latitude', 'REAL'),
     ('gps_longitude', 'REAL'),
@@ -228,6 +235,9 @@ INDEXES = [
     ('idx_iso', 'photos', 'iso'),
     ('idx_f_stop', 'photos', 'f_stop'),
     ('idx_focal_length', 'photos', 'focal_length'),
+    # Color facet filters (hue bucket + warm/cool/neutral classification)
+    ('idx_dominant_hue', 'photos', 'dominant_hue'),
+    ('idx_color_temp', 'photos', 'color_temp'),
 ]
 
 # Photo tags lookup table for fast exact-match queries (replaces LIKE '%tag%')
@@ -443,6 +453,7 @@ PHOTOS_FTS_COLUMNS = [
     'camera_model',
     'lens_model',
     'category',
+    'ocr_text',
 ]
 
 PHOTOS_FTS_CREATE = """
@@ -455,6 +466,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS photos_fts USING fts5(
     camera_model,
     lens_model,
     category,
+    ocr_text,
     content='photos',
     content_rowid='rowid'
 )

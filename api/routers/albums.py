@@ -669,6 +669,8 @@ async def get_shared_album(
                 'camera', 'lens', 'tag', 'date_from', 'date_to',
                 'hide_blinks', 'hide_bursts', 'hide_duplicates',
                 'composition_pattern', 'category', 'is_monochrome',
+                # Color facet + on-the-fly quality tier
+                'color_temp', 'hue_bucket', 'quality_tier',
                 # Range filters (quality, face, composition, saliency, technical, exposure, ratings)
                 'min_score', 'max_score', 'min_aesthetic', 'max_aesthetic',
                 'min_quality_score', 'max_quality_score',

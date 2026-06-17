@@ -135,6 +135,11 @@ export interface GalleryFilters {
   favorites_only: boolean;
   is_monochrome: boolean;
   search: string;
+  // Color facet (opt-in extraction; always-on filter)
+  color_temp: string;   // warm | cool | neutral
+  hue_bucket: string;   // red | orange | yellow | green | cyan | blue | purple | magenta
+  // Quality tier (on the fly from aggregate thresholds)
+  quality_tier: string; // excellent | good | fair | poor
 }
 
 /** Subset of viewer config defaults the URL/sync codec compares against. */
@@ -161,6 +166,7 @@ export const SMART_ALBUM_EXCLUDE_KEYS = new Set([
 /** Common string-typed filter keys shared across URL sync, API params, and filter counting. */
 export const RANGE_AND_SELECT_KEYS: (keyof GalleryFilters)[] = [
   'type', 'camera', 'lens', 'tag', 'person_id', 'composition_pattern', 'search',
+  'color_temp', 'hue_bucket', 'quality_tier',
   'min_score', 'max_score', 'min_aesthetic', 'max_aesthetic',
   'min_quality_score', 'max_quality_score', 'min_topiq', 'max_topiq',
   'min_face_quality', 'max_face_quality', 'min_composition', 'max_composition',
@@ -291,6 +297,9 @@ export const DEFAULT_FILTERS: GalleryFilters = {
   favorites_only: false,
   is_monochrome: false,
   search: '',
+  color_temp: '',
+  hue_bucket: '',
+  quality_tier: '',
 };
 
 export type DisplayOptions = Pick<GalleryFilters,

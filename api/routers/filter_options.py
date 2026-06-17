@@ -281,6 +281,57 @@ async def focal_lengths(user: Optional[CurrentUser] = Depends(get_optional_user)
     return await _cached_filter_query('focal_lengths', 'focal_lengths', query)
 
 
+@router.get("/colors")
+async def colors(user: Optional[CurrentUser] = Depends(get_optional_user)):
+    """Lazy-load colour facets: warm/cool/neutral temps and hue buckets with counts.
+
+    Returns ``{'temps': [(temp, count)], 'hue_buckets': [(bucket, count)]}``.
+    Both lists are empty until ``--recompute-colors`` has populated the
+    ``color_temp`` / ``dominant_hue`` columns.
+    """
+    from api.routers.gallery import HUE_BUCKETS
+    vis, vp = _vis_where(user)
+
+    async def query(conn):
+        try:
+            temp_rows = await _fetch_all(
+                conn,
+                f"""
+                SELECT color_temp, COUNT(*) as cnt FROM photos
+                WHERE color_temp IS NOT NULL{vis}
+                GROUP BY color_temp ORDER BY cnt DESC
+                """,
+                vp,
+            )
+            temps = [(r[0], r[1]) for r in temp_rows]
+
+            # One grouped scan over hue ranges; bucket in Python to avoid a
+            # CASE-per-bucket SQL expression that the planner can't index.
+            hue_rows = await _fetch_all(
+                conn,
+                f"""
+                SELECT dominant_hue FROM photos
+                WHERE dominant_hue IS NOT NULL{vis}
+                """,
+                vp,
+            )
+            counts = {name: 0 for name in HUE_BUCKETS}
+            for (hue,) in hue_rows:
+                for name, ranges in HUE_BUCKETS.items():
+                    if any(lo <= hue < hi for lo, hi in ranges):
+                        counts[name] += 1
+                        break
+            hue_buckets = [(name, counts[name]) for name in HUE_BUCKETS if counts[name]]
+            return {'temps': temps, 'hue_buckets': hue_buckets}
+        except sqlite3.Error:
+            logger.exception("Failed to query colors")
+            return {'temps': [], 'hue_buckets': []}
+
+    async with get_async_db() as conn:
+        data = await query(conn)
+    return {**data, 'cached': False}
+
+
 @router.get("/categories")
 async def categories(user: Optional[CurrentUser] = Depends(get_optional_user)):
     """Lazy-load category options with counts."""

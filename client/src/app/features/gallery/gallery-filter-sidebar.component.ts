@@ -391,6 +391,65 @@ function saveSectionStates(states: Record<string, boolean>): void {
         </mat-expansion-panel>
       }
 
+      <!-- Color & Quality tier -->
+      @if (store.colorTemps().length || store.hueBuckets().length || qualityTiers.length) {
+        <mat-expansion-panel class="!mb-1" [expanded]="sectionStates()['color_quality'] === true"
+                             (opened)="onSectionToggle('color_quality', true)"
+                             (closed)="onSectionToggle('color_quality', false)"
+                             [style.background-color]="sectionStates()['color_quality'] === true ? 'var(--mat-sys-surface-container)' : null">
+          <mat-expansion-panel-header>
+            <mat-panel-title class="flex items-center gap-2">
+              <mat-icon class="!text-base !w-5 !h-5 !leading-5 opacity-60">palette</mat-icon>
+              {{ 'gallery.sidebar.color_quality' | translate }}
+              @if (colorQualityActiveCount()) {
+                <span class="text-xs rounded-full min-w-[1.25rem] h-5 px-1.5 flex items-center justify-center bg-[var(--mat-sys-primary)] text-[var(--mat-sys-on-primary)] leading-none">{{ colorQualityActiveCount() }}</span>
+              }
+            </mat-panel-title>
+          </mat-expansion-panel-header>
+          <div class="flex flex-col gap-2 pb-2">
+            <!-- Quality tier -->
+            <mat-form-field subscriptSizing="dynamic" class="w-full">
+              <mat-label>{{ 'gallery.quality_tier' | translate }}</mat-label>
+              <mat-select [value]="store.filters().quality_tier" (selectionChange)="store.updateFilter('quality_tier', $event.value)">
+                <mat-option value="">{{ 'gallery.all' | translate }}</mat-option>
+                @for (t of qualityTiers; track t) {
+                  <mat-option [value]="t">{{ ('gallery.quality_tiers.' + t) | translate }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <!-- Color temperature -->
+            @if (store.colorTemps().length) {
+              <mat-form-field subscriptSizing="dynamic" class="w-full">
+                <mat-label>{{ 'gallery.color_temp' | translate }}</mat-label>
+                <mat-select [value]="store.filters().color_temp" (selectionChange)="store.updateFilter('color_temp', $event.value)">
+                  <mat-option value="">{{ 'gallery.all' | translate }}</mat-option>
+                  @for (c of store.colorTemps(); track c.value) {
+                    <mat-option [value]="c.value">{{ ('gallery.color_temps.' + c.value) | translate }} ({{ c.count }})</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+            <!-- Hue buckets as colour chips -->
+            @if (store.hueBuckets().length) {
+              <span class="text-xs opacity-60 px-1">{{ 'gallery.hue' | translate }}</span>
+              <div class="flex flex-wrap gap-1.5">
+                @for (h of store.hueBuckets(); track h.value) {
+                  <button type="button"
+                    class="flex items-center gap-1.5 rounded-full pl-1.5 pr-2.5 py-1 text-xs border border-[var(--mat-sys-outline-variant)]"
+                    [class.!border-[var(--mat-sys-primary)]]="store.filters().hue_bucket === h.value"
+                    [class.bg-[var(--mat-sys-primary-container)]]="store.filters().hue_bucket === h.value"
+                    [matTooltip]="('gallery.hue_buckets.' + h.value | translate) + ' (' + h.count + ')'"
+                    (click)="toggleHueBucket(h.value)">
+                    <span class="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10" [style.background-color]="hueSwatches[h.value]"></span>
+                    {{ ('gallery.hue_buckets.' + h.value) | translate }}
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </mat-expansion-panel>
+      }
+
       <!-- Equipment -->
       @if (store.cameras().length || store.lenses().length) {
         <mat-expansion-panel class="!mb-1" [expanded]="sectionStates()['equipment'] !== false"
@@ -737,6 +796,25 @@ export class GalleryFilterSidebarComponent {
 
   readonly sectionIcons = SECTION_ICONS;
   private i18n = inject(I18nService);
+
+  // Quality tiers (on-the-fly, derived server-side from aggregate thresholds).
+  readonly qualityTiers = ['excellent', 'good', 'fair', 'poor'] as const;
+
+  // Representative swatch colour per hue bucket (mid-hue, full saturation).
+  readonly hueSwatches: Record<string, string> = {
+    red: '#e53935', orange: '#fb8c00', yellow: '#fdd835', green: '#43a047',
+    cyan: '#00acc1', blue: '#1e88e5', purple: '#8e24aa', magenta: '#d81b60',
+  };
+
+  readonly colorQualityActiveCount = computed(() => {
+    const f = this.store.filters();
+    return (f.color_temp ? 1 : 0) + (f.hue_bucket ? 1 : 0) + (f.quality_tier ? 1 : 0);
+  });
+
+  toggleHueBucket(value: string): void {
+    const current = this.store.filters().hue_bucket;
+    this.store.updateFilter('hue_bucket', current === value ? '' : value);
+  }
 
   readonly filterQuery = signal('');
 

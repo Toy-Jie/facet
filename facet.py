@@ -267,6 +267,12 @@ Configuration:
                         help='Backfill TOPIQ quality scores from stored thumbnails (requires GPU)')
     db_group.add_argument('--recompute-iqa', action='store_true',
                         help='Recompute supplementary IQA metrics (TOPIQ IAA, NR-Face, LIQE) from stored thumbnails')
+    db_group.add_argument('--recompute-ocr', action='store_true',
+                        help='Extract OCR text-in-image from stored thumbnails into ocr_text (opt-in; '
+                             'no-op if no OCR engine is installed). Run --rebuild-fts afterwards to index it.')
+    db_group.add_argument('--recompute-colors', action='store_true',
+                        help='Extract dominant hue + warm/cool colour temperature from stored thumbnails '
+                             '(CPU only, fast) into dominant_hue / color_temp')
     db_group.add_argument('--upgrade-db', action='store_true',
                         help='Migrate schema + run the full backfill chain '
                              '(extract-gps, detect-duplicates, recompute-iqa, '
@@ -869,6 +875,82 @@ Configuration:
         from processing.scorer import Facet
         facet = Facet(db_path=args.db, config_path=args.config, lightweight=True)
         facet.recompute_iqa_from_thumbnails()
+        exit()
+
+    # Extract OCR text-in-image from stored thumbnails (opt-in, CPU; no-op if no engine)
+    if args.recompute_ocr:
+        import io
+        from PIL import Image
+        from analyzers.ocr import extract_text, is_ocr_available
+
+        init_database(args.db)  # Ensure ocr_text column exists
+        if not is_ocr_available():
+            logger.warning(
+                "No OCR engine installed — --recompute-ocr is a no-op. "
+                "Install pytesseract (+tesseract binary), easyocr, or paddleocr."
+            )
+            exit()
+
+        with get_connection(args.db) as conn:
+            rows = conn.execute(
+                "SELECT path, thumbnail FROM photos WHERE thumbnail IS NOT NULL"
+            ).fetchall()
+
+        logger.info("Running OCR on %d photos...", len(rows))
+        updated = 0
+        with get_connection(args.db) as conn:
+            for row in tqdm(rows, desc="OCR"):
+                blob = row['thumbnail']
+                if not blob:
+                    continue
+                try:
+                    img = Image.open(io.BytesIO(blob)).convert('RGB')
+                except Exception:
+                    continue
+                text = extract_text(img)
+                conn.execute(
+                    "UPDATE photos SET ocr_text = ? WHERE path = ?",
+                    (text, row['path'])
+                )
+                if text:
+                    updated += 1
+            conn.commit()
+        logger.info("OCR complete: %d photos with detected text.", updated)
+        logger.info("Run 'python database.py --rebuild-fts' to index ocr_text for search.")
+        exit()
+
+    # Extract dominant hue + colour temperature from stored thumbnails (CPU, fast)
+    if args.recompute_colors:
+        import io
+        from PIL import Image
+        from analyzers.color_facet import extract_color_facet
+
+        init_database(args.db)  # Ensure dominant_hue / color_temp columns exist
+        with get_connection(args.db) as conn:
+            rows = conn.execute(
+                "SELECT path, thumbnail FROM photos WHERE thumbnail IS NOT NULL"
+            ).fetchall()
+
+        logger.info("Extracting color facets for %d photos...", len(rows))
+        updated = 0
+        with get_connection(args.db) as conn:
+            for row in tqdm(rows, desc="Color facet"):
+                blob = row['thumbnail']
+                if not blob:
+                    continue
+                try:
+                    img = Image.open(io.BytesIO(blob)).convert('RGB')
+                except Exception:
+                    continue
+                hue, temp = extract_color_facet(img)
+                conn.execute(
+                    "UPDATE photos SET dominant_hue = ?, color_temp = ? WHERE path = ?",
+                    (hue, temp, row['path'])
+                )
+                if temp is not None:
+                    updated += 1
+            conn.commit()
+        logger.info("Color facet extraction complete: %d photos updated.", updated)
         exit()
 
     # Recompute burst detection
