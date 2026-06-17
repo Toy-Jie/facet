@@ -206,6 +206,13 @@ class GalleryParams(BaseModel):
     max_face_quality_iqa: str = ''
     min_liqe: str = ''
     max_liqe: str = ''
+    # Extended IQA tier (config-gated; columns NULL unless iqa_extended is enabled)
+    min_qalign: str = ''
+    max_qalign: str = ''
+    min_aesthetic_v25: str = ''
+    max_aesthetic_v25: str = ''
+    min_deqa: str = ''
+    max_deqa: str = ''
     # Saliency
     min_subject_sharpness: str = ''
     max_subject_sharpness: str = ''

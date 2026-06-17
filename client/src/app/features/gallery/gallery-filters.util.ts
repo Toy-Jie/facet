@@ -74,6 +74,12 @@ export interface GalleryFilters {
   max_face_quality_iqa: string;
   min_liqe: string;
   max_liqe: string;
+  min_qalign: string;
+  max_qalign: string;
+  min_aesthetic_v25: string;
+  max_aesthetic_v25: string;
+  min_deqa: string;
+  max_deqa: string;
   // Subject saliency
   min_subject_sharpness: string;
   max_subject_sharpness: string;
@@ -167,6 +173,7 @@ export const RANGE_AND_SELECT_KEYS: (keyof GalleryFilters)[] = [
   'min_isolation', 'max_isolation',
   'min_aesthetic_iaa', 'max_aesthetic_iaa', 'min_face_quality_iqa', 'max_face_quality_iqa',
   'min_liqe', 'max_liqe',
+  'min_qalign', 'max_qalign', 'min_aesthetic_v25', 'max_aesthetic_v25', 'min_deqa', 'max_deqa',
   'min_subject_sharpness', 'max_subject_sharpness', 'min_subject_prominence', 'max_subject_prominence',
   'min_subject_placement', 'max_subject_placement', 'min_bg_separation', 'max_bg_separation',
   'min_face_count', 'max_face_count',
@@ -235,6 +242,12 @@ export const DEFAULT_FILTERS: GalleryFilters = {
   max_face_quality_iqa: '',
   min_liqe: '',
   max_liqe: '',
+  min_qalign: '',
+  max_qalign: '',
+  min_aesthetic_v25: '',
+  max_aesthetic_v25: '',
+  min_deqa: '',
+  max_deqa: '',
   min_subject_sharpness: '',
   max_subject_sharpness: '',
   min_subject_prominence: '',

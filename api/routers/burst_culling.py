@@ -25,6 +25,24 @@ from utils.date_utils import parse_date
 logger = logging.getLogger(__name__)
 
 
+def _trigger_auto_retrain(db_path, user_id, added):
+    """Best-effort, non-blocking nudge to the personal-ranker auto-retrain.
+
+    A culling confirm derives ``added`` new comparison pairs (kept-beats-rejected);
+    once enough accumulate per user, the personal ranker retrains in the
+    background. Isolated so any failure never affects the culling write that
+    already committed.
+    """
+    if added <= 0:
+        return
+    try:
+        from optimization.auto_retrain import maybe_retrain
+        scope = user_id if (user_id and is_multi_user_enabled()) else None
+        maybe_retrain(db_path, scope, added=added)
+    except Exception:  # noqa: BLE001 — never let retrain bookkeeping break the request
+        logger.debug("Auto-retrain trigger skipped", exc_info=True)
+
+
 def _rejected_clause(user_id):
     """Return (from_clause, from_params, is_rejected_col) for filtering rejected photos."""
     from_clause, from_params = get_photos_from_clause(user_id)
@@ -414,6 +432,8 @@ async def select_burst_photos(
             )
 
             conn.commit()
+            from db import DEFAULT_DB_PATH
+            _trigger_auto_retrain(DEFAULT_DB_PATH, user_id, len(keep_paths) * len(reject_paths))
             return {'status': 'ok', 'kept': len(keep_set), 'rejected': len(group_paths - keep_set)}
 
         except HTTPException:
@@ -538,6 +558,8 @@ async def select_similar_photos(
             )
 
             conn.commit()
+            from db import DEFAULT_DB_PATH
+            _trigger_auto_retrain(DEFAULT_DB_PATH, user_id, len(keep_set) * len(reject_paths))
             return {'status': 'ok', 'kept': len(keep_set), 'rejected': len(reject_paths)}
 
         except HTTPException:

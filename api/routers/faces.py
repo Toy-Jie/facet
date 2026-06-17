@@ -275,10 +275,15 @@ def _mint_rating_comparisons(user_id):
     signal for the weight optimizer and personal ranker (Topic 1 step 7) without a
     manual --sync-label-comparisons. Coalesces rapid clicks into one rebuild; the
     rating write has already succeeded and must never be rolled back by this.
+
+    Also feeds the per-user auto-retrain counter: a rating change is one new
+    comparison-worth of taste signal, so once enough accumulate the personal
+    ranker retrains itself in the background (non-blocking, held-out gated).
     """
     from db import DEFAULT_DB_PATH
     scope = user_id if (user_id and is_multi_user_enabled()) else None
     db_path = DEFAULT_DB_PATH
+    _trigger_auto_retrain(db_path, scope)
     if _RATING_SYNC_DEBOUNCE_S <= 0:
         _run_rating_sync(db_path, scope)
         return
@@ -290,6 +295,19 @@ def _mint_rating_comparisons(user_id):
         timer.daemon = True
         _rating_sync_timers[scope] = (timer, db_path)
         timer.start()
+
+
+def _trigger_auto_retrain(db_path, scope, added=1):
+    """Best-effort, non-blocking nudge to the personal-ranker auto-retrain.
+
+    Isolated so a missing optimization dep (e.g. sklearn) or any failure never
+    affects the rating/culling write that already committed.
+    """
+    try:
+        from optimization.auto_retrain import maybe_retrain
+        maybe_retrain(db_path, scope, added=added)
+    except Exception:  # noqa: BLE001 — never let retrain bookkeeping break the request
+        logger.debug("Auto-retrain trigger skipped", exc_info=True)
 
 
 def flush_rating_comparisons():

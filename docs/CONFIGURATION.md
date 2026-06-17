@@ -777,6 +777,10 @@ Heavy/experimental quality scorers, **OFF by default** and **never a replacement
 
 When enabled, each metric is exposed to the weighted aggregate but defaults to weight 0, so `--recompute-average` is byte-identical until you give it a weight. Run `python facet.py --eval-iqa-srcc` to measure how well each metric ranks your library against your own star ratings.
 
+**Viewer surfacing.** When any of these columns is populated, the viewer shows the value in the photo-detail **Quality** panel (`Q-Align`, `Aesthetic V2.5`, `DeQA`) and exposes a matching range slider in the gallery filter sidebar under **Extended Quality** (`min_qalign`/`max_qalign`, `min_aesthetic_v25`/`max_aesthetic_v25`, `min_deqa`/`max_deqa`). Photos scanned before the tier was enabled simply have `NULL` in these columns and are unaffected by the filters.
+
+**Robustness.** DeQA-Score loads remote `trust_remote_code` code whose forward signature varies across checkpoint revisions; its scorer is defensive — any prediction failure (wrong signature, unexpected output shape, OOM) is caught and the image's `deqa_score` is left `NULL` rather than crashing the scan.
+
 ---
 
 ## Face Detection
