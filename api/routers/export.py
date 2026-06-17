@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import CurrentUser, require_edition
+from api.config import VIEWER_CONFIG, get_all_scan_directories
 from api.database import get_db
 from api.db_helpers import (
     get_photos_from_clause,
@@ -155,10 +156,47 @@ def _album_photo_paths(conn, album_id, user_id):
     return [row["photo_path"] for row in rows]
 
 
+def _allowed_export_roots():
+    """Real-path roots a copy/symlink export may write into.
+
+    Configured ``viewer.export.allowed_target_dirs`` first, then the scan
+    directories (so exporting within the photo tree works out of the box).
+    """
+    roots = []
+    export_cfg = VIEWER_CONFIG.get("export", {}) or {}
+    for d in (export_cfg.get("allowed_target_dirs") or []):
+        if d:
+            roots.append(os.path.realpath(d))
+    for d in get_all_scan_directories():
+        if d:
+            roots.append(os.path.realpath(d))
+    return roots
+
+
+def _validate_target_dir(target_dir):
+    """Canonicalize ``target_dir`` and require it under an allowed export root.
+
+    Without this an edition user could copy/symlink album photos to an arbitrary
+    host location (path traversal / symlink planting). Fail-closed: if no roots
+    are configured, copy/symlink export is refused rather than writing anywhere.
+    """
+    real = os.path.realpath(target_dir)
+    roots = _allowed_export_roots()
+    if not roots:
+        raise HTTPException(
+            status_code=403,
+            detail="Copy/symlink export is disabled — configure viewer.export.allowed_target_dirs",
+        )
+    if not any(real == r or real.startswith(r + os.sep) for r in roots):
+        raise HTTPException(status_code=403, detail="target_dir is not an allowed export location")
+    return real
+
+
 def _copy_or_link_into(paths, target_dir, mode):
     """Copy or symlink each resolved photo into ``target_dir``.
 
     Filenames that collide get a numeric suffix so selects aren't overwritten.
+    ``target_dir`` must already be validated by ``_validate_target_dir``.
     """
     os.makedirs(target_dir, exist_ok=True)
     copied = 0
@@ -261,12 +299,13 @@ def api_album_export(
             result["mode"] = "sidecars"
             return result
 
-    # copy / symlink: file ops happen outside the DB connection.
-    copied, skipped, errors = _copy_or_link_into(paths, body.target_dir, body.mode)
+    # copy / symlink: validate the destination, then do file ops outside the DB.
+    safe_target = _validate_target_dir(body.target_dir)
+    copied, skipped, errors = _copy_or_link_into(paths, safe_target, body.mode)
     return {
         "ok": True,
         "mode": body.mode,
-        "target_dir": body.target_dir,
+        "target_dir": safe_target,
         "copied": copied,
         "skipped": skipped,
         "errors": errors,

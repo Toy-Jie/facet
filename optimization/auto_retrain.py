@@ -145,13 +145,13 @@ def maybe_retrain(db_path, user_id, added: int = 1, threshold: int = RETRAIN_THR
     try:
         conn = sqlite3.connect(db_path)
         try:
-            pending = _read_counter(conn, scope) + max(0, int(added))
+            # Read-modify-write the counter UNDER the lock so two concurrent
+            # events can't both read the same value and lose an increment, and
+            # can't double-dispatch. Reset + claim the slot atomically on cross.
             with _retrain_lock:
-                running = _retrain_running
-                dispatch = should_retrain(pending, threshold, running)
+                pending = _read_counter(conn, scope) + max(0, int(added))
+                dispatch = should_retrain(pending, threshold, _retrain_running)
                 if dispatch:
-                    # Reset the counter now (under the lock) and claim the slot
-                    # so a concurrent event can't double-dispatch.
                     _retrain_running = True
                     _write_counter(conn, scope, 0)
                 else:
@@ -166,6 +166,8 @@ def maybe_retrain(db_path, user_id, added: int = 1, threshold: int = RETRAIN_THR
     if not dispatch:
         return False
 
+    # Prune finished threads so the tracking list can't grow without bound.
+    _active_threads[:] = [t for t in _active_threads if t.is_alive()]
     t = threading.Thread(
         target=_run_retrain, args=(db_path, scope), name=f"auto-retrain-{scope}", daemon=True,
     )

@@ -238,7 +238,10 @@ class TestAlbumExport:
         self._seed_album(db, 8, [p1])
         target = str(tmp_path / "basket")
 
-        with mock.patch(f"{_EXPORT_MODULE}.get_db", _db_cm(db)):
+        with (
+            mock.patch(f"{_EXPORT_MODULE}.get_db", _db_cm(db)),
+            mock.patch(f"{_EXPORT_MODULE}._allowed_export_roots", return_value=[str(tmp_path)]),
+        ):
             resp = client.post(
                 "/api/albums/8/export",
                 json={"mode": "copy", "target_dir": target},
@@ -248,6 +251,45 @@ class TestAlbumExport:
         body = resp.json()
         assert body["copied"] == 1
         assert os.path.isfile(os.path.join(target, "a.jpg"))
+
+    def test_copy_rejects_out_of_bounds_target(self, client, tmp_path):
+        """A target_dir outside the allowed roots is refused (no file written)."""
+        p1, r1 = _make_photo(tmp_path, "a.jpg", star_rating=3)
+        db = str(tmp_path / "t.db")
+        _seed_db(db, [r1])
+        self._seed_album(db, 11, [p1])
+        allowed = str(tmp_path / "allowed")
+        evil = str(tmp_path / "evil")
+
+        with (
+            mock.patch(f"{_EXPORT_MODULE}.get_db", _db_cm(db)),
+            mock.patch(f"{_EXPORT_MODULE}._allowed_export_roots", return_value=[allowed]),
+        ):
+            resp = client.post(
+                "/api/albums/11/export",
+                json={"mode": "copy", "target_dir": evil},
+            )
+
+        assert resp.status_code == 403
+        assert not os.path.exists(os.path.join(evil, "a.jpg"))
+
+    def test_copy_disabled_without_allowlist(self, client, tmp_path):
+        """With no allowed roots configured, copy/symlink export is fail-closed."""
+        p1, r1 = _make_photo(tmp_path, "a.jpg", star_rating=3)
+        db = str(tmp_path / "t.db")
+        _seed_db(db, [r1])
+        self._seed_album(db, 12, [p1])
+
+        with (
+            mock.patch(f"{_EXPORT_MODULE}.get_db", _db_cm(db)),
+            mock.patch(f"{_EXPORT_MODULE}._allowed_export_roots", return_value=[]),
+        ):
+            resp = client.post(
+                "/api/albums/12/export",
+                json={"mode": "copy", "target_dir": str(tmp_path / "x")},
+            )
+
+        assert resp.status_code == 403
 
     def test_copy_requires_target_dir(self, client, tmp_path):
         db = str(tmp_path / "t.db")
