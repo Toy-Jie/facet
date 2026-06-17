@@ -4,7 +4,6 @@ import { downloadAll } from './download';
 describe('downloadAll', () => {
   let createObjectURLSpy: ReturnType<typeof vi.spyOn>;
   let revokeObjectURLSpy: ReturnType<typeof vi.spyOn>;
-  let createElementSpy: ReturnType<typeof vi.spyOn>;
   let appendChildSpy: ReturnType<typeof vi.spyOn>;
   let removeChildSpy: ReturnType<typeof vi.spyOn>;
   let clickSpy: ReturnType<typeof vi.fn>;
@@ -21,7 +20,7 @@ describe('downloadAll', () => {
     revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 
     const realCreateElement = document.createElement.bind(document);
-    createElementSpy = vi
+    vi
       .spyOn(document, 'createElement')
       .mockImplementation((tag: string) => {
         const el = realCreateElement(tag) as HTMLAnchorElement;
