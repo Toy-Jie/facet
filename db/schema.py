@@ -35,6 +35,8 @@ PHOTOS_COLUMNS = [
     ('face_quality', 'REAL'),
     ('eye_sharpness', 'REAL'),
     ('face_sharpness', 'REAL'),
+    ('eyes_open_score', 'REAL'),    # Continuous 0-10 eyes-open (min across faces), from 106-pt landmarks
+    ('expression_score', 'REAL'),   # Continuous 0-10 mouth-state quality (mean across faces)
     ('face_ratio', 'REAL CHECK (face_ratio IS NULL OR (face_ratio >= 0 AND face_ratio <= 1))'),
     ('tech_sharpness', 'REAL'),
     ('color_score', 'REAL'),

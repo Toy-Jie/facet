@@ -1543,6 +1543,69 @@ class Facet:
         blink_count = sum(1 for v in photo_blink_status.values() if v == 1)
         logger.info("Finished. Updated %s photos (%s with blinks).", len(photo_blink_status), blink_count)
 
+    def recompute_eyes_expression(self):
+        """Re-compute eyes-open and expression scores from stored 106-pt landmarks.
+
+        Mirrors :meth:`recompute_blink_detection` — reads the stored
+        ``landmark_2d_106`` blob for each face, computes a continuous eyes-open
+        score (aggregated as the worst/min across a photo's faces) and a
+        mouth-state expression score (mean across faces), and writes them to
+        ``photos.eyes_open_score`` / ``photos.expression_score``. No InsightFace
+        re-run — pure geometry on stored landmarks.
+        """
+        import numpy as np
+        from collections import defaultdict
+        from tqdm import tqdm
+        from analyzers import FaceAnalyzer as _FaceAnalyzer
+
+        with get_connection(self.db_path) as conn:
+            landmark_rows = conn.execute(
+                "SELECT photo_path, landmark_2d_106 FROM faces "
+                "WHERE landmark_2d_106 IS NOT NULL"
+            ).fetchall()
+            no_landmark_count = conn.execute(
+                "SELECT COUNT(*) FROM faces WHERE landmark_2d_106 IS NULL"
+            ).fetchone()[0]
+
+            if not landmark_rows:
+                logger.info("No faces with stored landmarks — nothing to compute.")
+                if no_landmark_count:
+                    logger.info("  %s faces lack landmarks; re-scan to store them.", no_landmark_count)
+                return 0
+
+            logger.info("Computing eyes/expression from stored landmarks for %s faces...",
+                        len(landmark_rows))
+
+            per_photo_eyes = defaultdict(list)
+            per_photo_expr = defaultdict(list)
+            for row in tqdm(landmark_rows, desc="Eyes/expression from landmarks"):
+                path = row['photo_path']
+                try:
+                    landmarks = np.frombuffer(row['landmark_2d_106'], dtype=np.float32).reshape(106, 2)
+                except Exception as e:
+                    logger.warning("Error decoding landmarks for %s: %s", path, e)
+                    continue
+                per_photo_eyes[path].append(_FaceAnalyzer.compute_eyes_open_score(landmarks))
+                per_photo_expr[path].append(_FaceAnalyzer.compute_expression_score(landmarks))
+
+            update_data = []
+            for path in per_photo_eyes:
+                eyes = _FaceAnalyzer.aggregate_eyes_open(per_photo_eyes[path])
+                expr = _FaceAnalyzer.aggregate_expression(per_photo_expr[path])
+                update_data.append((eyes, expr, path))
+
+            logger.info("Saving results to database...")
+            conn.executemany(
+                "UPDATE photos SET eyes_open_score = ?, expression_score = ? WHERE path = ?",
+                update_data,
+            )
+            conn.commit()
+
+        if no_landmark_count:
+            logger.info("Note: %s faces lack stored landmarks (skipped).", no_landmark_count)
+        logger.info("Finished. Updated %s photos with eyes/expression scores.", len(update_data))
+        return len(update_data)
+
     def rescan_samp_composition(self, batch_size: int = 16):
         """
         Rescan composition scores using SAMP-Net from stored thumbnails.
