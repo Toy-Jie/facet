@@ -488,7 +488,7 @@ def build_metric_vector(m, cfg, category, weights=None, penalties=None):
     saturation = min(10.0, safe_float(m.get('mean_saturation'), 0.5) * 10.0)
     noise_score = max(0.0, min(10.0, 10.0 - noise_sigma * 0.7))
 
-    return {
+    result = {
         'aesthetic': aesthetic_value,
         'face_quality': face_qual,
         'face_sharpness': face_sharp,
@@ -512,6 +512,24 @@ def build_metric_vector(m, cfg, category, weights=None, penalties=None):
         'subject_placement': safe_float(m.get('subject_placement'), 5.0),
         'bg_separation': safe_float(m.get('bg_separation'), 5.0),
     }
+
+    # Extended IQA tier (config-gated OFF by default). Each metric is exposed to
+    # the weighted aggregate only when its column is enabled; its weight defaults
+    # to 0, so the aggregate is byte-identical until a weight is configured. When
+    # disabled the keys are absent, leaving the feature space identical to before.
+    if cfg is not None:
+        try:
+            ext = cfg.get_extended_iqa_settings()
+        except Exception:
+            ext = {}
+        if ext.get('qalign'):
+            result['qalign'] = safe_float(m.get('qalign_score'), 5.0)
+        if ext.get('aesthetic_v25'):
+            result['aesthetic_v25'] = safe_float(m.get('aesthetic_v25'), 5.0)
+        if ext.get('deqa'):
+            result['deqa'] = safe_float(m.get('deqa_score'), 5.0)
+
+    return result
 
 # MAIN SCORER CLASS
 # ============================================
@@ -1708,11 +1726,30 @@ class Facet:
         logger.info("Run --recompute-average to update aggregate scores with new comp_score values")
 
     # Model name -> DB column for supplementary IQA metrics
-    _IQA_MODELS = [
+    # Always-on supplementary IQA models (pyiqa-backed, ~2GB each).
+    _BASE_IQA_MODELS = [
         ('topiq_iaa', 'aesthetic_iaa'),
         ('topiq_nr_face', 'face_quality_iqa'),
         ('liqe', 'liqe_score'),
     ]
+
+    @property
+    def _IQA_MODELS(self):
+        """Base IQA models plus any config-enabled extended pyiqa models.
+
+        Q-Align is pyiqa-backed, so when ``iqa_extended.qalign`` is enabled it
+        slots into the same VRAM-aware multi-pass scoring as the base models
+        (writing the qalign_score column). It is OFF by default — full Q-Align
+        wants 16GB+ VRAM. Non-pyiqa extended scorers (Aesthetic V2.5, DeQA) have
+        their own loaders and are not part of this list.
+        """
+        models = list(self._BASE_IQA_MODELS)
+        try:
+            if self.config.get_extended_iqa_settings().get('qalign'):
+                models.append(('qalign', 'qalign_score'))
+        except Exception:
+            pass
+        return models
 
     def recompute_iqa_from_thumbnails(self, batch_size: int = 64):
         """Recompute supplementary IQA metrics from stored thumbnails.

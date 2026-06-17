@@ -358,6 +358,8 @@ Configuration:
                         help='Restrict --train-ranker to one category (default: pool all)')
     weight_group.add_argument('--report-unreviewed-bursts', action='store_true',
                         help='Report how many burst groups remain unreviewed (read-only)')
+    weight_group.add_argument('--eval-iqa-srcc', action='store_true',
+                        help='Report Spearman SRCC of each IQA/aesthetic metric vs star ratings (read-only)')
 
     # Model information
     model_group = parser.add_argument_group('Model information')
@@ -470,6 +472,12 @@ Configuration:
             logger.info("Ranker: held-out %.1f%% vs aggregate baseline %.1f%% (%+.1f pp); %s %d learned_scores",
                         result['cv_accuracy'], result['baseline_accuracy'], result['improvement_pp'],
                         'gated, wrote' if result.get('gated') else 'wrote', result.get('written', 0))
+        exit()
+
+    # Evaluate IQA metric SRCC vs star ratings (read-only, no GPU)
+    if args.eval_iqa_srcc:
+        from optimization.iqa_eval import print_iqa_srcc_report
+        print_iqa_srcc_report(args.db or DEFAULT_DB_PATH)
         exit()
 
     # Report unreviewed burst groups (read-only, no GPU)

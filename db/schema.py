@@ -97,6 +97,10 @@ PHOTOS_COLUMNS = [
     ('face_quality_iqa', 'REAL'),    # TOPIQ NR-Face (dedicated face quality)
     ('liqe_score', 'REAL'),          # LIQE quality score
     ('aesthetic_clip', 'REAL'),      # CLIP/SigLIP text-projection aesthetic (supplementary, free from cached embedding)
+    # Extended IQA tier (optional, config-gated OFF by default; never replaces TOPIQ)
+    ('qalign_score', 'REAL'),        # Q-Align LLM-based IQA (AVA MOS scale)
+    ('aesthetic_v25', 'REAL'),       # Aesthetic Predictor V2.5 (SigLIP head)
+    ('deqa_score', 'REAL'),          # DeQA-Score VLM IQA
 
     # Subject saliency metrics (BiRefNet)
     ('subject_sharpness', 'REAL'),   # Laplacian variance on subject mask

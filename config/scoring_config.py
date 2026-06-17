@@ -487,6 +487,22 @@ class ScoringConfig:
             'embedding_cosine_threshold': 0.90,
         })
 
+    def get_extended_iqa_settings(self):
+        """Get the optional extended-IQA tier flags (all OFF by default).
+
+        These gate the heavy/experimental scorers that are NEVER a replacement
+        for TOPIQ — they add supplementary columns only when explicitly enabled:
+        - qalign: Q-Align LLM-based IQA (heavy VRAM; pyiqa-backed)
+        - aesthetic_v25: Aesthetic Predictor V2.5 (light SigLIP head)
+        - deqa: DeQA-Score VLM (very heavy; 16GB+ GPU to validate)
+        """
+        section = self.config.get('iqa_extended', {})
+        return {
+            'qalign': bool(section.get('qalign', False)),
+            'aesthetic_v25': bool(section.get('aesthetic_v25', False)),
+            'deqa': bool(section.get('deqa', False)),
+        }
+
     def get_face_clustering_settings(self):
         """Get face clustering settings."""
         return self.config.get('face_clustering', {
