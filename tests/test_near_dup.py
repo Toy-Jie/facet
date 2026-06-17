@@ -84,3 +84,16 @@ def test_build_embedding_matrix_drops_minority_dim():
     matrix, has_emb = _build_embedding_matrix([a, b, odd])
     assert matrix.shape == (3, 4)
     assert has_emb.tolist() == [True, True, False]
+
+
+def test_evaluate_dedup_thresholds_precision_recall():
+    from utils.duplicate import evaluate_dedup_thresholds
+    # 3 true dups at high cosine, 2 non-dups at low cosine.
+    pairs = [(0.97, True), (0.95, True), (0.91, True), (0.70, False), (0.60, False)]
+    res = {r['threshold']: r for r in evaluate_dedup_thresholds(pairs, [0.90, 0.96])}
+    # At 0.90: all 3 dups predicted, no false positives -> perfect.
+    assert res[0.90]['precision'] == 1.0 and res[0.90]['recall'] == 1.0
+    # At 0.96: only the 0.97 dup predicted -> precision 1.0, recall 1/3.
+    assert res[0.96]['tp'] == 1 and res[0.96]['fn'] == 2
+    assert res[0.96]['precision'] == 1.0
+    assert round(res[0.96]['recall'], 2) == 0.33

@@ -221,5 +221,139 @@ def detect_duplicates(db_path, config_path=None):
                 len(dup_groups), total_dups, hidden)
 
 
+def evaluate_dedup_thresholds(labelled_pairs, thresholds):
+    """Precision/recall sweep for the stage-2 cosine gate (Topic 4 step 3).
+
+    Args:
+        labelled_pairs: list of ``(cosine, is_duplicate_bool)`` over candidate
+            pairs (e.g. pHash-loose candidates with a ground-truth dup label).
+        thresholds: iterable of cosine cut-offs to evaluate. A pair is predicted
+            duplicate iff ``cosine >= threshold``.
+
+    Returns a list of dicts ``{threshold, precision, recall, f1, tp, fp, fn}``,
+    one per threshold — the precision/recall table the eval prints.
+    """
+    results = []
+    for t in thresholds:
+        tp = fp = fn = 0
+        for cos, is_dup in labelled_pairs:
+            pred = cos >= t
+            if pred and is_dup:
+                tp += 1
+            elif pred and not is_dup:
+                fp += 1
+            elif (not pred) and is_dup:
+                fn += 1
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+        results.append({
+            'threshold': round(float(t), 3),
+            'precision': round(precision, 3),
+            'recall': round(recall, 3),
+            'f1': round(f1, 3),
+            'tp': tp, 'fp': fp, 'fn': fn,
+        })
+    return results
+
+
+def _candidate_cosines(db_path, prefilter_hamming, config_path=None):
+    """Decode pHash-loose candidate pairs and return ``(cosine, hamming)`` tuples.
+
+    Used by the threshold report to characterize the separation between true
+    near-dups (high cosine) and incidental pHash collisions (low cosine), and to
+    quantify how many strict-pHash matches the cosine gate rejects as false.
+    """
+    with sqlite3.connect(db_path) as conn:
+        apply_pragmas(conn)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT path, phash, clip_embedding FROM photos "
+            "WHERE phash IS NOT NULL AND clip_embedding IS NOT NULL ORDER BY path"
+        ).fetchall()
+    hashes = np.array([_hex_to_uint64(r['phash']) for r in rows], dtype=np.uint64)
+    matrix, has_emb = _build_embedding_matrix([r['clip_embedding'] for r in rows])
+    pairs = []
+    n = len(rows)
+    for i in range(n):
+        if not has_emb[i] or i + 1 >= n:
+            continue
+        d = _hamming_to_all(hashes[i], hashes[i + 1:])
+        for mi in np.where(d <= prefilter_hamming)[0]:
+            j = i + 1 + int(mi)
+            if has_emb[j]:
+                pairs.append((float(np.dot(matrix[i], matrix[j])), int(d[mi])))
+    return pairs
+
+
+def report_dedup_thresholds(db_path, config_path=None, labels_path=None):
+    """Print a dedup threshold eval.
+
+    With a labels JSON (``[{"a": path, "b": path, "dup": true|false}, ...]``),
+    prints a precision/recall table for the stage-2 cosine gate. Without labels
+    (the common case here — the DB has no dup ground truth), prints the cosine
+    distribution of pHash-loose candidate pairs so an operator can pick a gate by
+    eye and confirm true near-dups separate from incidental pHash collisions.
+    """
+    from config import ScoringConfig
+    settings = ScoringConfig(config_path, validate=False).get_duplicate_detection_settings()
+    similarity_pct = settings.get('similarity_threshold_percent', 90)
+    max_distance = int(64 * (1 - similarity_pct / 100))
+    prefilter_hamming = max(int(settings.get('prefilter_hamming', 12)), max_distance)
+    sweep = [0.80, 0.84, 0.88, 0.90, 0.92, 0.94, 0.96, 0.98]
+
+    if labels_path:
+        import json
+        with open(labels_path, 'r', encoding='utf-8') as fh:
+            labels = json.load(fh)
+        from utils.embedding import bytes_to_normalized_embedding
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            emb = {}
+            for entry in labels:
+                for key in ('a', 'b'):
+                    p = entry[key]
+                    if p not in emb:
+                        row = conn.execute(
+                            "SELECT clip_embedding FROM photos WHERE path = ?", (p,)
+                        ).fetchone()
+                        emb[p] = bytes_to_normalized_embedding(row['clip_embedding']) if row else None
+        labelled_pairs = []
+        for entry in labels:
+            ea, eb = emb.get(entry['a']), emb.get(entry['b'])
+            if ea is not None and eb is not None and ea.shape == eb.shape:
+                labelled_pairs.append((float(np.dot(ea, eb)), bool(entry['dup'])))
+        logger.info("Dedup threshold sweep over %d labelled pairs:", len(labelled_pairs))
+        logger.info("  thresh  prec   recall  f1     tp  fp  fn")
+        for r in evaluate_dedup_thresholds(labelled_pairs, sweep):
+            logger.info("  %.2f    %.3f  %.3f   %.3f  %d  %d  %d",
+                        r['threshold'], r['precision'], r['recall'], r['f1'],
+                        r['tp'], r['fp'], r['fn'])
+        return
+
+    pairs = _candidate_cosines(db_path, prefilter_hamming, config_path)
+    if not pairs:
+        logger.info("No pHash-loose candidate pairs with embeddings found — nothing to report.")
+        return
+    cos_threshold = settings.get('embedding_cosine_threshold', 0.90)
+    arr = np.array([c for c, _ in pairs])
+    strict = np.array([c for c, h in pairs if h <= max_distance])
+    logger.info("pHash-loose candidate cosines (n=%d, Hamming<=%d):", len(arr), prefilter_hamming)
+    for p in (5, 10, 25, 50, 75, 90, 95):
+        logger.info("  p%-2d: %.3f", p, float(np.percentile(arr, p)))
+    logger.info("Stage-2 gate cosine>=%.2f keeps %.1f%% of candidates.",
+                cos_threshold, 100.0 * float((arr >= cos_threshold).mean()))
+    # Precision win: strict-pHash (<= max_distance) pairs the OLD pHash-only
+    # detector would have merged, but the cosine gate rejects as collisions.
+    if strict.size:
+        rejected = int((strict < cos_threshold).sum())
+        logger.info(
+            "Strict pHash matches (Hamming<=%d) with both embeddings: %d; "
+            "%d (%.0f%%) rejected as pHash collisions by the cosine gate "
+            "(false merges the pHash-only detector would have made).",
+            max_distance, strict.size, rejected, 100.0 * rejected / strict.size,
+        )
+
+
 # Precomputed popcount table for bytes 0-255
 _POPCOUNT_TABLE = np.array([bin(i).count('1') for i in range(256)], dtype=np.int32)

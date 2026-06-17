@@ -252,6 +252,9 @@ Configuration:
                         help='Recompute aggregate scores for a single category only')
     db_group.add_argument('--detect-duplicates', action='store_true',
                         help='Detect duplicate photos using pHash comparison')
+    db_group.add_argument('--sweep-dedup-thresholds', nargs='?', const='', metavar='LABELS_JSON',
+                        help='Evaluate near-dup cosine thresholds. With a labels JSON, prints a '
+                             'precision/recall table; without, prints the candidate-cosine distribution.')
     db_group.add_argument('--recompute-embeddings', action='store_true',
                         help='Recompute CLIP/SigLIP embeddings for all photos (required after model switch)')
     db_group.add_argument('--recompute-tags', action='store_true',
@@ -473,6 +476,13 @@ Configuration:
         from utils.duplicate import detect_duplicates
         init_database(args.db)
         detect_duplicates(args.db, config_path=args.config)
+        exit()
+
+    # Evaluate near-dup cosine thresholds (read-only, no GPU)
+    if args.sweep_dedup_thresholds is not None:
+        from utils.duplicate import report_dedup_thresholds
+        labels = args.sweep_dedup_thresholds or None
+        report_dedup_thresholds(args.db or DEFAULT_DB_PATH, config_path=args.config, labels_path=labels)
         exit()
 
     # Import scorer (deferred to avoid loading heavy modules for --help)
