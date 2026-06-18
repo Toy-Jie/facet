@@ -403,10 +403,7 @@
         </mat-menu>
         <mat-menu #langMenu="matMenu">
           <button mat-menu-item (click)="switchLang('en')">English</button>
-          <button mat-menu-item (click)="switchLang('fr')">Français</button>
-          <button mat-menu-item (click)="switchLang('de')">Deutsch</button>
-          <button mat-menu-item (click)="switchLang('it')">Italiano</button>
-          <button mat-menu-item (click)="switchLang('es')">Español</button>
+          <button mat-menu-item (click)="switchLang('zh')">中文</button>
         </mat-menu>
         <mat-menu #themeMenu="matMenu">
           @for (t of themeService.THEMES; track t.id) {
@@ -425,10 +422,7 @@
         </button>
         <mat-menu #langMenuAnon="matMenu">
           <button mat-menu-item (click)="switchLang('en')">English</button>
-          <button mat-menu-item (click)="switchLang('fr')">Français</button>
-          <button mat-menu-item (click)="switchLang('de')">Deutsch</button>
-          <button mat-menu-item (click)="switchLang('it')">Italiano</button>
-          <button mat-menu-item (click)="switchLang('es')">Español</button>
+          <button mat-menu-item (click)="switchLang('zh')">中文</button>
         </mat-menu>
         <!-- Dark mode toggle (not authenticated) -->
         <button mat-icon-button (click)="themeService.toggleDarkMode()" [attr.aria-label]="(themeService.darkMode() ? 'ui.light_mode' : 'ui.dark_mode') | translate">

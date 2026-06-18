@@ -43,7 +43,7 @@ describe('I18nService', () => {
     });
 
     it('should default locale to en when no cookie or matching browser language', () => {
-      expect(['en', 'fr', 'de', 'it', 'es']).toContain(service.locale());
+      expect(['en', 'zh']).toContain(service.locale());
     });
   });
 
@@ -160,27 +160,27 @@ describe('I18nService', () => {
 
   describe('setLocale()', () => {
     it('should update the locale signal', async () => {
-      const setPromise = service.setLocale('fr');
+      const setPromise = service.setLocale('zh');
 
       const req = httpTesting.expectOne('/api/i18n/fr');
       req.flush(mockTranslations);
 
       await setPromise;
-      expect(service.locale()).toBe('fr');
+      expect(service.locale()).toBe('zh');
     });
 
     it('should write the locale to a cookie', async () => {
-      const setPromise = service.setLocale('fr');
+      const setPromise = service.setLocale('zh');
 
       const req = httpTesting.expectOne('/api/i18n/fr');
       req.flush(mockTranslations);
 
       await setPromise;
-      expect(document.cookie).toContain('facet_lang=fr');
+      expect(document.cookie).toContain('facet_lang=zh');
     });
 
     it('should reload translations for the new locale', async () => {
-      const setPromise = service.setLocale('fr');
+      const setPromise = service.setLocale('zh');
 
       const req = httpTesting.expectOne('/api/i18n/fr');
       expect(req.request.method).toBe('GET');
@@ -209,7 +209,7 @@ describe('I18nService', () => {
 
   describe('detectLocale (via constructor)', () => {
     it('should use cookie value when facet_lang cookie is set', () => {
-      document.cookie = 'facet_lang=fr;path=/';
+      document.cookie = 'facet_lang=zh;path=/';
 
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
@@ -218,7 +218,7 @@ describe('I18nService', () => {
       const newService = TestBed.inject(I18nService);
       const newHttp = TestBed.inject(HttpTestingController);
 
-      expect(newService.locale()).toBe('fr');
+      expect(newService.locale()).toBe('zh');
 
       newHttp.verify();
     });
@@ -234,7 +234,7 @@ describe('I18nService', () => {
       const newHttp = TestBed.inject(HttpTestingController);
 
       // 'ja' is not in the supported list, should fall back to browser or 'en'
-      expect(['en', 'fr', 'de', 'it', 'es']).toContain(newService.locale());
+      expect(['en', 'zh']).toContain(newService.locale());
 
       newHttp.verify();
     });

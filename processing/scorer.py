@@ -2138,9 +2138,17 @@ class Facet:
             for res, _ in results_with_images:
                 # Optional extended-IQA columns default to NULL for callers/passes
                 # that did not compute them (named-param INSERT needs every key).
+                res.setdefault('topiq_score', None)
+                res.setdefault('aesthetic_iaa', None)
+                res.setdefault('face_quality_iqa', None)
+                res.setdefault('liqe_score', None)
                 res.setdefault('qalign_score', None)
                 res.setdefault('aesthetic_v25', None)
                 res.setdefault('deqa_score', None)
+                res.setdefault('subject_sharpness', None)
+                res.setdefault('subject_prominence', None)
+                res.setdefault('subject_placement', None)
+                res.setdefault('bg_separation', None)
                 conn.execute('''
                     INSERT OR REPLACE INTO photos (
                         path, filename, category, image_width, image_height,

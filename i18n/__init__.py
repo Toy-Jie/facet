@@ -23,7 +23,7 @@ except ImportError:
     g = None
 
 # Supported languages
-SUPPORTED_LANGUAGES = ['en', 'fr', 'de', 'it', 'es']
+SUPPORTED_LANGUAGES = ['en', 'zh']
 DEFAULT_LANGUAGE = 'en'
 
 # Module directory
@@ -44,7 +44,7 @@ def get_locale():
     4. Default language (en)
 
     Returns:
-        str: Language code (e.g. 'en', 'fr', 'de', 'it', 'es')
+        str: Language code (e.g. 'en', 'zh')
     """
     if request is None:
         return DEFAULT_LANGUAGE
@@ -76,7 +76,7 @@ def load_translations(lang):
     """Load translation file for the specified language.
 
     Args:
-        lang: Language code ('en' or 'fr')
+        lang: Language code ('en' or 'zh')
 
     Returns:
         dict: Translation dictionary, or empty dict if file not found

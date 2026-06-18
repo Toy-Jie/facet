@@ -11,9 +11,20 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter(tags=["i18n"])
 
 _TRANSLATIONS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'i18n', 'translations')
-SUPPORTED_LANGUAGES = ['en', 'fr', 'de', 'it', 'es']
+SUPPORTED_LANGUAGES = ['en', 'zh']
 
 _translations_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Merge translation overrides into English defaults."""
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _load_translations(lang: str) -> dict:
@@ -36,6 +47,8 @@ def _load_translations(lang: str) -> dict:
             return cached[1]
         with open(real_filepath, 'r', encoding='utf-8') as f:
             translations = json.load(f)
+            if lang != 'en':
+                translations = _deep_merge(_load_translations('en'), translations)
             _translations_cache[lang] = (mtime, translations)
             return translations
     except (FileNotFoundError, json.JSONDecodeError):

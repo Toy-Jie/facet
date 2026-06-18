@@ -7,6 +7,7 @@ export class I18nService {
   private http = inject(HttpClient);
 
   private readonly COOKIE_KEY = 'facet_lang';
+  private readonly SUPPORTED_LANGUAGES = ['en', 'zh'];
   private readonly _translations = signal<Record<string, unknown>>({});
 
   readonly translations = this._translations.asReadonly();
@@ -56,11 +57,11 @@ export class I18nService {
   private detectLocale(): string {
     // Check cookie
     const match = document.cookie.match(new RegExp(`${this.COOKIE_KEY}=([^;]+)`));
-    if (match && ['en', 'fr', 'de', 'it', 'es'].includes(match[1])) return match[1];
+    if (match && this.SUPPORTED_LANGUAGES.includes(match[1])) return match[1];
 
     // Check browser language
     const browserLang = navigator.language?.split('-')[0];
-    if (browserLang && ['en', 'fr', 'de', 'it', 'es'].includes(browserLang)) return browserLang;
+    if (browserLang && this.SUPPORTED_LANGUAGES.includes(browserLang)) return browserLang;
 
     return 'en';
   }
