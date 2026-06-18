@@ -6,22 +6,43 @@
       <!-- Nav links -->
       @if (auth.isAuthenticated()) {
         <nav class="top-nav-links flex items-center gap-1 overflow-x-auto min-w-0 shrink">
-          <a mat-button class="!inline-flex !px-2 xl:!px-3 shrink-0" routerLink="/" routerLinkActive #rlGallery="routerLinkActive" [routerLinkActiveOptions]="{exact:true}" [style.color]="rlGallery.isActive ? 'var(--mat-sys-primary)' : ''" [matTooltip]="'nav.gallery_tooltip' | translate" [attr.aria-label]="'nav.gallery_tooltip' | translate" (dblclick)="resetAllFilters()">
+          <button
+            mat-button
+            class="!inline-flex !px-2 xl:!px-3 shrink-0"
+            #libraryMenuTrigger="matMenuTrigger"
+            [matMenuTriggerFor]="libraryMenu"
+            [style.color]="isLibraryRoute() ? 'var(--mat-sys-primary)' : ''"
+            [matTooltip]="'nav.gallery' | translate"
+            [attr.aria-label]="'nav.gallery' | translate"
+            (mouseenter)="openNavMenu(libraryMenuTrigger)"
+            (mouseleave)="scheduleNavMenuClose(libraryMenuTrigger)">
             <mat-icon>diamond</mat-icon>
             <span>{{ 'nav.gallery' | translate }}</span>
-          </a>
-          @if (store.config()?.features?.show_albums) {
-            <a mat-button class="!inline-flex !px-2 xl:!px-3 shrink-0" routerLink="/albums" routerLinkActive #rlAlbums="routerLinkActive" [style.color]="rlAlbums.isActive ? 'var(--mat-sys-primary)' : ''" [matTooltip]="'nav.albums' | translate" [attr.aria-label]="'nav.albums' | translate">
-              <mat-icon>photo_album</mat-icon>
-              <span>{{ 'nav.albums' | translate }}</span>
-            </a>
-          }
-          @if (store.config()?.features?.show_capsules) {
-            <a mat-button class="!inline-flex !px-2 xl:!px-3 shrink-0" routerLink="/capsules" routerLinkActive #rlCapsules="routerLinkActive" [style.color]="rlCapsules.isActive ? 'var(--mat-sys-primary)' : ''" [matTooltip]="'nav.capsules' | translate" [attr.aria-label]="'nav.capsules' | translate">
-              <mat-icon>auto_stories</mat-icon>
-              <span>{{ 'nav.capsules' | translate }}</span>
-            </a>
-          }
+            <mat-icon class="!text-base !w-4 !h-4">expand_more</mat-icon>
+          </button>
+          <mat-menu #libraryMenu="matMenu" overlapTrigger="false">
+            <div
+              class="py-1"
+              (mouseenter)="clearNavMenuCloseTimer()"
+              (mouseleave)="scheduleNavMenuClose(libraryMenuTrigger)">
+              <a mat-menu-item routerLink="/" routerLinkActive #rlGalleryMenu="routerLinkActive" [routerLinkActiveOptions]="{exact:true}" [style.color]="rlGalleryMenu.isActive ? 'var(--mat-sys-primary)' : ''" (dblclick)="resetAllFilters()">
+                <mat-icon>diamond</mat-icon>
+                <span>{{ 'nav.gallery' | translate }}</span>
+              </a>
+              @if (store.config()?.features?.show_albums) {
+                <a mat-menu-item routerLink="/albums" routerLinkActive #rlAlbumsMenu="routerLinkActive" [style.color]="rlAlbumsMenu.isActive ? 'var(--mat-sys-primary)' : ''">
+                  <mat-icon>photo_album</mat-icon>
+                  <span>{{ 'nav.albums' | translate }}</span>
+                </a>
+              }
+              @if (store.config()?.features?.show_capsules) {
+                <a mat-menu-item routerLink="/capsules" routerLinkActive #rlCapsulesMenu="routerLinkActive" [style.color]="rlCapsulesMenu.isActive ? 'var(--mat-sys-primary)' : ''">
+                  <mat-icon>auto_stories</mat-icon>
+                  <span>{{ 'nav.capsules' | translate }}</span>
+                </a>
+              }
+            </div>
+          </mat-menu>
           @if (store.config()?.features?.show_timeline) {
             <a mat-button class="!inline-flex !px-2 xl:!px-3 shrink-0" routerLink="/timeline" routerLinkActive #rlTimeline="routerLinkActive" [style.color]="rlTimeline.isActive ? 'var(--mat-sys-primary)' : ''" [matTooltip]="'nav.timeline' | translate" [attr.aria-label]="'nav.timeline' | translate">
               <mat-icon>view_timeline</mat-icon>

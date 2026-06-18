@@ -11,7 +11,7 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatListModule } from '@angular/material/list';
-import { MatMenuModule } from '@angular/material/menu';
+import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -133,6 +133,7 @@ export class App implements OnInit {
   protected readonly hasBurstGroups = signal(false);
   protected readonly hasMemories = signal(false);
   protected readonly hasGeoPhotos = signal(false);
+  private navMenuCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
   private url = toSignal(
     this.router.events.pipe(
@@ -146,6 +147,9 @@ export class App implements OnInit {
     const path = this.url().split('?')[0];
     return path === '/' || path === '' || path.startsWith('/album/');
   });
+  protected readonly isLibraryRoute = computed(() =>
+    this.isGalleryRoute() || this.isAlbumsRoute() || this.isCapsuleRoute(),
+  );
 
   protected readonly isStatsRoute = computed(() => this.url().split('?')[0] === '/stats');
 
@@ -156,6 +160,22 @@ export class App implements OnInit {
   protected readonly isCapsuleRoute = computed(() => this.url().split('?')[0] === '/capsules');
   protected readonly isTimelineRoute = computed(() => this.url().split('?')[0].startsWith('/timeline'));
   protected readonly isSharedRoute = computed(() => this.url().split('?')[0].startsWith('/shared/'));
+
+  protected openNavMenu(trigger: MatMenuTrigger): void {
+    this.clearNavMenuCloseTimer();
+    trigger.openMenu();
+  }
+
+  protected scheduleNavMenuClose(trigger: MatMenuTrigger): void {
+    this.clearNavMenuCloseTimer();
+    this.navMenuCloseTimer = setTimeout(() => trigger.closeMenu(), 160);
+  }
+
+  protected clearNavMenuCloseTimer(): void {
+    if (!this.navMenuCloseTimer) return;
+    clearTimeout(this.navMenuCloseTimer);
+    this.navMenuCloseTimer = null;
+  }
 
   protected readonly sortGroups = computed(() => {
     const grouped = this.store.config()?.sort_options_grouped;
