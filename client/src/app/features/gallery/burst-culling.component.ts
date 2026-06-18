@@ -102,9 +102,9 @@ interface CullingGroupsResponse {
                        role="button"
                        tabindex="0"
                        [attr.aria-label]="photo.filename"
-                       (click)="openLightbox(group, pIdx)"
-                       (keydown.enter)="openLightbox(group, pIdx)"
-                       (keydown.space)="openLightbox(group, pIdx); $event.preventDefault()"
+                       (click)="toggleSelection(photo.path, group)"
+                       (keydown.enter)="toggleSelection(photo.path, group)"
+                       (keydown.space)="toggleSelection(photo.path, group); $event.preventDefault()"
                        (dblclick)="selectExclusive(photo.path, group); $event.stopPropagation()">
                     <img [src]="photo.path | imageUrl"
                          class="h-72 md:h-96 w-auto object-contain" [alt]="photo.filename" loading="lazy" />
@@ -114,7 +114,7 @@ interface CullingGroupsResponse {
                       </div>
                     }
                     @if (photo.path | isKept:selectionsMap():group.group_id) {
-                      <div class="absolute top-2 right-2 w-7 h-7 rounded-full bg-green-600 inline-flex items-center justify-center">
+                      <div class="absolute top-10 right-2 w-7 h-7 rounded-full bg-green-600 inline-flex items-center justify-center">
                         <mat-icon class="!text-base !w-4 !h-4 !leading-4 text-white">check</mat-icon>
                       </div>
                     }
@@ -126,13 +126,20 @@ interface CullingGroupsResponse {
                         {{ 'ui.badges.blink' | translate }}
                       </div>
                     }
-                    @if (!(photo.path | isKept:selectionsMap():group.group_id)) {
-                      <button class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 inline-flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition-opacity"
+                    <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/photo:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <button class="w-7 h-7 rounded-full bg-black/60 inline-flex items-center justify-center"
                               [matTooltip]="'culling.view_detail' | translate"
+                              [attr.aria-label]="'culling.view_detail' | translate"
                               (click)="openDetail($event, photo.path)">
                         <mat-icon class="!text-base !w-4 !h-4 !leading-4 text-white">info</mat-icon>
                       </button>
-                    }
+                      <button class="w-7 h-7 rounded-full bg-black/60 inline-flex items-center justify-center"
+                              [matTooltip]="'culling.fullscreen_cull' | translate"
+                              [attr.aria-label]="'culling.fullscreen_cull' | translate"
+                              (click)="openLightboxFromButton($event, group, pIdx)">
+                        <mat-icon class="!text-base !w-4 !h-4 !leading-4 text-white">fullscreen</mat-icon>
+                      </button>
+                    </div>
                   </div>
                 }
               </div>
@@ -469,6 +476,11 @@ export class BurstCullingComponent implements OnDestroy {
     this.lightboxGroupId.set(this.groupKey(group));
     this.lightboxIndex.set(index);
     this.resetLightboxZoom();
+  }
+
+  protected openLightboxFromButton(event: Event, group: CullingGroup, index: number): void {
+    event.stopPropagation();
+    this.openLightbox(group, index);
   }
 
   protected closeLightbox(): void {

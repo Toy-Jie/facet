@@ -35,7 +35,7 @@ export class IsKeptPipe implements PipeTransform {
 export class IsDecidedPipe implements PipeTransform {
   transform(path: string, selectionsMap: Map<number, Set<string>>, burstId: number): boolean {
     const kept = selectionsMap.get(burstId);
-    return kept !== undefined && kept.size > 0 && !kept.has(path);
+    return kept !== undefined && !kept.has(path);
   }
 }
 

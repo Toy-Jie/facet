@@ -1616,7 +1616,8 @@
       "rejected": "Rejected",
       "undecided": "Undecided",
       "zoom_pan": "Wheel zoom / Drag pan"
-    }
+    },
+    "fullscreen_cull": "Fullscreen culling"
   },
   "memories": {
     "title": "On This Day",
