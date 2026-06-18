@@ -198,6 +198,15 @@ html, body {
   white-space: nowrap;
 }
 
+.top-nav-links {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.top-nav-links::-webkit-scrollbar {
+  display: none;
+}
+
 // Scrollbar styling
 ::-webkit-scrollbar {
   width: 8px;

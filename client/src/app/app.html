@@ -5,7 +5,7 @@
     <div class="flex items-center gap-3 w-full">
       <!-- Nav links -->
       @if (auth.isAuthenticated()) {
-        <nav class="flex items-center gap-1 overflow-x-auto min-w-0 shrink">
+        <nav class="top-nav-links flex items-center gap-1 overflow-x-auto min-w-0 shrink">
           <a mat-button class="!inline-flex !px-2 xl:!px-3 shrink-0" routerLink="/" routerLinkActive #rlGallery="routerLinkActive" [routerLinkActiveOptions]="{exact:true}" [style.color]="rlGallery.isActive ? 'var(--mat-sys-primary)' : ''" [matTooltip]="'nav.gallery_tooltip' | translate" [attr.aria-label]="'nav.gallery_tooltip' | translate" (dblclick)="resetAllFilters()">
             <mat-icon>diamond</mat-icon>
             <span>{{ 'nav.gallery' | translate }}</span>
