@@ -107,6 +107,27 @@ def _print_scan_summary(db_path, todo_list, raw_paired_skipped):
     logger.info("=" * 60)
 
 
+def _auto_cluster_faces_after_scan(db_path, config):
+    """Populate person assignments after normal scans.
+
+    Face detection stores embeddings in the faces table, but the web Persons
+    page needs faces.person_id assignments. Incremental clustering preserves
+    existing named persons and assigns new or changed faces.
+    """
+    try:
+        settings = config.get_face_clustering_settings()
+        if not settings.get('enabled', True):
+            logger.info("Face clustering is disabled in config; skipping person grouping.")
+            return
+        from faces import run_face_clustering
+        logger.info("Running incremental face clustering for the Persons page...")
+        ran = run_face_clustering(db_path, config, force=False, preserve_named_only=False)
+        if ran:
+            logger.info("Incremental face clustering complete.")
+    except Exception:
+        logger.warning("Incremental face clustering failed (scan results are still usable).", exc_info=True)
+
+
 def _get_photo_column_count(db_path: str) -> int:
     """Return the number of columns currently on the photos table (0 if absent)."""
     import sqlite3
@@ -1700,9 +1721,12 @@ Configuration:
     scorer.commit()
 
     # 4. Process bursts
-    # Note: Run --cluster-faces-incremental separately if person_ids are needed for grouping
     emit_progress('bursts', force=True)
     process_bursts(scorer.db_path, scorer.config.config_path)
+
+    # 5. Cluster detected faces into persons for the web Persons page.
+    emit_progress('persons', force=True)
+    _auto_cluster_faces_after_scan(scorer.db_path, scorer.config)
 
     # 6. Auto-tag photos using stored CLIP/SigLIP embeddings
     emit_progress('tagging', force=True)

@@ -11,6 +11,7 @@ const LEVEL_LABELS: Record<string, string> = {
 const PHASE_LABELS_ZH: Record<string, string> = {
   scoring: '照片评分',
   bursts: '连拍与重复检测',
+  persons: '人物聚类',
   tagging: '自动标签',
   vec: '语义搜索索引',
   done: '完成',
@@ -150,6 +151,22 @@ const RULES_ZH: TranslationRule[] = [
   {
     pattern: /^Assigned (\d+) burst groups$/,
     replace: (_, count) => `已分配 ${count} 个连拍分组`,
+  },
+  {
+    pattern: /^Running incremental face clustering for the Persons page\.\.\.$/,
+    replace: () => '正在为人物页面执行增量人脸聚类...',
+  },
+  {
+    pattern: /^Incremental face clustering complete\.$/,
+    replace: () => '增量人脸聚类完成。',
+  },
+  {
+    pattern: /^Face clustering is disabled in config; skipping person grouping\.$/,
+    replace: () => '配置中已禁用人脸聚类，跳过人物分组。',
+  },
+  {
+    pattern: /^Incremental face clustering failed \(scan results are still usable\)\.$/,
+    replace: () => '增量人脸聚类失败（扫描结果仍可正常使用）。',
   },
   {
     pattern: /^Batch Processing Complete$/,

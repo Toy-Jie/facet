@@ -150,7 +150,24 @@ describe('scan log translator', () => {
 
   it('translates progress phase names', () => {
     expect(scanPhaseLabel('scoring', 'zh')).toBe('照片评分');
+    expect(scanPhaseLabel('persons', 'zh')).toBe('人物聚类');
     expect(scanPhaseLabel('tagging', 'zh')).toBe('自动标签');
     expect(scanPhaseLabel('scoring', 'en')).toBe('scoring');
+  });
+
+  it('translates automatic face clustering messages', () => {
+    expect(
+      translateScanLogLine(
+        '2026-06-19 06:56:40 INFO  [facet] Running incremental face clustering for the Persons page...',
+        'zh',
+      ),
+    ).toBe('2026-06-19 06:56:40 信息：正在为人物页面执行增量人脸聚类...');
+
+    expect(
+      translateScanLogLine(
+        '2026-06-19 06:56:40 INFO  [facet] Incremental face clustering complete.',
+        'zh',
+      ),
+    ).toBe('2026-06-19 06:56:40 信息：增量人脸聚类完成。');
   });
 });
