@@ -291,7 +291,15 @@ async def api_gallery_scan_directories(
                 where_str = " WHERE " + " AND ".join(where_clauses)
                 cur = await conn.execute(
                     f"""
-                    SELECT photos.path, COALESCE(photos.aggregate, 0) AS aggregate
+                    SELECT
+                        photos.path,
+                        COALESCE(photos.aggregate, 0) AS aggregate,
+                        CASE
+                            WHEN COALESCE(photos.face_count, 0) > 0
+                                OR EXISTS (SELECT 1 FROM faces WHERE faces.photo_path = photos.path)
+                            THEN 1
+                            ELSE 0
+                        END AS has_face
                     FROM {from_clause}{where_str}
                     ORDER BY COALESCE(photos.aggregate, 0) DESC, photos.path ASC
                     """,
@@ -307,17 +315,38 @@ async def api_gallery_scan_directories(
                         'photo_count': 0,
                         'cover_photo_path': row['path'],
                         'cover_score': row['aggregate'] or 0,
+                        'cover_has_face': bool(row['has_face']),
+                        '_fallback_cover_path': row['path'],
+                        '_fallback_cover_score': row['aggregate'] or 0,
+                        '_face_cover_path': row['path'] if row['has_face'] else None,
+                        '_face_cover_score': (row['aggregate'] or 0) if row['has_face'] else None,
                     })
                     item['photo_count'] += 1
                     score = row['aggregate'] or 0
-                    best_path = item['cover_photo_path'] or ''
-                    if score > item['cover_score'] or (score == item['cover_score'] and row['path'] < best_path):
-                        item['cover_photo_path'] = row['path']
-                        item['cover_score'] = score
+                    fallback_path = item['_fallback_cover_path'] or ''
+                    if score > item['_fallback_cover_score'] or (score == item['_fallback_cover_score'] and row['path'] < fallback_path):
+                        item['_fallback_cover_path'] = row['path']
+                        item['_fallback_cover_score'] = score
+
+                    if row['has_face']:
+                        face_path = item['_face_cover_path'] or ''
+                        face_score = item['_face_cover_score']
+                        if face_score is None or score > face_score or (score == face_score and row['path'] < face_path):
+                            item['_face_cover_path'] = row['path']
+                            item['_face_cover_score'] = score
+
+                    if item['_face_cover_path']:
+                        item['cover_photo_path'] = item['_face_cover_path']
+                        item['cover_score'] = item['_face_cover_score']
+                        item['cover_has_face'] = True
+                    else:
+                        item['cover_photo_path'] = item['_fallback_cover_path']
+                        item['cover_score'] = item['_fallback_cover_score']
+                        item['cover_has_face'] = False
 
             return {
                 'directories': [
-                    d
+                    {k: v for k, v in d.items() if not k.startswith('_')}
                     for d in sorted(directories_by_path.values(), key=lambda item: item['path'].lower())
                     if d['photo_count'] > 0
                 ],

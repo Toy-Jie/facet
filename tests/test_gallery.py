@@ -316,9 +316,9 @@ class TestGalleryScanDirectoriesEndpoint:
         root_a = str(tmp_path / "shoot_a")
         root_b = str(tmp_path / "shoot_b")
         _make_db(db_path, [
-            _photo(f"{root_a}/low.jpg", "2024:01:01 10:00:00", aggregate=4.0),
-            _photo(f"{root_a}/best.png", "2024:01:01 10:00:00", aggregate=9.0),
-            _photo(f"{root_b}/only.jpg", "2024:01:01 10:00:00", aggregate=6.0),
+            _photo(f"{root_a}/face.jpg", "2024:01:01 10:00:00", aggregate=8.0, face_count=1),
+            _photo(f"{root_a}/best-no-face.png", "2024:01:01 10:00:00", aggregate=9.0, face_count=0),
+            _photo(f"{root_b}/only.jpg", "2024:01:01 10:00:00", aggregate=6.0, face_count=0),
             _photo(str(tmp_path / "other" / "skip.jpg"), "2024:01:01 10:00:00", aggregate=10.0),
         ])
         app = _create_app_no_auth()
@@ -332,9 +332,60 @@ class TestGalleryScanDirectoriesEndpoint:
         directories = resp.json()["directories"]
         assert [d["path"] for d in directories] == [root_a, root_b]
         assert directories[0]["photo_count"] == 2
-        assert directories[0]["cover_photo_path"] == f"{root_a}/best.png"
-        assert directories[0]["cover_score"] == 9.0
+        assert directories[0]["cover_photo_path"] == f"{root_a}/face.jpg"
+        assert directories[0]["cover_score"] == 8.0
+        assert directories[0]["cover_has_face"] is True
         assert directories[1]["photo_count"] == 1
+        assert directories[1]["cover_photo_path"] == f"{root_b}/only.jpg"
+        assert directories[1]["cover_score"] == 6.0
+        assert directories[1]["cover_has_face"] is False
+
+    def test_scan_directories_falls_back_to_best_score_when_project_has_no_faces(self, tmp_path):
+        db_path = str(tmp_path / "test.db")
+        root = str(tmp_path / "landscape")
+        _make_db(db_path, [
+            _photo(f"{root}/lower.jpg", "2024:01:01 10:00:00", aggregate=5.0, face_count=0),
+            _photo(f"{root}/highest.png", "2024:01:01 10:00:00", aggregate=9.0, face_count=0),
+        ])
+        app = _create_app_no_auth()
+        with (
+            mock.patch("api.routers.gallery.get_async_db", _async_conn_factory(db_path)),
+            mock.patch("api.routers.gallery.get_all_scan_directories", return_value=[root]),
+        ):
+            resp = TestClient(app).get("/api/gallery/scan_directories")
+
+        assert resp.status_code == 200
+        directories = resp.json()["directories"]
+        assert len(directories) == 1
+        assert directories[0]["cover_photo_path"] == f"{root}/highest.png"
+        assert directories[0]["cover_score"] == 9.0
+        assert directories[0]["cover_has_face"] is False
+
+    def test_scan_directories_uses_faces_table_when_face_count_is_missing(self, tmp_path):
+        db_path = str(tmp_path / "test.db")
+        root = str(tmp_path / "mixed")
+        face_path = f"{root}/face-from-table.jpg"
+        _make_db(
+            db_path,
+            [
+                _photo(face_path, "2024:01:01 10:00:00", aggregate=7.0, face_count=0),
+                _photo(f"{root}/best-no-face.png", "2024:01:01 10:00:00", aggregate=9.0, face_count=0),
+            ],
+            faces=[(1, face_path, None)],
+        )
+        app = _create_app_no_auth()
+        with (
+            mock.patch("api.routers.gallery.get_async_db", _async_conn_factory(db_path)),
+            mock.patch("api.routers.gallery.get_all_scan_directories", return_value=[root]),
+        ):
+            resp = TestClient(app).get("/api/gallery/scan_directories")
+
+        assert resp.status_code == 200
+        directories = resp.json()["directories"]
+        assert len(directories) == 1
+        assert directories[0]["cover_photo_path"] == face_path
+        assert directories[0]["cover_score"] == 7.0
+        assert directories[0]["cover_has_face"] is True
 
     def test_scan_directories_groups_immediate_child_folders_as_projects(self, tmp_path):
         db_path = str(tmp_path / "test.db")
