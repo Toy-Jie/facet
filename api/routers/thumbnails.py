@@ -113,6 +113,31 @@ def _get_or_resize(photo_path: str, thumbnail_bytes: bytes, size: int) -> bytes:
     return resized
 
 
+@lru_cache(maxsize=64)
+def _render_preview_from_original_cached(file_path: str, mtime: float, size: int, quality: int) -> bytes:
+    """Render a high-resolution preview from the original image, cached by file state."""
+    from PIL import Image, ImageOps
+
+    suffix = Path(file_path).suffix.lower()
+
+    if suffix in RAW_EXTENSIONS:
+        source_bytes = _convert_raw_cached(file_path, mtime, quality)
+        img = Image.open(BytesIO(source_bytes))
+    elif suffix in HEIF_EXTENSIONS:
+        source_bytes = _convert_heif_cached(file_path, mtime, quality)
+        img = Image.open(BytesIO(source_bytes))
+    else:
+        img = Image.open(file_path)
+
+    with img:
+        img = ImageOps.exif_transpose(img).convert("RGB")
+        if max(img.size) > size:
+            img.thumbnail((size, size), Image.Resampling.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        return buf.getvalue()
+
+
 @router.get("/thumbnail")
 def get_thumbnail(
     request: Request,
@@ -126,6 +151,17 @@ def get_thumbnail(
 
     with get_db() as conn:
         row = conn.execute("SELECT thumbnail FROM photos WHERE path = ?", (path,)).fetchone()
+
+    if size and size > 640:
+        try:
+            real_disk = resolve_photo_disk_path(path)
+            mtime = os.path.getmtime(real_disk)
+            bounded_size = min(size, 4096)
+            quality = _get_image_jpeg_quality()
+            preview = _render_preview_from_original_cached(real_disk, mtime, bounded_size, quality)
+            return _cached_image_response(preview, request)
+        except (HTTPException, OSError, ValueError):
+            logger.debug("Failed to render high-resolution thumbnail for %s", path, exc_info=True)
 
     if row and row['thumbnail']:
         if size and 0 < size < 640:
