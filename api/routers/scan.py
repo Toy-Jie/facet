@@ -31,6 +31,7 @@ _scan_state = {
     'process': None,
     'output_lines': deque(maxlen=500),
     'started_at': None,
+    'finished_at': None,
     'directories': [],
     'exit_code': None,
     'progress': None,
@@ -51,6 +52,7 @@ def _read_scan_output(proc):
         else:
             _scan_state['output_lines'].append(line)
     proc.wait()
+    _scan_state['finished_at'] = time.time()
     _scan_state['exit_code'] = proc.returncode
     _scan_state['running'] = False
     # Invalidate caches after scan adds/updates photos
@@ -116,6 +118,7 @@ def start_scan(
         _scan_state['process'] = proc
         _scan_state['output_lines'] = deque(maxlen=500)
         _scan_state['started_at'] = time.time()
+        _scan_state['finished_at'] = None
         _scan_state['directories'] = directories
         _scan_state['exit_code'] = None
         _scan_state['progress'] = None
@@ -172,7 +175,9 @@ def _build_scan_snapshot(lines: int) -> dict:
     output_lines = list(_scan_state['output_lines'])[-lines:]
     elapsed = None
     if _scan_state['started_at']:
-        elapsed = round(time.time() - _scan_state['started_at'], 1)
+        finished_at = _scan_state.get('finished_at')
+        end_time = finished_at if finished_at is not None else time.time()
+        elapsed = round(end_time - _scan_state['started_at'], 1)
     return {
         'running': _scan_state['running'],
         'directories': _scan_state['directories'],

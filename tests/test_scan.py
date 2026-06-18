@@ -132,6 +132,36 @@ class TestScanStatus:
         assert body["output"] == []
         assert body["elapsed_seconds"] is None
 
+    def test_scan_status_finished_elapsed_is_frozen(self):
+        """Completed scans report elapsed time at finish, not wall-clock now."""
+        viewer_cfg = _viewer_config_with_scan()
+        mock_state = {
+            'running': False,
+            'process': None,
+            'output_lines': deque(["No new files to process."], maxlen=500),
+            'started_at': 1000.0,
+            'finished_at': 1012.4,
+            'directories': ["/photos"],
+            'exit_code': 0,
+            'progress': None,
+        }
+
+        with (
+            mock.patch(f"{_AUTH_MODULE}.VIEWER_CONFIG", viewer_cfg),
+            mock.patch(f"{_AUTH_MODULE}.is_multi_user_enabled", return_value=True),
+            mock.patch(f"{_ROUTER_MODULE}.VIEWER_CONFIG", viewer_cfg),
+            mock.patch(f"{_ROUTER_MODULE}._scan_state", mock_state),
+            mock.patch(f"{_ROUTER_MODULE}.time.time", return_value=9999.0),
+        ):
+            app, client, _ = _make_superadmin_app(viewer_cfg)
+            resp = client.get("/api/scan/status")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["running"] is False
+        assert body["exit_code"] == 0
+        assert body["elapsed_seconds"] == 12.4
+
     def test_scan_status_feature_disabled(self):
         """When scan feature is disabled, status returns 403."""
         viewer_cfg = _viewer_config_with_scan(enabled=False)
