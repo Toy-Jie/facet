@@ -175,6 +175,7 @@ export class NewPersonDialogComponent {
                   (editSave)="onNeedsNamingSave($event)"
                   (editCancel)="onNeedsNamingCancel()"
                   (viewPhotos)="onViewPhotos($event)"
+                  (projectSelected)="onViewProject($event)"
                 />
               }
             </div>
@@ -192,6 +193,7 @@ export class NewPersonDialogComponent {
             [canEdit]="auth.isEdition()"
             (selected)="onPersonSelected($event)"
             (viewPhotos)="onViewPhotos($event)"
+            (projectSelected)="onViewProject($event)"
             (editStart)="startEdit($event)"
             (editSave)="onEditSave($event)"
             (editCancel)="cancelEdit()"
@@ -449,6 +451,15 @@ export class ManagePersonsComponent implements OnInit {
 
   onViewPhotos(id: number): void {
     this.router.navigate(['/'], { queryParams: { person_id: String(id) } });
+  }
+
+  onViewProject(event: { personId: number; projectPath: string }): void {
+    this.router.navigate(['/'], {
+      queryParams: {
+        person_id: String(event.personId),
+        path_prefix: event.projectPath,
+      },
+    });
   }
 
   onEditSave({ id, name }: { id: number; name: string }): void {

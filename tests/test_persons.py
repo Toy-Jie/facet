@@ -36,12 +36,14 @@ _PERSONS_SCHEMA = """
     );
     CREATE TABLE faces (
         id INTEGER PRIMARY KEY,
-        photo_path TEXT
+        photo_path TEXT,
+        person_id INTEGER
     );
     CREATE TABLE photos (
         path TEXT PRIMARY KEY,
         eye_sharpness REAL,
-        face_quality REAL
+        face_quality REAL,
+        aggregate REAL
     );
 """
 
@@ -310,8 +312,8 @@ class TestListPersons:
                  "face_count": 5, "auto_clustered": 1},
             ],
             faces=[
-                {"id": 10, "photo_path": "/a.jpg"},
-                {"id": 20, "photo_path": "/b.jpg"},
+                {"id": 10, "photo_path": "/a.jpg", "person_id": 1},
+                {"id": 20, "photo_path": "/b.jpg", "person_id": 2},
             ],
             photos=[
                 {"path": "/a.jpg", "eye_sharpness": 8.0, "face_quality": 7.5},
@@ -332,6 +334,43 @@ class TestListPersons:
         assert body["persons"][0]["id"] == 1
         assert body["persons"][0]["name"] == "Alice"
         assert body["persons"][0]["face_count"] == 25
+        assert body["persons"][0]["project_count"] == 1
+
+    def test_list_persons_includes_project_summaries(self, client, tmp_path):
+        db = str(tmp_path / "persons.db")
+        root = str(tmp_path / "library")
+        project_a = f"{root}/wedding"
+        project_b = f"{root}/portrait"
+        _make_persons_db(
+            db,
+            persons=[
+                {"id": 1, "name": "Alice", "face_count": 4},
+            ],
+            faces=[
+                {"id": 1, "person_id": 1, "photo_path": f"{project_a}/001.jpg"},
+                {"id": 2, "person_id": 1, "photo_path": f"{project_a}/002.jpg"},
+                {"id": 3, "person_id": 1, "photo_path": f"{project_a}/002.jpg"},
+                {"id": 4, "person_id": 1, "photo_path": f"{project_b}/010.jpg"},
+            ],
+            photos=[
+                {"path": f"{project_a}/001.jpg", "aggregate": 7.0},
+                {"path": f"{project_a}/002.jpg", "aggregate": 9.0},
+                {"path": f"{project_b}/010.jpg", "aggregate": 6.0},
+            ],
+        )
+        with (
+            mock.patch("api.routers.persons.get_async_db", _async_conn_factory(db)),
+            mock.patch("api.routers.persons.get_all_scan_directories", return_value=[root]),
+        ):
+            resp = client.get("/api/persons", params={"page": 1, "per_page": 48})
+
+        assert resp.status_code == 200
+        person = resp.json()["persons"][0]
+        assert person["project_count"] == 2
+        assert [p["path"] for p in person["projects"]] == [project_a, project_b]
+        assert person["projects"][0]["photo_count"] == 2
+        assert person["projects"][0]["face_count"] == 3
+        assert person["projects"][0]["cover_photo_path"] == f"{project_a}/002.jpg"
 
     def test_search_by_name(self, client, tmp_path):
         """Searching with a text string filters by name LIKE (case-insensitive)."""

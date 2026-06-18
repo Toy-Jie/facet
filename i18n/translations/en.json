@@ -1402,6 +1402,7 @@
     "unnamed": "Unnamed",
     "face_count": "{count} photos",
     "photo_count": "{count} photos",
+    "project_count": "{count} projects",
     "rename": "Rename",
     "view_photos": "View photos",
     "delete": "Delete",

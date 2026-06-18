@@ -1224,6 +1224,7 @@
     "unnamed": "未命名",
     "face_count": "{count} 张照片",
     "photo_count": "{count} 张照片",
+    "project_count": "{count} 个项目",
     "rename": "重命名",
     "view_photos": "查看照片",
     "delete": "删除",

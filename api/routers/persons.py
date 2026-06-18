@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api.auth import CurrentUser, require_edition, require_authenticated
-from api.config import VIEWER_CONFIG, invalidate_stats_cache
+from api.config import VIEWER_CONFIG, get_all_scan_directories, invalidate_stats_cache
 from api.database import get_async_db, get_db
 from api.db_helpers import reassign_faces_to_person
 
@@ -27,6 +27,89 @@ _SORT_CLAUSES = {
     "quality_asc": "ORDER BY rep_quality ASC, p.id",
     "quality_desc": "ORDER BY rep_quality DESC, p.id",
 }
+
+
+def _normalize_path(path: str) -> str:
+    return path.replace('\\', '/')
+
+
+def _project_path_for_photo(scan_root: str, photo_path: str) -> str:
+    root = _normalize_path(scan_root).rstrip('/')
+    normalized_photo = _normalize_path(photo_path)
+    root_prefix = root + '/'
+    if not normalized_photo.startswith(root_prefix):
+        return root
+    relative = normalized_photo[len(root_prefix):]
+    child = relative.split('/', 1)[0]
+    return f"{root}/{child}" if '/' in relative and child else root
+
+
+def _project_for_photo_path(photo_path: str, scan_dirs: list[str]) -> tuple[str, str]:
+    normalized = _normalize_path(photo_path)
+    matches = [
+        root for root in scan_dirs
+        if normalized.startswith(_normalize_path(root).rstrip('/') + '/')
+    ]
+    if matches:
+        root = max(matches, key=len)
+        project_path = _project_path_for_photo(root, normalized)
+    else:
+        parent = normalized.rsplit('/', 1)[0] if '/' in normalized else normalized
+        project_path = parent or normalized
+    name = project_path.rstrip('/').split('/')[-1] or project_path
+    return project_path, name
+
+
+async def _attach_person_projects(conn, persons: list[dict]) -> None:
+    if not persons:
+        return
+    person_ids = [p['id'] for p in persons]
+    placeholders = ','.join('?' for _ in person_ids)
+    cur = await conn.execute(
+        f"""
+        SELECT f.person_id, f.photo_path, COALESCE(photos.aggregate, 0) AS aggregate
+        FROM faces f
+        LEFT JOIN photos ON photos.path = f.photo_path
+        WHERE f.person_id IN ({placeholders})
+          AND f.person_id IS NOT NULL
+          AND f.photo_path IS NOT NULL
+        """,
+        person_ids,
+    )
+    rows = await cur.fetchall()
+    await cur.close()
+
+    scan_dirs = get_all_scan_directories()
+    projects_by_person: dict[int, dict[str, dict]] = {pid: {} for pid in person_ids}
+    for row in rows:
+        person_id = row['person_id']
+        project_path, project_name = _project_for_photo_path(row['photo_path'], scan_dirs)
+        project = projects_by_person.setdefault(person_id, {}).setdefault(project_path, {
+            'path': project_path,
+            'name': project_name,
+            'photo_count': 0,
+            'face_count': 0,
+            'cover_photo_path': row['photo_path'],
+            'cover_score': row['aggregate'] or 0,
+            '_photo_paths': set(),
+        })
+        project['face_count'] += 1
+        project['_photo_paths'].add(row['photo_path'])
+        project['photo_count'] = len(project['_photo_paths'])
+        score = row['aggregate'] or 0
+        cover_path = project['cover_photo_path'] or ''
+        if score > project['cover_score'] or (score == project['cover_score'] and row['photo_path'] < cover_path):
+            project['cover_photo_path'] = row['photo_path']
+            project['cover_score'] = score
+
+    for person in persons:
+        projects = []
+        for project in projects_by_person.get(person['id'], {}).values():
+            clean = {k: v for k, v in project.items() if not k.startswith('_')}
+            projects.append(clean)
+        projects.sort(key=lambda item: (-item['photo_count'], item['name'].lower(), item['path'].lower()))
+        person['projects'] = projects
+        person['project_count'] = len(projects)
 
 
 # --- Pydantic request bodies ---
@@ -106,6 +189,7 @@ async def list_persons(
         rows = await cur.fetchall()
         await cur.close()
         persons = [dict(row) for row in rows]
+        await _attach_person_projects(conn, persons)
 
     return {"persons": persons, "total": total, "sort": sort}
 

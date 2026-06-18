@@ -13,6 +13,17 @@ export interface Person {
   name: string | null;
   face_count: number;
   face_thumbnail: boolean;
+  project_count?: number;
+  projects?: PersonProject[];
+}
+
+export interface PersonProject {
+  path: string;
+  name: string;
+  photo_count: number;
+  face_count: number;
+  cover_photo_path: string | null;
+  cover_score?: number | null;
 }
 
 @Component({
@@ -98,6 +109,30 @@ export interface Person {
             <p class="text-xs opacity-60 mt-0.5">
               {{ 'persons.face_count' | translate:{ count: person().face_count } }}
             </p>
+            @if ((person().project_count ?? 0) > 0) {
+              <p class="text-xs opacity-60 mt-0.5">
+                {{ 'persons.project_count' | translate:{ count: person().project_count ?? 0 } }}
+              </p>
+            }
+            @if ((person().projects?.length ?? 0) > 0) {
+              <div class="mt-2 flex flex-wrap gap-1"
+                   role="presentation"
+                   tabindex="-1"
+                   (click)="$event.stopPropagation()"
+                   (keydown)="$event.stopPropagation()">
+                @for (project of person().projects!.slice(0, 3); track project.path) {
+                  <button
+                    type="button"
+                    class="max-w-full rounded bg-[var(--mat-sys-surface-container-high)] px-1.5 py-0.5 text-[0.68rem] leading-4 opacity-85 hover:opacity-100"
+                    [matTooltip]="project.path"
+                    (click)="projectSelected.emit({ personId: person().id, projectPath: project.path })"
+                  >
+                    <span class="inline-block max-w-[8rem] truncate align-bottom">{{ project.name }}</span>
+                    <span class="opacity-70"> · {{ project.photo_count }}</span>
+                  </button>
+                }
+              </div>
+            }
           </div>
           <!-- Actions (inline, right side) -->
           @if (canEdit() && !isEditing()) {
@@ -132,6 +167,7 @@ export class PersonCardComponent {
 
   readonly selected = output<number>();
   readonly viewPhotos = output<number>();
+  readonly projectSelected = output<{ personId: number; projectPath: string }>();
   readonly editStart = output<number>();
   readonly editSave = output<{ id: number; name: string }>();
   readonly editCancel = output<void>();
