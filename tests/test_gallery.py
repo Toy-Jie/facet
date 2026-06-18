@@ -333,6 +333,7 @@ class TestGalleryScanDirectoriesEndpoint:
         assert [d["path"] for d in directories] == [root_a, root_b]
         assert directories[0]["photo_count"] == 2
         assert directories[0]["cover_photo_path"] == f"{root_a}/best.png"
+        assert directories[0]["cover_score"] == 9.0
         assert directories[1]["photo_count"] == 1
 
     def test_scan_directories_groups_immediate_child_folders_as_projects(self, tmp_path):
@@ -358,6 +359,7 @@ class TestGalleryScanDirectoriesEndpoint:
         by_path = {d["path"]: d for d in directories}
         assert by_path[project_a]["photo_count"] == 2
         assert by_path[project_a]["cover_photo_path"] == f"{project_a}/nested/002.png"
+        assert by_path[project_a]["cover_score"] == 9.0
         assert by_path[project_b]["photo_count"] == 1
 
 

@@ -306,17 +306,18 @@ async def api_gallery_scan_directories(
                         'name': project_path.rstrip('/').split('/')[-1] or project_path,
                         'photo_count': 0,
                         'cover_photo_path': row['path'],
-                        '_cover_score': row['aggregate'] or 0,
+                        'cover_score': row['aggregate'] or 0,
                     })
                     item['photo_count'] += 1
                     score = row['aggregate'] or 0
-                    if score > item['_cover_score']:
+                    best_path = item['cover_photo_path'] or ''
+                    if score > item['cover_score'] or (score == item['cover_score'] and row['path'] < best_path):
                         item['cover_photo_path'] = row['path']
-                        item['_cover_score'] = score
+                        item['cover_score'] = score
 
             return {
                 'directories': [
-                    {k: v for k, v in d.items() if not k.startswith('_')}
+                    d
                     for d in sorted(directories_by_path.values(), key=lambda item: item['path'].lower())
                     if d['photo_count'] > 0
                 ],

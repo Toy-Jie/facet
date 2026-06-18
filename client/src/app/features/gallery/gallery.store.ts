@@ -55,6 +55,7 @@ export interface ScanDirectorySummary {
   name: string;
   photo_count: number;
   cover_photo_path: string | null;
+  cover_score?: number | null;
 }
 
 export interface FilterOption {

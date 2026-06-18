@@ -12,6 +12,7 @@ import {
   DestroyRef,
   Injector,
 } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSidenav, MatSidenavModule, MatSidenavContent } from '@angular/material/sidenav';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -58,6 +59,7 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
     MatMenuModule,
     MatTooltipModule,
     MatBottomSheetModule,
+    DecimalPipe,
     TranslatePipe,
     MatSnackBarModule,
     PhotoTooltipComponent,
@@ -102,7 +104,7 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
                     class="group overflow-hidden rounded-md border border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] text-left hover:bg-[var(--mat-sys-surface-container-high)] focus:outline-none focus:ring-2 focus:ring-[var(--mat-sys-primary)]"
                     (click)="openScanDirectory(directory.path)"
                   >
-                    <div class="aspect-[16/9] bg-black/10 overflow-hidden">
+                    <div class="aspect-[16/9] bg-black/10 overflow-hidden relative">
                       @if (directory.cover_photo_path) {
                         <img
                           class="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
@@ -110,6 +112,11 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
                           [alt]="directory.name"
                           loading="lazy"
                         />
+                        @if (directory.cover_score !== null && directory.cover_score !== undefined) {
+                          <span class="absolute right-2 top-2 rounded bg-black/65 px-2 py-0.5 text-xs font-medium text-white">
+                            {{ directory.cover_score | number:'1.1-1' }}
+                          </span>
+                        }
                       } @else {
                         <div class="h-full flex items-center justify-center opacity-50">
                           <mat-icon class="!text-5xl !w-14 !h-14">folder</mat-icon>
