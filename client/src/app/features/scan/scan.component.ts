@@ -10,6 +10,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { I18nService } from '../../core/services/i18n.service';
 import { ScanDirectory, ScanService } from '../../core/services/scan.service';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
+import { scanPhaseLabel, translateScanLog } from './scan-log-translator';
 
 @Component({
   selector: 'app-scan',
@@ -117,7 +118,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <div>
                   <div class="opacity-60">{{ 'scan.phase' | translate }}</div>
-                  <div class="font-medium">{{ status().progress?.phase || '-' }}</div>
+                  <div class="font-medium">{{ phaseText() }}</div>
                 </div>
                 <div>
                   <div class="opacity-60">{{ 'scan.progress' | translate }}</div>
@@ -182,7 +183,10 @@ export class ScanComponent implements OnInit {
     return status.exit_code === 0 ? 'check_circle' : 'error';
   });
 
-  protected readonly outputText = computed(() => this.status().output.join('\n'));
+  protected readonly outputText = computed(() => translateScanLog(
+    this.status().output,
+    this.i18n.locale(),
+  ));
   protected readonly canScan = computed(() =>
     !!this.auth.features()['show_scan_button']
     && (this.auth.isMultiUser() ? this.auth.isSuperadmin() : this.auth.isEdition()),
@@ -252,7 +256,11 @@ export class ScanComponent implements OnInit {
     if (progress.total && progress.current !== undefined) {
       return `${progress.current} / ${progress.total}`;
     }
-    return progress.phase || '-';
+    return scanPhaseLabel(progress.phase, this.i18n.locale());
+  }
+
+  protected phaseText(): string {
+    return scanPhaseLabel(this.status().progress?.phase, this.i18n.locale());
   }
 
   protected elapsedText(): string {

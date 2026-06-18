@@ -1202,7 +1202,7 @@
     "no_directories": "没有可扫描的文件夹。请先在配置中添加图片目录。",
     "load_error": "加载扫描文件夹失败",
     "start_error": "启动扫描失败",
-    "superadmin_required": "只有超级管理员可以启动扫描。",
+    "superadmin_required": "当前账号没有扫描权限。",
     "owner_shared": "共享目录",
     "owner_user": "用户：{owner}"
   },
