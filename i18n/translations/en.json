@@ -1066,7 +1066,8 @@
       "batch_rejected": "{count} photos rejected",
       "batch_rated": "{count} photos rated {rating} stars",
       "select_all": "Select all",
-      "actions": "Actions"
+      "actions": "Actions",
+      "shortcut_hint": "{action} ({shortcut})"
     },
     "composition_pattern": "Composition",
     "sidebar": {
@@ -1843,6 +1844,9 @@
     "open_detail": "Open photo",
     "toggle_select": "Select / deselect",
     "select_all": "Select all loaded",
+    "favorite_selected": "Favorite selected photos",
+    "reject_selected": "Reject selected photos",
+    "download_selected": "Download selected photos",
     "clear_selection": "Clear selection",
     "show_help": "Show this help",
     "close": "Close",

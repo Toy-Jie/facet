@@ -18,8 +18,8 @@ describe('GalleryComponent', () => {
 
    
   let mockStore: any;
-  let mockApi: { thumbnailUrl: Mock };
-  let mockAuth: Record<string, unknown>;
+  let mockApi: { thumbnailUrl: Mock; downloadUrl: Mock; getRaw: Mock };
+  let mockAuth: { isEdition: Mock };
   let mockI18n: { t: Mock };
 
   beforeEach(() => {
@@ -74,6 +74,8 @@ describe('GalleryComponent', () => {
 
     mockApi = {
       thumbnailUrl: vi.fn((path: string) => `/thumbnail?path=${path}`),
+      downloadUrl: vi.fn((path: string) => `/download?path=${path}`),
+      getRaw: vi.fn(() => of(new Blob(['photo']))),
     };
 
     mockAuth = { isEdition: vi.fn(() => false) };
@@ -201,6 +203,74 @@ describe('GalleryComponent', () => {
       expect(callOrder.indexOf('loadPhotos')).toBeGreaterThan(
         callOrder.indexOf('loadTypeCounts'),
       );
+    });
+  });
+
+  describe('selection shortcuts', () => {
+    const shortcutEvent = (key: string, extra: Partial<KeyboardEvent> = {}) => ({
+      key,
+      target: null,
+      preventDefault: vi.fn(),
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      ...extra,
+    }) as unknown as KeyboardEvent & { preventDefault: Mock };
+
+    beforeEach(() => {
+      mockStore.photos.set([{ path: '/one.jpg' }, { path: '/two.jpg' }]);
+      mockStore.selectedPaths.set(new Set(['/one.jpg']));
+      mockStore.selectionCount.set(1);
+    });
+
+    it('selects all loaded photos with Ctrl+A', () => {
+      const event = shortcutEvent('a', { ctrlKey: true });
+
+      (component as any).onSelectionShortcut(event);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockStore.selectAllLoaded).toHaveBeenCalled();
+    });
+
+    it('clears the current selection with Escape', () => {
+      const event = shortcutEvent('Escape');
+
+      (component as any).onSelectionShortcut(event);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockStore.clearSelection).toHaveBeenCalled();
+    });
+
+    it('favorites selected photos with F in edition mode', () => {
+      mockAuth.isEdition.mockReturnValue(true);
+      const batchFavorite = vi.spyOn(component as any, 'batchFavorite').mockResolvedValue(undefined);
+      const event = shortcutEvent('f');
+
+      (component as any).onSelectionShortcut(event);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(batchFavorite).toHaveBeenCalled();
+    });
+
+    it('rejects selected photos with X in edition mode', () => {
+      mockAuth.isEdition.mockReturnValue(true);
+      const batchReject = vi.spyOn(component as any, 'batchReject').mockResolvedValue(undefined);
+      const event = shortcutEvent('x');
+
+      (component as any).onSelectionShortcut(event);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(batchReject).toHaveBeenCalled();
+    });
+
+    it('downloads selected photos with D', () => {
+      const downloadSelected = vi.spyOn(component as any, 'downloadSelected').mockResolvedValue(undefined);
+      const event = shortcutEvent('d');
+
+      (component as any).onSelectionShortcut(event);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(downloadSelected).toHaveBeenCalled();
     });
   });
 });

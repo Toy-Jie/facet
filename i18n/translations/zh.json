@@ -509,7 +509,8 @@
       "batch_rejected": "已淘汰 {count} 张照片",
       "batch_rated": "已将 {count} 张照片评为 {rating} 星",
       "select_all": "全选",
-      "actions": "操作"
+      "actions": "操作",
+      "shortcut_hint": "{action}（{shortcut}）"
     },
     "composition_pattern": "构图",
     "sidebar": {
@@ -1577,6 +1578,9 @@
     "open_detail": "打开照片",
     "toggle_select": "选择 / 取消选择",
     "select_all": "选择已加载全部",
+    "favorite_selected": "收藏已选照片",
+    "reject_selected": "淘汰已选照片",
+    "download_selected": "下载已选照片",
     "clear_selection": "清除选择",
     "show_help": "显示帮助",
     "close": "关闭",

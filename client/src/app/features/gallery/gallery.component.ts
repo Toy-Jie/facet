@@ -304,11 +304,11 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
       <div class="fixed bottom-[45px] lg:bottom-0 left-0 right-0 z-50 flex items-center justify-center gap-1 lg:gap-3 px-2 lg:px-6 py-1 lg:py-3 bg-[var(--mat-sys-surface-container)] border-t border-[var(--mat-sys-outline-variant)] shadow-lg">
         <span class="text-sm font-medium shrink-0">{{ 'gallery.selection.count' | translate:{ count: selectionCount() } }}</span>
         <div class="flex items-center gap-0 lg:gap-2">
-          <button mat-icon-button class="lg:!hidden" (click)="clearSelection()" [matTooltip]="'gallery.selection.clear' | translate"><mat-icon>close</mat-icon></button>
-          <button mat-button class="!hidden lg:!inline-flex" (click)="clearSelection()"><mat-icon>close</mat-icon> {{ 'gallery.selection.clear' | translate }}</button>
+          <button mat-icon-button class="lg:!hidden" (click)="clearSelection()" [matTooltip]="shortcutTooltip('gallery.selection.clear', 'Esc')"><mat-icon>close</mat-icon></button>
+          <button mat-button class="!hidden lg:!inline-flex" (click)="clearSelection()" [matTooltip]="shortcutTooltip('gallery.selection.clear', 'Esc')"><mat-icon>close</mat-icon> {{ 'gallery.selection.clear' | translate }} <span class="ml-1 px-1.5 py-0.5 rounded border border-[var(--mat-sys-outline-variant)] text-xs font-mono opacity-70">Esc</span></button>
           @if (!allLoadedSelected()) {
-            <button mat-icon-button class="lg:!hidden" (click)="selectAll()" [matTooltip]="'gallery.selection.select_all' | translate"><mat-icon>select_all</mat-icon></button>
-            <button mat-button class="!hidden lg:!inline-flex" (click)="selectAll()"><mat-icon>select_all</mat-icon> {{ 'gallery.selection.select_all' | translate }}</button>
+            <button mat-icon-button class="lg:!hidden" (click)="selectAll()" [matTooltip]="shortcutTooltip('gallery.selection.select_all', 'Ctrl+A')"><mat-icon>select_all</mat-icon></button>
+            <button mat-button class="!hidden lg:!inline-flex" (click)="selectAll()" [matTooltip]="shortcutTooltip('gallery.selection.select_all', 'Ctrl+A')"><mat-icon>select_all</mat-icon> {{ 'gallery.selection.select_all' | translate }} <span class="ml-1 px-1.5 py-0.5 rounded border border-[var(--mat-sys-outline-variant)] text-xs font-mono opacity-70">Ctrl+A</span></button>
           }
           <!-- Mobile: single Actions trigger opening a touch-friendly bottom sheet -->
           <button mat-flat-button class="lg:!hidden" (click)="openActionsSheet()" [disabled]="downloading()">
@@ -316,8 +316,8 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
             {{ 'gallery.selection.actions' | translate }}
           </button>
           @if (auth.isEdition()) {
-            <button mat-button class="!hidden lg:!inline-flex" (click)="batchFavorite()"><mat-icon>favorite</mat-icon> {{ 'gallery.selection.favorite' | translate }}</button>
-            <button mat-button class="!hidden lg:!inline-flex" (click)="batchReject()"><mat-icon>thumb_down</mat-icon> {{ 'gallery.selection.reject' | translate }}</button>
+            <button mat-button class="!hidden lg:!inline-flex" (click)="batchFavorite()" [matTooltip]="shortcutTooltip('gallery.selection.favorite', 'F')"><mat-icon>favorite</mat-icon> {{ 'gallery.selection.favorite' | translate }} <span class="ml-1 px-1.5 py-0.5 rounded border border-[var(--mat-sys-outline-variant)] text-xs font-mono opacity-70">F</span></button>
+            <button mat-button class="!hidden lg:!inline-flex" (click)="batchReject()" [matTooltip]="shortcutTooltip('gallery.selection.reject', 'X')"><mat-icon>thumb_down</mat-icon> {{ 'gallery.selection.reject' | translate }} <span class="ml-1 px-1.5 py-0.5 rounded border border-[var(--mat-sys-outline-variant)] text-xs font-mono opacity-70">X</span></button>
             <button mat-button class="!hidden lg:!inline-flex" [matMenuTriggerFor]="rateMenu"><mat-icon>star</mat-icon> {{ 'gallery.selection.rate' | translate }}</button>
             <mat-menu #rateMenu="matMenu">
               @for (star of [1, 2, 3, 4, 5]; track star) {
@@ -344,7 +344,7 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
           }
           <button mat-button class="!hidden lg:!inline-flex" (click)="copyPaths()"><mat-icon>content_copy</mat-icon> {{ 'gallery.selection.copy_filenames' | translate }}</button>
           @if (auth.downloadProfiles().length) {
-            <button mat-flat-button class="!hidden lg:!inline-flex" [matMenuTriggerFor]="dlMenu" [disabled]="downloading()">@if (downloading()) { <mat-spinner diameter="18" class="!inline-block !align-baseline"></mat-spinner> } @else { <mat-icon>download</mat-icon> } {{ downloading() ? ('photo_detail.downloading' | translate) : ('gallery.selection.download' | translate) }}</button>
+            <button mat-flat-button class="!hidden lg:!inline-flex" [matMenuTriggerFor]="dlMenu" [disabled]="downloading()" [matTooltip]="shortcutTooltip('gallery.selection.download', 'D')">@if (downloading()) { <mat-spinner diameter="18" class="!inline-block !align-baseline"></mat-spinner> } @else { <mat-icon>download</mat-icon> } {{ downloading() ? ('photo_detail.downloading' | translate) : ('gallery.selection.download' | translate) }} <span class="ml-1 px-1.5 py-0.5 rounded border border-current text-xs font-mono opacity-80">D</span></button>
             <mat-menu #dlMenu="matMenu">
               <button mat-menu-item (click)="downloadSelected()"><mat-icon>image</mat-icon> {{ 'download.type_original' | translate }}</button>
               @for (profile of auth.downloadProfiles(); track profile) {
@@ -353,7 +353,7 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
               <button mat-menu-item (click)="downloadSelected('raw')"><mat-icon>raw_on</mat-icon> {{ 'download.type_raw' | translate }}</button>
             </mat-menu>
           } @else {
-            <button mat-flat-button class="!hidden lg:!inline-flex" (click)="downloadSelected()" [disabled]="downloading()">@if (downloading()) { <mat-spinner diameter="18" class="!inline-block !align-baseline"></mat-spinner> } @else { <mat-icon>download</mat-icon> } {{ downloading() ? ('photo_detail.downloading' | translate) : ('gallery.selection.download' | translate) }}</button>
+            <button mat-flat-button class="!hidden lg:!inline-flex" (click)="downloadSelected()" [disabled]="downloading()" [matTooltip]="shortcutTooltip('gallery.selection.download', 'D')">@if (downloading()) { <mat-spinner diameter="18" class="!inline-block !align-baseline"></mat-spinner> } @else { <mat-icon>download</mat-icon> } {{ downloading() ? ('photo_detail.downloading' | translate) : ('gallery.selection.download' | translate) }} <span class="ml-1 px-1.5 py-0.5 rounded border border-current text-xs font-mono opacity-80">D</span></button>
           }
         </div>
       </div>
@@ -361,7 +361,7 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
   `,
   host: {
     class: 'block h-full',
-    '(document:keydown.control.a)': 'onSelectAllShortcut($event)',
+    '(document:keydown)': 'onSelectionShortcut($event)',
   },
 })
 export class GalleryComponent implements OnInit, OnDestroy {
@@ -678,15 +678,51 @@ export class GalleryComponent implements OnInit, OnDestroy {
     this.store.selectAllLoaded();
   }
 
-  /** Ctrl+A selects all loaded photos unless focus is in an input or a dialog is open. */
-  protected onSelectAllShortcut(event: Event): void {
+  protected shortcutTooltip(labelKey: string, shortcut: string): string {
+    return this.i18n.t('gallery.selection.shortcut_hint', {
+      action: this.i18n.t(labelKey),
+      shortcut,
+    });
+  }
+
+  /** Bulk selection shortcuts unless focus is in an input or a dialog is open. */
+  protected onSelectionShortcut(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
     if (target?.isContentEditable) return;
     if (document.querySelector('mat-dialog-container, mat-bottom-sheet-container')) return;
-    if (!this.store.photos().length) return;
-    event.preventDefault();
-    this.selectAll();
+    if (!this.store.photos().length && !(event.key === 'Escape' && this.selectionCount())) return;
+
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && key === 'a') {
+      event.preventDefault();
+      this.selectAll();
+      return;
+    }
+
+    if (!this.selectionCount() || event.altKey || event.ctrlKey || event.metaKey) return;
+
+    switch (key) {
+      case 'escape':
+        event.preventDefault();
+        this.clearSelection();
+        break;
+      case 'f':
+        if (!this.auth.isEdition()) return;
+        event.preventDefault();
+        void this.batchFavorite();
+        break;
+      case 'x':
+        if (!this.auth.isEdition()) return;
+        event.preventDefault();
+        void this.batchReject();
+        break;
+      case 'd':
+        if (this.downloading()) return;
+        event.preventDefault();
+        void this.downloadSelected();
+        break;
+    }
   }
 
   protected copyPaths(): void {
