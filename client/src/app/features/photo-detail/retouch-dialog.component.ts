@@ -588,7 +588,7 @@ export class RetouchDialogComponent {
   }
 
   private defaultCrop(): CropParams {
-    return { x: 0.05, y: 0.05, width: 0.9, height: 0.9, unit: 'normalized' };
+    return { x: 0, y: 0, width: 1, height: 1, unit: 'normalized' };
   }
 
   private clamp(value: number, min: number, max: number): number {
