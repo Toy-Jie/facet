@@ -30,6 +30,8 @@ interface CropParams {
 interface RetouchParams {
   crop?: CropParams | null;
   rotate: number;
+  flip_horizontal: boolean;
+  flip_vertical: boolean;
   brightness: number;
   contrast: number;
   saturation: number;
@@ -44,6 +46,16 @@ interface Spot {
   x: number;
   y: number;
   radius: number;
+}
+
+type CropDragHandle = 'move' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
+
+interface CropDragState {
+  handle: CropDragHandle;
+  startX: number;
+  startY: number;
+  startCrop: CropParams;
+  imageRect: DOMRect;
 }
 
 interface PreviewResponse {
@@ -62,6 +74,8 @@ interface ApplyResponse {
 const DEFAULT_PARAMS: RetouchParams = {
   crop: null,
   rotate: 0,
+  flip_horizontal: false,
+  flip_vertical: false,
   brightness: 0,
   contrast: 0,
   saturation: 0,
@@ -108,8 +122,34 @@ const DEFAULT_PARAMS: RetouchParams = {
               [src]="previewSrc()"
               [alt]="data.filename"
               class="block max-w-full max-h-[72vh] object-contain select-none"
+              draggable="false"
               [class.cursor-crosshair]="inpaintMode()"
             />
+            @if (params().crop; as crop) {
+              <div
+                class="crop-box"
+                [style.left.%]="crop.x * 100"
+                [style.top.%]="crop.y * 100"
+                [style.width.%]="crop.width * 100"
+                [style.height.%]="crop.height * 100"
+                (pointerdown)="startCropDrag($event, 'move')"
+                (click)="$event.stopPropagation()"
+                [matTooltip]="'retouch.crop_drag_hint' | translate"
+              >
+                <span class="crop-rule crop-rule-v crop-rule-v-1"></span>
+                <span class="crop-rule crop-rule-v crop-rule-v-2"></span>
+                <span class="crop-rule crop-rule-h crop-rule-h-1"></span>
+                <span class="crop-rule crop-rule-h crop-rule-h-2"></span>
+                <span class="crop-edge crop-edge-n" (pointerdown)="startCropDrag($event, 'n')"></span>
+                <span class="crop-edge crop-edge-s" (pointerdown)="startCropDrag($event, 's')"></span>
+                <span class="crop-edge crop-edge-e" (pointerdown)="startCropDrag($event, 'e')"></span>
+                <span class="crop-edge crop-edge-w" (pointerdown)="startCropDrag($event, 'w')"></span>
+                <span class="crop-handle crop-handle-nw" (pointerdown)="startCropDrag($event, 'nw')"></span>
+                <span class="crop-handle crop-handle-ne" (pointerdown)="startCropDrag($event, 'ne')"></span>
+                <span class="crop-handle crop-handle-sw" (pointerdown)="startCropDrag($event, 'sw')"></span>
+                <span class="crop-handle crop-handle-se" (pointerdown)="startCropDrag($event, 'se')"></span>
+              </div>
+            }
             @for (spot of spots(); track spot.x + ':' + spot.y) {
               <span
                 class="absolute rounded-full border-2 border-white/90 bg-red-500/25 pointer-events-none"
@@ -145,20 +185,23 @@ const DEFAULT_PARAMS: RetouchParams = {
                 {{ 'retouch.basic' | translate }}
               </ng-template>
               <div class="p-4 space-y-5">
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                   <button mat-stroked-button (click)="rotate(-90)"><mat-icon>rotate_left</mat-icon>{{ 'retouch.rotate_left' | translate }}</button>
                   <button mat-stroked-button (click)="rotate(90)"><mat-icon>rotate_right</mat-icon>{{ 'retouch.rotate_right' | translate }}</button>
+                  <button mat-stroked-button (click)="toggleFlip('flip_horizontal')"><mat-icon>flip</mat-icon>{{ 'retouch.flip_horizontal' | translate }}</button>
+                  <button mat-stroked-button (click)="toggleFlip('flip_vertical')"><mat-icon class="rotate-90">flip</mat-icon>{{ 'retouch.flip_vertical' | translate }}</button>
                 </div>
                 <label class="flex items-center gap-2 text-sm">
                   <input type="checkbox" [ngModel]="cropEnabled()" (ngModelChange)="setCropEnabled($event)" />
                   {{ 'retouch.enable_crop' | translate }}
                 </label>
                 @if (cropEnabled()) {
-                  <div class="grid grid-cols-2 gap-3">
-                    <label class="text-xs">{{ 'retouch.crop_x' | translate }}<input class="w-full mt-1 px-2 py-1 rounded border bg-transparent" type="number" min="0" max="95" [ngModel]="cropPercent('x')" (ngModelChange)="setCropPercent('x', $event)" /></label>
-                    <label class="text-xs">{{ 'retouch.crop_y' | translate }}<input class="w-full mt-1 px-2 py-1 rounded border bg-transparent" type="number" min="0" max="95" [ngModel]="cropPercent('y')" (ngModelChange)="setCropPercent('y', $event)" /></label>
-                    <label class="text-xs">{{ 'retouch.crop_w' | translate }}<input class="w-full mt-1 px-2 py-1 rounded border bg-transparent" type="number" min="5" max="100" [ngModel]="cropPercent('width')" (ngModelChange)="setCropPercent('width', $event)" /></label>
-                    <label class="text-xs">{{ 'retouch.crop_h' | translate }}<input class="w-full mt-1 px-2 py-1 rounded border bg-transparent" type="number" min="5" max="100" [ngModel]="cropPercent('height')" (ngModelChange)="setCropPercent('height', $event)" /></label>
+                  <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 space-y-3">
+                    <p class="m-0 text-xs text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.crop_hint' | translate }}</p>
+                    <button mat-button (click)="resetCrop()">
+                      <mat-icon>crop_free</mat-icon>
+                      {{ 'retouch.reset_crop' | translate }}
+                    </button>
                   </div>
                 }
                 <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'brightness', label: ('retouch.brightness' | translate), min: -100, max: 100 }" />
@@ -243,6 +286,70 @@ const DEFAULT_PARAMS: RetouchParams = {
       </div>
     </ng-template>
   `,
+  styles: [`
+    .crop-box {
+      position: absolute;
+      z-index: 10;
+      border: 2px solid rgba(255, 255, 255, 0.96);
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.46);
+      cursor: move;
+      touch-action: none;
+    }
+    .crop-rule {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(255, 255, 255, 0.48);
+    }
+    .crop-rule-v {
+      top: 0;
+      bottom: 0;
+      width: 1px;
+    }
+    .crop-rule-h {
+      left: 0;
+      right: 0;
+      height: 1px;
+    }
+    .crop-rule-v-1 { left: 33.333%; }
+    .crop-rule-v-2 { left: 66.666%; }
+    .crop-rule-h-1 { top: 33.333%; }
+    .crop-rule-h-2 { top: 66.666%; }
+    .crop-edge,
+    .crop-handle {
+      position: absolute;
+      z-index: 11;
+      touch-action: none;
+    }
+    .crop-edge-n,
+    .crop-edge-s {
+      left: 14px;
+      right: 14px;
+      height: 16px;
+      cursor: ns-resize;
+    }
+    .crop-edge-n { top: -8px; }
+    .crop-edge-s { bottom: -8px; }
+    .crop-edge-e,
+    .crop-edge-w {
+      top: 14px;
+      bottom: 14px;
+      width: 16px;
+      cursor: ew-resize;
+    }
+    .crop-edge-e { right: -8px; }
+    .crop-edge-w { left: -8px; }
+    .crop-handle {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #fff;
+      background: rgba(0, 0, 0, 0.32);
+      border-radius: 2px;
+    }
+    .crop-handle-nw { left: -9px; top: -9px; cursor: nwse-resize; }
+    .crop-handle-ne { right: -9px; top: -9px; cursor: nesw-resize; }
+    .crop-handle-sw { left: -9px; bottom: -9px; cursor: nesw-resize; }
+    .crop-handle-se { right: -9px; bottom: -9px; cursor: nwse-resize; }
+  `],
 })
 export class RetouchDialogComponent {
   private readonly api = inject(ApiService);
@@ -265,6 +372,7 @@ export class RetouchDialogComponent {
   private undoStack: RetouchParams[] = [];
   private redoStack: RetouchParams[] = [];
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
+  private cropDrag: CropDragState | null = null;
 
   readonly canUndo = computed(() => this.undoStack.length > 0);
   readonly canRedo = computed(() => this.redoStack.length > 0);
@@ -292,35 +400,41 @@ export class RetouchDialogComponent {
     this.schedulePreview();
   }
 
+  toggleFlip(key: 'flip_horizontal' | 'flip_vertical'): void {
+    this.pushHistory();
+    this.params.update(p => ({ ...p, [key]: !p[key] }));
+    this.schedulePreview();
+  }
+
   setCropEnabled(enabled: boolean): void {
     this.pushHistory();
     this.params.update(p => ({
       ...p,
-      crop: enabled ? { x: 0, y: 0, width: 1, height: 1, unit: 'normalized' } : null,
+      crop: enabled ? this.defaultCrop() : null,
     }));
-    this.schedulePreview();
   }
 
-  cropPercent(key: keyof CropParams): number {
-    const crop = this.params().crop;
-    const value = crop?.[key];
-    return typeof value === 'number' ? Math.round(value * 100) : 0;
-  }
-
-  setCropPercent(key: keyof CropParams, value: number | string): void {
-    if (key === 'unit') return;
+  resetCrop(): void {
     this.pushHistory();
-    const next = Math.max(0, Math.min(100, Number(value))) / 100;
-    this.params.update(p => {
-      const crop = p.crop ?? { x: 0, y: 0, width: 1, height: 1, unit: 'normalized' as const };
-      const updated = { ...crop, [key]: next };
-      updated.width = Math.max(0.05, Math.min(1 - updated.x, updated.width));
-      updated.height = Math.max(0.05, Math.min(1 - updated.y, updated.height));
-      updated.x = Math.max(0, Math.min(1 - updated.width, updated.x));
-      updated.y = Math.max(0, Math.min(1 - updated.height, updated.y));
-      return { ...p, crop: updated };
-    });
-    this.schedulePreview();
+    this.params.update(p => ({ ...p, crop: this.defaultCrop() }));
+  }
+
+  startCropDrag(event: PointerEvent, handle: CropDragHandle): void {
+    const crop = this.params().crop;
+    const img = this.previewImage()?.nativeElement;
+    if (!crop || !img) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.pushHistory();
+    this.cropDrag = {
+      handle,
+      startX: event.clientX,
+      startY: event.clientY,
+      startCrop: { ...crop },
+      imageRect: img.getBoundingClientRect(),
+    };
+    window.addEventListener('pointermove', this.onCropPointerMove);
+    window.addEventListener('pointerup', this.onCropPointerUp, { once: true });
   }
 
   toggleInpaint(): void {
@@ -405,7 +519,7 @@ export class RetouchDialogComponent {
     try {
       const res = await firstValueFrom(this.api.post<PreviewResponse>('/retouch/preview', {
         image_path: this.data.path,
-        params: this.paramsWithMask(),
+        params: this.paramsWithMask({ includeCrop: false }),
         max_size: 1280,
       }));
       this.previewSrc.set(res.image_base64);
@@ -419,9 +533,66 @@ export class RetouchDialogComponent {
     }
   }
 
-  private paramsWithMask(): RetouchParams {
+  private paramsWithMask(options: { includeCrop?: boolean } = {}): RetouchParams {
     const mask = this.buildMask();
-    return { ...this.params(), inpaint_mask_base64: mask };
+    const includeCrop = options.includeCrop !== false;
+    return { ...this.params(), crop: includeCrop ? this.params().crop : null, inpaint_mask_base64: mask };
+  }
+
+  private readonly onCropPointerMove = (event: PointerEvent): void => {
+    const drag = this.cropDrag;
+    if (!drag) return;
+    event.preventDefault();
+    const dx = (event.clientX - drag.startX) / Math.max(1, drag.imageRect.width);
+    const dy = (event.clientY - drag.startY) / Math.max(1, drag.imageRect.height);
+    const crop = this.resizeCrop(drag.startCrop, drag.handle, dx, dy);
+    this.params.update(p => ({ ...p, crop }));
+  };
+
+  private readonly onCropPointerUp = (): void => {
+    this.cropDrag = null;
+    window.removeEventListener('pointermove', this.onCropPointerMove);
+  };
+
+  private resizeCrop(start: CropParams, handle: CropDragHandle, dx: number, dy: number): CropParams {
+    const minSize = 0.05;
+    let left = start.x;
+    let top = start.y;
+    let right = start.x + start.width;
+    let bottom = start.y + start.height;
+
+    if (handle === 'move') {
+      const width = start.width;
+      const height = start.height;
+      return {
+        x: this.clamp(start.x + dx, 0, 1 - width),
+        y: this.clamp(start.y + dy, 0, 1 - height),
+        width,
+        height,
+        unit: 'normalized',
+      };
+    }
+
+    if (handle.includes('w')) left = this.clamp(start.x + dx, 0, right - minSize);
+    if (handle.includes('e')) right = this.clamp(start.x + start.width + dx, left + minSize, 1);
+    if (handle.includes('n')) top = this.clamp(start.y + dy, 0, bottom - minSize);
+    if (handle.includes('s')) bottom = this.clamp(start.y + start.height + dy, top + minSize, 1);
+
+    return {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+      unit: 'normalized',
+    };
+  }
+
+  private defaultCrop(): CropParams {
+    return { x: 0.05, y: 0.05, width: 0.9, height: 0.9, unit: 'normalized' };
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
   }
 
   private buildMask(): string | null {

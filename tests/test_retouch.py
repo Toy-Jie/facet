@@ -86,3 +86,36 @@ def test_retouch_apply_saves_copy_and_records_history(retouch_client, tmp_path):
     assert edit[0] == str(img_path)
     assert edit[1] == output_path
     assert "whiten_skin" in edit[2]
+
+
+def test_retouch_apply_rotates_flips_and_crops_copy(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_photo(tmp_path, db_path)
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {
+            "rotate": 90,
+            "flip_horizontal": True,
+            "flip_vertical": True,
+            "crop": {"x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5, "unit": "normalized"},
+        },
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    assert img_path.read_bytes() == original_bytes
+
+    with Image.open(output_path) as out:
+        assert out.size == (36, 48)
+
+    conn = sqlite3.connect(db_path)
+    edit = conn.execute(
+        "SELECT params_json FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()
+    conn.close()
+
+    assert edit is not None
+    assert '"flip_horizontal": true' in edit[0]
+    assert '"flip_vertical": true' in edit[0]

@@ -39,6 +39,8 @@ class CropRect(BaseModel):
 class RetouchAdjustments(BaseModel):
     crop: Optional[CropRect] = None
     rotate: int = Field(default=0, ge=-360, le=360)
+    flip_horizontal: bool = False
+    flip_vertical: bool = False
     brightness: float = Field(default=0, ge=-100, le=100)
     contrast: float = Field(default=0, ge=-100, le=100)
     saturation: float = Field(default=0, ge=-100, le=100)
@@ -251,11 +253,13 @@ def _apply_inpaint(rgb: np.ndarray, mask_base64: Optional[str]) -> np.ndarray:
 
 def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
     out = img.copy()
-    if params.crop:
-        out = _apply_crop(out, params.crop)
     rotate = params.rotate % 360
     if rotate:
         out = out.rotate(-rotate, expand=True, resample=Image.Resampling.BICUBIC)
+    if params.flip_horizontal:
+        out = ImageOps.mirror(out)
+    if params.flip_vertical:
+        out = ImageOps.flip(out)
     if params.brightness:
         out = ImageEnhance.Brightness(out).enhance(_factor(params.brightness, 0.75))
     if params.contrast:
@@ -267,7 +271,10 @@ def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
     rgb = _apply_temperature(rgb, params.temperature)
     rgb = _apply_portrait_effects(rgb, params)
     rgb = _apply_inpaint(rgb, params.inpaint_mask_base64)
-    return Image.fromarray(rgb, mode="RGB")
+    out = Image.fromarray(rgb, mode="RGB")
+    if params.crop:
+        out = _apply_crop(out, params.crop)
+    return out
 
 
 def _jpeg_base64(img: Image.Image, quality: int = 86) -> str:
