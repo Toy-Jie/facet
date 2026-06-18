@@ -41,6 +41,12 @@
                   <span>{{ 'nav.capsules' | translate }}</span>
                 </a>
               }
+              @if (canScan()) {
+                <a mat-menu-item routerLink="/scan" routerLinkActive #rlScanMenu="routerLinkActive" [style.color]="rlScanMenu.isActive ? 'var(--mat-sys-primary)' : ''">
+                  <mat-icon>document_scanner</mat-icon>
+                  <span>{{ 'nav.scan' | translate }}</span>
+                </a>
+              }
             </div>
           </mat-menu>
           @if (store.config()?.features?.show_timeline) {

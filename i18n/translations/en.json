@@ -994,7 +994,8 @@
     "timeline": "Timeline",
     "folders": "Folders",
     "map": "Map",
-    "capsules": "Capsules"
+    "capsules": "Capsules",
+    "scan": "Scan"
   },
   "auth": {
     "logout": "Log out",
@@ -1357,12 +1358,31 @@
   },
   "scan": {
     "title": "Scan Photos",
+    "description": "Choose configured photo folders, start a local AI scan, and watch progress in real time.",
+    "directories": "Photo folders",
     "start_button": "Start Scan",
     "starting": "Starting...",
+    "started": "Scan started",
     "running": "Running",
     "completed": "Completed",
     "failed": "Failed",
-    "idle": "Idle"
+    "idle": "Idle",
+    "refresh": "Refresh",
+    "select_all": "Select all",
+    "clear": "Clear",
+    "selected_count": "{count} folders selected",
+    "phase": "Phase",
+    "progress": "Progress",
+    "elapsed": "Elapsed",
+    "current_file": "Current file",
+    "output": "Scan log",
+    "no_output": "No output yet",
+    "no_directories": "No folders are available for scanning. Add photo directories in the configuration first.",
+    "load_error": "Could not load scan folders",
+    "start_error": "Could not start scan",
+    "superadmin_required": "Only superadmins can start scans.",
+    "owner_shared": "Shared directory",
+    "owner_user": "User: {owner}"
   },
   "persons": {
     "manage_title": "Manage Persons",

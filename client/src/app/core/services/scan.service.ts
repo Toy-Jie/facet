@@ -59,7 +59,10 @@ export class ScanService implements OnDestroy {
   connect(): void {
     this.disconnect();
     const token = this.auth.token;
-    if (!token) return;
+    if (!token) {
+      this.startPolling();
+      return;
+    }
 
     const params = new URLSearchParams({ token, lines: '50' });
     const source = new EventSource(`/api/scan/stream?${params}`);

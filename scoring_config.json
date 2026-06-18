@@ -2461,7 +2461,8 @@
       "show_timeline": true,
       "show_map": true,
       "show_capsules": true,
-      "show_folders": true
+      "show_folders": true,
+      "show_scan_button": true
     },
     "allowed_origins": [
       "http://localhost:4200",
@@ -2489,5 +2490,10 @@
     "mmap_size_mb": 2048,
     "cache_size_mb": 128,
     "slow_request_ms": 1000
+  },
+  "users": {
+    "shared_directories": [
+      "/Users/aaajiexiaodoubi/Downloads/jpg"
+    ]
   }
 }

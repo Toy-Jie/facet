@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
-from api.auth import CurrentUser, decode_access_token, require_superadmin
+from api.auth import CurrentUser, decode_access_token, is_multi_user_enabled, require_authenticated
 from api.config import VIEWER_CONFIG, FACET_SCRIPT, get_all_scan_directories, get_user_directories, _photo_types_cache, _stats_cache
 from processing.progress import parse_progress_line
 
@@ -62,14 +62,23 @@ class ScanStartRequest(BaseModel):
     directories: list[str] = []
 
 
+def _require_scan_access(user: CurrentUser) -> None:
+    if is_multi_user_enabled():
+        if not user.is_superadmin:
+            raise HTTPException(status_code=403, detail="Superadmin access required")
+    elif not user.is_edition:
+        raise HTTPException(status_code=403, detail="Edition access required")
+
+
 @router.post("/start")
 def start_scan(
     body: ScanStartRequest,
-    user: CurrentUser = Depends(require_superadmin),
+    user: CurrentUser = Depends(require_authenticated),
 ):
     """Trigger a photo scan as a background subprocess."""
     if not VIEWER_CONFIG.get('features', {}).get('show_scan_button', False):
         raise HTTPException(status_code=403, detail="Scan feature not enabled")
+    _require_scan_access(user)
 
     if not _scan_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="A scan is already running")
@@ -134,11 +143,12 @@ def start_scan(
 @router.get("/status")
 def scan_status(
     lines: int = Query(20),
-    user: CurrentUser = Depends(require_superadmin),
+    user: CurrentUser = Depends(require_authenticated),
 ):
     """Poll scan progress. Returns last N lines of output."""
     if not VIEWER_CONFIG.get('features', {}).get('show_scan_button', False):
         raise HTTPException(status_code=403, detail="Scan feature not enabled")
+    _require_scan_access(user)
 
     return _build_scan_snapshot(lines)
 
@@ -147,8 +157,15 @@ def _verify_superadmin_token(token: Optional[str]) -> None:
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")
     payload = decode_access_token(token)
-    if not payload or payload.get('role') != 'superadmin':
-        raise HTTPException(status_code=403, detail="Superadmin access required")
+    if not payload:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    user = CurrentUser(
+        user_id=payload.get('sub'),
+        role=payload.get('role', 'user'),
+        display_name=payload.get('display_name', ''),
+        edition_authenticated=payload.get('edition', False),
+    )
+    _require_scan_access(user)
 
 
 def _build_scan_snapshot(lines: int) -> dict:
@@ -226,11 +243,12 @@ async def scan_stream(
 
 @router.get("/directories")
 def scan_directories(
-    user: CurrentUser = Depends(require_superadmin),
+    user: CurrentUser = Depends(require_authenticated),
 ):
     """List all configured directories available for scanning."""
     if not VIEWER_CONFIG.get('features', {}).get('show_scan_button', False):
         raise HTTPException(status_code=403, detail="Scan feature not enabled")
+    _require_scan_access(user)
 
     all_dirs = get_all_scan_directories()
     user_dirs = get_user_directories(user.user_id) if user.user_id else []

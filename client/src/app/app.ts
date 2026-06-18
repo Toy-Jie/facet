@@ -147,9 +147,6 @@ export class App implements OnInit {
     const path = this.url().split('?')[0];
     return path === '/' || path === '' || path.startsWith('/album/');
   });
-  protected readonly isLibraryRoute = computed(() =>
-    this.isGalleryRoute() || this.isAlbumsRoute() || this.isCapsuleRoute(),
-  );
 
   protected readonly isStatsRoute = computed(() => this.url().split('?')[0] === '/stats');
 
@@ -158,8 +155,16 @@ export class App implements OnInit {
   protected readonly isPersonsRoute = computed(() => this.url().split('?')[0] === '/persons');
   protected readonly isMapRoute = computed(() => this.url().split('?')[0] === '/map');
   protected readonly isCapsuleRoute = computed(() => this.url().split('?')[0] === '/capsules');
+  protected readonly isScanRoute = computed(() => this.url().split('?')[0] === '/scan');
+  protected readonly isLibraryRoute = computed(() =>
+    this.isGalleryRoute() || this.isAlbumsRoute() || this.isCapsuleRoute() || this.isScanRoute(),
+  );
   protected readonly isTimelineRoute = computed(() => this.url().split('?')[0].startsWith('/timeline'));
   protected readonly isSharedRoute = computed(() => this.url().split('?')[0].startsWith('/shared/'));
+  protected readonly canScan = computed(() =>
+    !!this.auth.features()['show_scan_button']
+    && (this.auth.isMultiUser() ? this.auth.isSuperadmin() : this.auth.isEdition()),
+  );
 
   protected openNavMenu(trigger: MatMenuTrigger): void {
     this.clearNavMenuCloseTimer();

@@ -418,7 +418,8 @@
     "timeline": "时间线",
     "folders": "文件夹",
     "map": "地图",
-    "capsules": "胶囊"
+    "capsules": "胶囊",
+    "scan": "扫描"
   },
   "auth": {
     "logout": "退出登录",
@@ -1179,12 +1180,31 @@
   },
   "scan": {
     "title": "扫描照片",
+    "description": "选择已配置的图片文件夹，启动本地 AI 扫描并实时查看进度。",
+    "directories": "图片文件夹",
     "start_button": "开始扫描",
     "starting": "正在启动...",
+    "started": "扫描已启动",
     "running": "运行中",
     "completed": "已完成",
     "failed": "失败",
-    "idle": "空闲"
+    "idle": "空闲",
+    "refresh": "刷新",
+    "select_all": "全选",
+    "clear": "清除",
+    "selected_count": "已选 {count} 个文件夹",
+    "phase": "阶段",
+    "progress": "进度",
+    "elapsed": "耗时",
+    "current_file": "当前文件",
+    "output": "扫描日志",
+    "no_output": "暂无日志",
+    "no_directories": "没有可扫描的文件夹。请先在配置中添加图片目录。",
+    "load_error": "加载扫描文件夹失败",
+    "start_error": "启动扫描失败",
+    "superadmin_required": "只有超级管理员可以启动扫描。",
+    "owner_shared": "共享目录",
+    "owner_user": "用户：{owner}"
   },
   "persons": {
     "manage_title": "管理人物",

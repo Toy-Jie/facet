@@ -215,21 +215,28 @@ class TestRequireSuperadminEnforcement:
             # Should pass auth — may return 200 or other non-auth error
             assert resp.status_code not in (401, 403)
 
-    def test_non_multi_user_mode_gets_403(self):
-        """Even a superadmin role is rejected when multi-user mode is disabled."""
+    def test_non_multi_user_mode_edition_access_passes_scan_auth(self):
+        """Single-user mode allows edition-level access to scan endpoints."""
         viewer_cfg = self._viewer_with_scan()
         with (
             mock.patch(f"{_AUTH_MODULE}.VIEWER_CONFIG", viewer_cfg),
+            mock.patch("api.routers.scan.VIEWER_CONFIG", viewer_cfg),
             mock.patch(f"{_AUTH_MODULE}.is_multi_user_enabled", return_value=False),
+            mock.patch("api.routers.scan.is_multi_user_enabled", return_value=False),
+            mock.patch("api.routers.scan.get_all_scan_directories", return_value=["/photos"]),
+            mock.patch("api.routers.scan.subprocess.Popen") as popen_mock,
         ):
+            popen_mock.return_value.stdout = []
+            popen_mock.return_value.returncode = 0
+            popen_mock.return_value.pid = 123
             app, client = _make_app_and_client(raise_server_exceptions=False)
-            sa = CurrentUser(user_id="sa1", role="superadmin")
-            app.dependency_overrides[require_authenticated] = lambda: sa
+            edition_user = CurrentUser(edition_authenticated=True)
+            app.dependency_overrides[require_authenticated] = lambda: edition_user
             resp = client.post(
                 self.SCAN_START,
-                json={"directory": "/photos"},
+                json={"directories": ["/photos"]},
             )
-            assert resp.status_code == 403
+            assert resp.status_code not in (401, 403)
 
     def test_unauthenticated_gets_401_on_scan(self):
         """No token at all should yield 401, not 403."""
