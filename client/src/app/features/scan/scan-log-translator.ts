@@ -21,7 +21,20 @@ type TranslationRule = {
   replace: (...matches: string[]) => string;
 };
 
+function scanStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    completed: '已完成',
+    failed: '失败',
+    interrupted: '已中断',
+  };
+  return labels[status] ?? status;
+}
+
 const RULES_ZH: TranslationRule[] = [
+  {
+    pattern: /^Multi-pass processing:\s+(.+)$/,
+    replace: (_, progress) => `多阶段处理：${progress}`,
+  },
   {
     pattern: /^Config validation passed: all (\d+) categories have valid weight totals$/,
     replace: (_, count) => `配置校验通过：${count} 个分类的权重总和有效`,
@@ -33,6 +46,10 @@ const RULES_ZH: TranslationRule[] = [
   {
     pattern: /^Using cpu$/i,
     replace: () => '正在使用 CPU',
+  },
+  {
+    pattern: /^Using default SimpleTokenizer\.$/,
+    replace: () => '正在使用默认 SimpleTokenizer。',
   },
   {
     pattern: /^Using (.+)$/,
@@ -77,6 +94,10 @@ const RULES_ZH: TranslationRule[] = [
     replace: () => '所有任务已完成。',
   },
   {
+    pattern: /^All models unloaded$/,
+    replace: () => '所有模型已卸载',
+  },
+  {
     pattern: /^Tagged (\d+) photos with missing tags\.$/,
     replace: (_, count) => `已为 ${count} 张缺少标签的照片补充标签。`,
   },
@@ -118,6 +139,15 @@ const RULES_ZH: TranslationRule[] = [
       `正在处理 ${count} 张照片（初始分块大小：${chunkSize}，自动调节：${autoTuning}）...`,
   },
   {
+    pattern: /^Processing burst groups \(rapid<=([\d.]+)s, similarity>=(\d+)%, window=([\d.]+)min\)\.\.\.$/,
+    replace: (_, rapid, similarity, window) =>
+      `正在处理连拍分组（快速连拍 <= ${rapid} 秒，相似度 >= ${similarity}%，时间窗口 ${window} 分钟）...`,
+  },
+  {
+    pattern: /^Assigned (\d+) burst groups$/,
+    replace: (_, count) => `已分配 ${count} 个连拍分组`,
+  },
+  {
     pattern: /^Batch Processing Complete$/,
     replace: () => '批量处理完成',
   },
@@ -128,6 +158,10 @@ const RULES_ZH: TranslationRule[] = [
   {
     pattern: /^Memory peak: ([\d.]+) GB \| GPU peak: ([\d.]+) GB$/,
     replace: (_, memory, gpu) => `内存峰值：${memory} GB | GPU 峰值：${gpu} GB`,
+  },
+  {
+    pattern: /^RAM cache: (\d+)\/(\d+) hits \((\d+)%\)$/,
+    replace: (_, hits, total, percent) => `内存缓存：${hits}/${total} 次命中（${percent}%）`,
   },
   {
     pattern: /^Multi-pass processing complete:$/,
@@ -175,7 +209,51 @@ const RULES_ZH: TranslationRule[] = [
   },
   {
     pattern: /^Scan run #(\d+) finished: (.+)$/,
-    replace: (_, id, status) => `扫描任务 #${id} 已结束：${status}`,
+    replace: (_, id, status) => `扫描任务 #${id} 已结束：${scanStatusLabel(status)}`,
+  },
+  {
+    pattern: /^Parsing model identifier\. Schema: (.+), Identifier: (.+)$/,
+    replace: (_, schema, identifier) => `正在解析模型标识：Schema=${schema}，Identifier=${identifier}`,
+  },
+  {
+    pattern: /^Loaded built-in (.+) model config\.$/,
+    replace: (_, model) => `已加载内置 ${model} 模型配置。`,
+  },
+  {
+    pattern: /^HTTP Request: (\w+) (.+) "(HTTP\/[\d.]+ \d+ .+)"$/,
+    replace: (_, method, url, status) => `HTTP 请求：${method} ${url}（${status}）`,
+  },
+  {
+    pattern: /^Instantiating model architecture: (.+)$/,
+    replace: (_, architecture) => `正在创建模型架构：${architecture}`,
+  },
+  {
+    pattern: /^Loading full pretrained weights from: (.+)$/,
+    replace: (_, path) => `正在加载完整预训练权重：${path}`,
+  },
+  {
+    pattern: /^Final image preprocessing configuration set: (.+)$/,
+    replace: (_, config) => `最终图像预处理配置：${config}`,
+  },
+  {
+    pattern: /^Model (.+) creation process complete\.$/,
+    replace: (_, model) => `模型 ${model} 创建完成。`,
+  },
+  {
+    pattern: /^Parsing tokenizer identifier\. Schema: (.+), Identifier: (.+)$/,
+    replace: (_, schema, identifier) => `正在解析分词器标识：Schema=${schema}，Identifier=${identifier}`,
+  },
+  {
+    pattern: /^Attempting to load config from built-in: (.+)$/,
+    replace: (_, config) => `正在尝试从内置配置加载：${config}`,
+  },
+  {
+    pattern: /^Traceback \(most recent call last\):$/,
+    replace: () => '异常追踪（最近一次调用）：',
+  },
+  {
+    pattern: /^sqlite3\.OperationalError: no such module: vec0$/,
+    replace: () => 'SQLite 操作错误：缺少 vec0 模块',
   },
   {
     pattern: /^Path does not exist: (.+)$/,
