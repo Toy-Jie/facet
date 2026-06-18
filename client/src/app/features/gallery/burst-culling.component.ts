@@ -16,7 +16,7 @@ import { UndoService } from '../../core/services/undo.service';
 import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll.directive';
 import { firstValueFrom } from 'rxjs';
 import {
-  IsKeptPipe, IsDecidedPipe, IsConfirmedPipe, IsPassingPipe, PassCountdownPipe,
+  IsConfirmedPipe, IsPassingPipe, PassCountdownPipe,
   CullingGroup,
 } from './burst-culling.pipes';
 
@@ -41,8 +41,6 @@ interface CullingGroupsResponse {
     MatCheckboxModule,
     TranslatePipe,
     ImageUrlPipe,
-    IsKeptPipe,
-    IsDecidedPipe,
     IsConfirmedPipe,
     IsPassingPipe,
     PassCountdownPipe,
@@ -95,10 +93,7 @@ interface CullingGroupsResponse {
               <!-- Photos -->
               <div class="flex gap-2 md:gap-3 overflow-x-auto p-3 items-center">
                 @for (photo of group.photos; track photo.path; let pIdx = $index) {
-                  <div class="group/photo relative cursor-pointer rounded-lg overflow-hidden border-2 transition-colors flex-shrink-0 h-full max-w-[480px]"
-                       [class.border-green-500]="photo.path | isKept:selectionsMap():group.group_id"
-                       [class.border-red-500]="!(photo.path | isKept:selectionsMap():group.group_id) && (photo.path | isDecided:selectionsMap():group.group_id)"
-                       [class.border-transparent]="!(photo.path | isDecided:selectionsMap():group.group_id)"
+                  <div [class]="photoCardClass(photo.path, group)"
                        role="button"
                        tabindex="0"
                        [attr.aria-label]="photo.filename"
@@ -113,7 +108,7 @@ interface CullingGroupsResponse {
                         {{ 'culling.auto_best' | translate }}
                       </div>
                     }
-                    @if (photo.path | isKept:selectionsMap():group.group_id) {
+                    @if (isPhotoKept(photo.path, group)) {
                       <div class="absolute top-10 right-2 w-7 h-7 rounded-full bg-green-600 inline-flex items-center justify-center">
                         <mat-icon class="!text-base !w-4 !h-4 !leading-4 text-white">check</mat-icon>
                       </div>
@@ -252,12 +247,12 @@ interface CullingGroupsResponse {
                role="presentation"
                (click)="$event.stopPropagation()"
                (keydown)="$event.stopPropagation()">
-            @if (lbPhoto.path | isKept:selectionsMap():lbGroup.group_id) {
+            @if (isPhotoKept(lbPhoto.path, lbGroup)) {
               <span class="inline-flex items-center gap-1 text-green-400 text-sm">
                 <mat-icon class="!text-base !w-4 !h-4 !leading-4">check</mat-icon>
                 {{ 'culling.lightbox.kept' | translate }}
               </span>
-            } @else if (lbPhoto.path | isDecided:selectionsMap():lbGroup.group_id) {
+            } @else if (isPhotoDecided(lbPhoto.path, lbGroup)) {
               <span class="inline-flex items-center gap-1 text-red-400 text-sm">
                 <mat-icon class="!text-base !w-4 !h-4 !leading-4">close</mat-icon>
                 {{ 'culling.lightbox.rejected' | translate }}
@@ -291,8 +286,8 @@ export class BurstCullingComponent implements OnDestroy {
   /** Monotonic id bumped on every filter change; loadGroups/loadMore drop late responses whose generation no longer matches. */
   private loadGenerationId = 0;
 
-  /** group_id -> set of kept paths */
-  protected readonly selectionsMap = signal<Map<number, Set<string>>>(new Map());
+  /** group key (group_id + '_' + type) -> set of kept paths */
+  protected readonly selectionsMap = signal<Map<string, Set<string>>>(new Map());
 
   /** Set of confirmed group keys (group_id + '_' + type) */
   protected readonly confirmedGroups = signal<Set<string>>(new Set());
@@ -373,6 +368,22 @@ export class BurstCullingComponent implements OnDestroy {
     return `${group.group_id}_${group.type}`;
   }
 
+  protected isPhotoKept(path: string, group: CullingGroup): boolean {
+    return this.selectionsMap().get(this.groupKey(group))?.has(path) ?? false;
+  }
+
+  protected isPhotoDecided(path: string, group: CullingGroup): boolean {
+    const kept = this.selectionsMap().get(this.groupKey(group));
+    return kept !== undefined && !kept.has(path);
+  }
+
+  protected photoCardClass(path: string, group: CullingGroup): string {
+    const base = 'group/photo relative cursor-pointer rounded-lg overflow-hidden border-2 transition-colors flex-shrink-0 h-full max-w-[480px]';
+    if (this.isPhotoKept(path, group)) return `${base} border-green-500`;
+    if (this.isPhotoDecided(path, group)) return `${base} border-red-500`;
+    return `${base} border-transparent`;
+  }
+
   private buildParams(page: number): Record<string, string | number | boolean> {
     return {
       page,
@@ -383,13 +394,14 @@ export class BurstCullingComponent implements OnDestroy {
     };
   }
 
-  private autoSelectBest(groups: CullingGroup[], base?: Map<number, Set<string>>): Map<number, Set<string>> {
-    const map = base ? new Map(base) : new Map<number, Set<string>>();
+  private autoSelectBest(groups: CullingGroup[], base?: Map<string, Set<string>>): Map<string, Set<string>> {
+    const map = base ? new Map(base) : new Map<string, Set<string>>();
     for (const group of groups) {
-      if (!map.has(group.group_id)) {
+      const key = this.groupKey(group);
+      if (!map.has(key)) {
         const best = group.best_path || group.photos[0]?.path;
         if (best) {
-          map.set(group.group_id, new Set([best]));
+          map.set(key, new Set([best]));
         }
       }
     }
@@ -573,9 +585,10 @@ export class BurstCullingComponent implements OnDestroy {
     const photo = group.photos[this.lightboxIndex()];
     if (!photo) return;
     const map = new Map(this.selectionsMap());
-    const kept = new Set(map.get(group.group_id) ?? []);
+    const key = this.groupKey(group);
+    const kept = new Set(map.get(key) ?? []);
     if (keep) kept.add(photo.path); else kept.delete(photo.path);
-    map.set(group.group_id, kept);
+    map.set(key, kept);
     this.selectionsMap.set(map);
   }
 
@@ -613,23 +626,24 @@ export class BurstCullingComponent implements OnDestroy {
 
   protected toggleSelection(path: string, group: CullingGroup): void {
     const map = new Map(this.selectionsMap());
-    const kept = new Set(map.get(group.group_id) ?? []);
+    const key = this.groupKey(group);
+    const kept = new Set(map.get(key) ?? []);
 
     if (kept.has(path)) {
       kept.delete(path);
     } else {
       kept.add(path);
     }
-    map.set(group.group_id, kept);
+    map.set(key, kept);
     this.selectionsMap.set(map);
   }
 
   protected selectExclusive(path: string, group: CullingGroup): void {
-    this.updateMapSignal(this.selectionsMap, group.group_id, new Set([path]));
+    this.updateMapSignal(this.selectionsMap, this.groupKey(group), new Set([path]));
   }
 
   protected async confirmGroup(group: CullingGroup): Promise<void> {
-    const kept = this.selectionsMap().get(group.group_id);
+    const kept = this.selectionsMap().get(this.groupKey(group));
     if (!kept || kept.size === 0) return;
 
     // Deferred commit: the group disappears instantly and the API call only
@@ -725,7 +739,7 @@ export class BurstCullingComponent implements OnDestroy {
       const confirmed = this.confirmedGroups();
       const remaining = this.groups().filter(g => !confirmed.has(this.groupKey(g)));
       const toConfirm = remaining.filter(g => {
-        const kept = this.selectionsMap().get(g.group_id);
+        const kept = this.selectionsMap().get(this.groupKey(g));
         return kept && kept.size > 0;
       });
 
@@ -734,7 +748,7 @@ export class BurstCullingComponent implements OnDestroy {
       for (let i = 0; i < toConfirm.length; i += batchSize) {
         const batch = toConfirm.slice(i, i + batchSize);
         await Promise.all(batch.map(g => {
-          const kept = this.selectionsMap().get(g.group_id)!;
+          const kept = this.selectionsMap().get(this.groupKey(g))!;
           return firstValueFrom(this.api.post('/culling-groups/confirm', {
             group_id: g.group_id,
             type: g.type,

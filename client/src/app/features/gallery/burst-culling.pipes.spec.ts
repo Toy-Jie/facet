@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import {
   IsKeptPipe, IsDecidedPipe, IsConfirmedPipe, IsPassingPipe, PassCountdownPipe,
   CullingGroup,
@@ -11,17 +12,17 @@ describe('IsKeptPipe', () => {
   const pipe = new IsKeptPipe();
 
   it('returns true when path is in the kept set for the burst', () => {
-    const map = new Map<number, Set<string>>([[1, new Set(['/photo1.jpg'])]]);
-    expect(pipe.transform('/photo1.jpg', map, 1)).toBe(true);
+    const map = new Map<string, Set<string>>([['1_burst', new Set(['/photo1.jpg'])]]);
+    expect(pipe.transform('/photo1.jpg', map, '1_burst')).toBe(true);
   });
 
   it('returns false when path is not in the kept set', () => {
-    const map = new Map<number, Set<string>>([[1, new Set(['/photo1.jpg'])]]);
-    expect(pipe.transform('/photo2.jpg', map, 1)).toBe(false);
+    const map = new Map<string, Set<string>>([['1_burst', new Set(['/photo1.jpg'])]]);
+    expect(pipe.transform('/photo2.jpg', map, '1_burst')).toBe(false);
   });
 
   it('returns false when burst_id has no entry', () => {
-    expect(pipe.transform('/photo1.jpg', new Map(), 99)).toBe(false);
+    expect(pipe.transform('/photo1.jpg', new Map(), '99_burst')).toBe(false);
   });
 });
 
@@ -29,22 +30,22 @@ describe('IsDecidedPipe', () => {
   const pipe = new IsDecidedPipe();
 
   it('returns true when burst has selections and path is not kept', () => {
-    const map = new Map<number, Set<string>>([[1, new Set(['/photo1.jpg'])]]);
-    expect(pipe.transform('/photo2.jpg', map, 1)).toBe(true);
+    const map = new Map<string, Set<string>>([['1_burst', new Set(['/photo1.jpg'])]]);
+    expect(pipe.transform('/photo2.jpg', map, '1_burst')).toBe(true);
   });
 
   it('returns false when path is kept', () => {
-    const map = new Map<number, Set<string>>([[1, new Set(['/photo1.jpg'])]]);
-    expect(pipe.transform('/photo1.jpg', map, 1)).toBe(false);
+    const map = new Map<string, Set<string>>([['1_burst', new Set(['/photo1.jpg'])]]);
+    expect(pipe.transform('/photo1.jpg', map, '1_burst')).toBe(false);
   });
 
   it('returns false when burst has no entry', () => {
-    expect(pipe.transform('/photo1.jpg', new Map(), 1)).toBe(false);
+    expect(pipe.transform('/photo1.jpg', new Map(), '1_burst')).toBe(false);
   });
 
-  it('returns false when kept set is empty', () => {
-    const map = new Map<number, Set<string>>([[1, new Set<string>()]]);
-    expect(pipe.transform('/photo1.jpg', map, 1)).toBe(false);
+  it('returns true when kept set is empty because the photo is explicitly rejected', () => {
+    const map = new Map<string, Set<string>>([['1_burst', new Set<string>()]]);
+    expect(pipe.transform('/photo1.jpg', map, '1_burst')).toBe(true);
   });
 });
 

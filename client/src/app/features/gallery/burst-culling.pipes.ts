@@ -25,16 +25,16 @@ export interface CullingGroup {
 
 @Pipe({ name: 'isKept' })
 export class IsKeptPipe implements PipeTransform {
-  transform(path: string, selectionsMap: Map<number, Set<string>>, burstId: number): boolean {
-    const kept = selectionsMap.get(burstId);
+  transform(path: string, selectionsMap: Map<string, Set<string>>, groupKey: string): boolean {
+    const kept = selectionsMap.get(groupKey);
     return kept?.has(path) ?? false;
   }
 }
 
 @Pipe({ name: 'isDecided' })
 export class IsDecidedPipe implements PipeTransform {
-  transform(path: string, selectionsMap: Map<number, Set<string>>, burstId: number): boolean {
-    const kept = selectionsMap.get(burstId);
+  transform(path: string, selectionsMap: Map<string, Set<string>>, groupKey: string): boolean {
+    const kept = selectionsMap.get(groupKey);
     return kept !== undefined && !kept.has(path);
   }
 }
