@@ -163,12 +163,15 @@ export class App implements OnInit {
 
   protected openNavMenu(trigger: MatMenuTrigger): void {
     this.clearNavMenuCloseTimer();
-    trigger.openMenu();
+    if (!trigger.menuOpen) trigger.openMenu();
   }
 
   protected scheduleNavMenuClose(trigger: MatMenuTrigger): void {
     this.clearNavMenuCloseTimer();
-    this.navMenuCloseTimer = setTimeout(() => trigger.closeMenu(), 160);
+    this.navMenuCloseTimer = setTimeout(() => {
+      trigger.closeMenu();
+      this.navMenuCloseTimer = null;
+    }, 160);
   }
 
   protected clearNavMenuCloseTimer(): void {

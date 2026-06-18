@@ -15,7 +15,7 @@
             [matTooltip]="'nav.gallery' | translate"
             [attr.aria-label]="'nav.gallery' | translate"
             (mouseenter)="openNavMenu(libraryMenuTrigger)"
-            (mouseleave)="scheduleNavMenuClose(libraryMenuTrigger)">
+            (menuClosed)="clearNavMenuCloseTimer()">
             <mat-icon>diamond</mat-icon>
             <span>{{ 'nav.gallery' | translate }}</span>
             <mat-icon class="!text-base !w-4 !h-4">expand_more</mat-icon>
