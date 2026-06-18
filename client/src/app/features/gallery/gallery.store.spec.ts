@@ -445,6 +445,56 @@ describe('GalleryStore', () => {
     });
   });
 
+  describe('scan directories', () => {
+    it('loads scan directory summaries with hide filters', async () => {
+      store.filters.set({
+        ...DEFAULT_FILTERS,
+        hide_blinks: true,
+        hide_bursts: false,
+        hide_duplicates: true,
+      });
+      apiGet.mockReturnValue(of({
+        directories: [
+          {
+            path: '/photos/shoot-a',
+            name: 'shoot-a',
+            photo_count: 2,
+            cover_photo_path: '/photos/shoot-a/best.png',
+          },
+        ],
+      }));
+
+      await store.loadScanDirectories();
+
+      expect(apiGet).toHaveBeenCalledWith('/gallery/scan_directories', {
+        hide_blinks: true,
+        hide_bursts: false,
+        hide_duplicates: true,
+      });
+      expect(store.scanDirectories()).toEqual([
+        {
+          path: '/photos/shoot-a',
+          name: 'shoot-a',
+          photo_count: 2,
+          cover_photo_path: '/photos/shoot-a/best.png',
+        },
+      ]);
+    });
+
+    it('selects a scan directory via path_prefix', async () => {
+      apiGet.mockReturnValue(of(makePhotosResponse()));
+
+      await store.selectScanDirectory('/photos/shoot-a');
+
+      expect(store.filters().path_prefix).toBe('/photos/shoot-a');
+      expect(routerNavigate).toHaveBeenCalled();
+      expect(apiGet).toHaveBeenCalledWith(
+        '/photos',
+        expect.objectContaining({ path_prefix: '/photos/shoot-a' }),
+      );
+    });
+  });
+
   describe('updateFilter()', () => {
     beforeEach(() => {
       apiGet.mockReturnValue(of(makePhotosResponse()));

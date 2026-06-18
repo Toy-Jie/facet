@@ -50,6 +50,10 @@ describe('buildApiParams', () => {
     expect(buildApiParams(filters({ album_id: '7' }), true)['album_id']).toBeUndefined();
     expect(buildApiParams(filters({ album_id: '7' }), false)['album_id']).toBe('7');
   });
+  it('includes path_prefix when a scan directory is selected', () => {
+    const p = buildApiParams(filters({ path_prefix: '/photos/shoot-a' }), false);
+    expect(p['path_prefix']).toBe('/photos/shoot-a');
+  });
 });
 
 describe('buildSyncParams', () => {
@@ -68,6 +72,10 @@ describe('buildSyncParams', () => {
   it('emits hide_blinks=false when it differs from the true default', () => {
     expect(buildSyncParams(filters({ hide_blinks: false }), undefined)['hide_blinks']).toBe('false');
   });
+  it('includes path_prefix in synced URL params', () => {
+    expect(buildSyncParams(filters({ path_prefix: '/photos/shoot-a' }), undefined)['path_prefix'])
+      .toBe('/photos/shoot-a');
+  });
 });
 
 describe('applyQueryParams', () => {
@@ -75,6 +83,10 @@ describe('applyQueryParams', () => {
     const r = applyQueryParams(DEFAULT_FILTERS, { camera: 'Nikon', tag: 'sky' });
     expect(r.camera).toBe('Nikon');
     expect(r.tag).toBe('sky');
+  });
+  it('restores path_prefix from query params', () => {
+    const r = applyQueryParams(DEFAULT_FILTERS, { path_prefix: '/photos/shoot-a' });
+    expect(r.path_prefix).toBe('/photos/shoot-a');
   });
   it('parses boolean params', () => {
     const r = applyQueryParams(DEFAULT_FILTERS, { hide_blinks: 'false', favorites_only: 'true' });

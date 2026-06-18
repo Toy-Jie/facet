@@ -34,6 +34,8 @@ describe('GalleryComponent', () => {
       total: signal(0),
       loading: signal(false),
       hasMore: signal(false),
+      scanDirectories: signal([]),
+      scanDirectoriesLoading: signal(false),
       cameras: signal([]),
       lenses: signal([]),
       tags: signal([]),
@@ -49,6 +51,7 @@ describe('GalleryComponent', () => {
       loadConfig: vi.fn(() => Promise.resolve()),
       loadFilterOptions: vi.fn(() => Promise.resolve()),
       loadTypeCounts: vi.fn(() => Promise.resolve()),
+      loadScanDirectories: vi.fn(() => Promise.resolve()),
       loadPhotos: vi.fn(() => Promise.resolve()),
       updateFilter: vi.fn(() => Promise.resolve()),
       resetFilters: vi.fn(() => Promise.resolve()),
@@ -66,6 +69,8 @@ describe('GalleryComponent', () => {
       filterKey: vi.fn(() => '{}'),
       hiddenSummary: signal({ total: 0, blinks: 0, bursts: 0, duplicates: 0 }),
       updateFilters: vi.fn(() => Promise.resolve()),
+      selectScanDirectory: vi.fn(() => Promise.resolve()),
+      clearScanDirectory: vi.fn(() => Promise.resolve()),
       setRating: vi.fn(),
       batchFavorite: vi.fn(() => Promise.resolve(new Map())),
       batchReject: vi.fn(() => Promise.resolve(new Map())),
@@ -138,13 +143,14 @@ describe('GalleryComponent', () => {
   });
 
   describe('ngOnInit()', () => {
-    it('should call store.loadConfig, loadFilterOptions, loadTypeCounts, and loadPhotos', async () => {
+    it('should call store.loadConfig, loadFilterOptions, loadTypeCounts, and loadScanDirectories', async () => {
       await component.ngOnInit();
 
       expect(mockStore.loadConfig).toHaveBeenCalled();
       expect(mockStore.loadFilterOptions).toHaveBeenCalled();
       expect(mockStore.loadTypeCounts).toHaveBeenCalled();
-      expect(mockStore.loadPhotos).toHaveBeenCalled();
+      expect(mockStore.loadScanDirectories).toHaveBeenCalled();
+      expect(mockStore.loadPhotos).not.toHaveBeenCalled();
     });
 
     it('should call loadConfig before loadFilterOptions and loadTypeCounts', async () => {
@@ -176,8 +182,9 @@ describe('GalleryComponent', () => {
       );
     });
 
-    it('should call loadPhotos after loadFilterOptions and loadTypeCounts', async () => {
+    it('should call loadPhotos after loadFilterOptions and loadTypeCounts when a scan directory is selected', async () => {
       const callOrder: string[] = [];
+      mockStore.filters.set({ ...DEFAULT_FILTERS, path_prefix: '/photos/shoot-a' });
       mockStore.loadConfig.mockImplementation(() => {
         callOrder.push('loadConfig');
         return Promise.resolve();
@@ -188,6 +195,10 @@ describe('GalleryComponent', () => {
       });
       mockStore.loadTypeCounts.mockImplementation(() => {
         callOrder.push('loadTypeCounts');
+        return Promise.resolve();
+      });
+      mockStore.loadScanDirectories.mockImplementation(() => {
+        callOrder.push('loadScanDirectories');
         return Promise.resolve();
       });
       mockStore.loadPhotos.mockImplementation(() => {
@@ -202,6 +213,9 @@ describe('GalleryComponent', () => {
       );
       expect(callOrder.indexOf('loadPhotos')).toBeGreaterThan(
         callOrder.indexOf('loadTypeCounts'),
+      );
+      expect(callOrder.indexOf('loadPhotos')).toBeGreaterThan(
+        callOrder.indexOf('loadScanDirectories'),
       );
     });
   });

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import ValidationError
 
 from api.auth import CurrentUser, get_optional_user
-from api.config import VIEWER_CONFIG, _FULL_CONFIG
+from api.config import VIEWER_CONFIG, _FULL_CONFIG, get_all_scan_directories
 from api.database import get_async_db, get_db
 from api.models.gallery import GalleryParams
 from api.db_helpers import (
@@ -53,6 +53,16 @@ def _fts5_query_from(term: str) -> Optional[str]:
         if cleaned:
             tokens.append(f'"{cleaned}"*')
     return ' '.join(tokens) if tokens else None
+
+
+def _normalize_path(path: str) -> str:
+    return path.replace('\\', '/')
+
+
+def _scan_dir_like_param(path: str) -> str:
+    normalized = _normalize_path(path).rstrip('/') + '/'
+    escaped = normalized.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    return escaped + '%'
 
 
 def _apply_search_filter(where_clauses, sql_params, term: str, conn):
@@ -233,6 +243,70 @@ def _apply_preference_filters(where_clauses, sql_params, params, user_id):
         where_clauses.append(f"{pref_cols['is_rejected']} = 1")
     elif params.get('hide_rejected') in ('1', 'true'):
         where_clauses.append(f"({pref_cols['is_rejected']} = 0 OR {pref_cols['is_rejected']} IS NULL)")
+
+
+@router.get("/api/gallery/scan_directories")
+async def api_gallery_scan_directories(
+    hide_blinks: str = Query('0'),
+    hide_bursts: str = Query('0'),
+    hide_duplicates: str = Query('0'),
+    user: Optional[CurrentUser] = Depends(get_optional_user),
+):
+    """List configured scan roots with visible photo counts and cover photos."""
+    scan_dirs = get_all_scan_directories()
+    user_id = user.user_id if user else None
+    if not scan_dirs:
+        return {'directories': []}
+
+    try:
+        async with get_async_db() as conn:
+            from_clause, from_params = get_photos_from_clause(user_id)
+            vis_sql, vis_params = get_visibility_clause(user_id)
+            hide_clauses = build_hide_clauses(hide_blinks, hide_bursts, hide_duplicates)
+            base_where = [vis_sql, *hide_clauses]
+
+            directories = []
+            for directory in scan_dirs:
+                where_clauses = [
+                    *base_where,
+                    "REPLACE(photos.path, '\\', '/') LIKE ? ESCAPE '\\'",
+                ]
+                params = list(from_params) + list(vis_params) + [_scan_dir_like_param(directory)]
+                where_str = " WHERE " + " AND ".join(where_clauses)
+                count_cur = await conn.execute(
+                    f"SELECT COUNT(*) AS photo_count FROM {from_clause}{where_str}",
+                    params,
+                )
+                count_row = await count_cur.fetchone()
+                await count_cur.close()
+
+                cover_cur = await conn.execute(
+                    f"""
+                    SELECT photos.path
+                    FROM {from_clause}{where_str}
+                    ORDER BY COALESCE(photos.aggregate, 0) DESC, photos.path ASC
+                    LIMIT 1
+                    """,
+                    params,
+                )
+                cover_row = await cover_cur.fetchone()
+                await cover_cur.close()
+                photo_count = int(count_row['photo_count'] or 0) if count_row else 0
+                directories.append({
+                    'path': directory,
+                    'name': directory.rstrip('/').split('/')[-1] or directory,
+                    'photo_count': photo_count,
+                    'cover_photo_path': cover_row['path'] if cover_row else None,
+                })
+
+            return {
+                'directories': [
+                    d for d in directories if d['photo_count'] > 0
+                ],
+            }
+    except sqlite3.Error:
+        logger.exception("Failed to fetch gallery scan directories")
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 
 # Single source of truth for numeric range filters: (column, min_key, max_key, is_float).

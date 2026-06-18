@@ -50,6 +50,13 @@ export interface TypeCount {
   count: number;
 }
 
+export interface ScanDirectorySummary {
+  path: string;
+  name: string;
+  photo_count: number;
+  cover_photo_path: string | null;
+}
+
 export interface FilterOption {
   value: string;
   count: number;
@@ -145,6 +152,8 @@ export class GalleryStore {
   private _loadSeq = 0;
   readonly hasMore = signal(false);
   readonly config = signal<ViewerConfig | null>(null);
+  readonly scanDirectories = signal<ScanDirectorySummary[]>([]);
+  readonly scanDirectoriesLoading = signal(false);
   readonly filterDrawerOpen = signal(localStorage.getItem(DRAWER_STATE_KEY) === 'true');
   readonly slideshowActive = signal(false);
   readonly cardWidth = signal(parseInt(localStorage.getItem(CARD_WIDTH_KEY) ?? '', 10) || 0);
@@ -406,6 +415,37 @@ export class GalleryStore {
         this.loading.set(false);
       }
     }
+  }
+
+  async loadScanDirectories(): Promise<void> {
+    this.scanDirectoriesLoading.set(true);
+    const f = this.filters();
+    try {
+      const res = await firstValueFrom(this.api.get<{ directories: ScanDirectorySummary[] }>(
+        '/gallery/scan_directories',
+        {
+          hide_blinks: f.hide_blinks,
+          hide_bursts: f.hide_bursts,
+          hide_duplicates: f.hide_duplicates,
+        },
+      ));
+      this.scanDirectories.set(res.directories ?? []);
+    } catch {
+      this.scanDirectories.set([]);
+    } finally {
+      this.scanDirectoriesLoading.set(false);
+    }
+  }
+
+  async selectScanDirectory(path: string): Promise<void> {
+    this.clearSelection();
+    await this.updateFilter('path_prefix', path);
+  }
+
+  async clearScanDirectory(): Promise<void> {
+    this.clearSelection();
+    await this.updateFilter('path_prefix', '');
+    await this.loadScanDirectories();
   }
 
   /** Display-only keys that never affect the API query */

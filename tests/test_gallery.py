@@ -308,6 +308,34 @@ class TestGalleryTypeCountsEndpoint:
         assert isinstance(data["types"], list)
 
 
+class TestGalleryScanDirectoriesEndpoint:
+    """GET /api/gallery/scan_directories — configured scan root summaries."""
+
+    def test_scan_directories_returns_counts_and_covers(self, tmp_path):
+        db_path = str(tmp_path / "test.db")
+        root_a = str(tmp_path / "shoot_a")
+        root_b = str(tmp_path / "shoot_b")
+        _make_db(db_path, [
+            _photo(f"{root_a}/low.jpg", "2024:01:01 10:00:00", aggregate=4.0),
+            _photo(f"{root_a}/best.png", "2024:01:01 10:00:00", aggregate=9.0),
+            _photo(f"{root_b}/only.jpg", "2024:01:01 10:00:00", aggregate=6.0),
+            _photo(str(tmp_path / "other" / "skip.jpg"), "2024:01:01 10:00:00", aggregate=10.0),
+        ])
+        app = _create_app_no_auth()
+        with (
+            mock.patch("api.routers.gallery.get_async_db", _async_conn_factory(db_path)),
+            mock.patch("api.routers.gallery.get_all_scan_directories", return_value=[root_a, root_b]),
+        ):
+            resp = TestClient(app).get("/api/gallery/scan_directories")
+
+        assert resp.status_code == 200
+        directories = resp.json()["directories"]
+        assert [d["path"] for d in directories] == [root_a, root_b]
+        assert directories[0]["photo_count"] == 2
+        assert directories[0]["cover_photo_path"] == f"{root_a}/best.png"
+        assert directories[1]["photo_count"] == 1
+
+
 # ---------------------------------------------------------------------------
 # Single Photo
 # ---------------------------------------------------------------------------

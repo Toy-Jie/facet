@@ -77,6 +77,79 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
 
       <!-- Main content -->
       <mat-sidenav-content>
+        @if (showScanDirectoryPicker()) {
+          <section class="px-2 md:px-4 pt-2 md:pt-4">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h1 class="m-0 text-xl font-semibold">{{ 'gallery.scan_directories.title' | translate }}</h1>
+                <p class="m-0 mt-1 text-sm opacity-70">{{ 'gallery.scan_directories.subtitle' | translate }}</p>
+              </div>
+              <button mat-button (click)="reloadScanDirectories()" [disabled]="store.scanDirectoriesLoading()">
+                <mat-icon>refresh</mat-icon>
+                {{ 'scan.refresh' | translate }}
+              </button>
+            </div>
+
+            @if (store.scanDirectoriesLoading()) {
+              <div class="flex justify-center py-10">
+                <mat-spinner diameter="40" />
+              </div>
+            } @else if (store.scanDirectories().length) {
+              <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                @for (directory of store.scanDirectories(); track directory.path) {
+                  <button
+                    type="button"
+                    class="group overflow-hidden rounded-md border border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] text-left hover:bg-[var(--mat-sys-surface-container-high)] focus:outline-none focus:ring-2 focus:ring-[var(--mat-sys-primary)]"
+                    (click)="openScanDirectory(directory.path)"
+                  >
+                    <div class="aspect-[16/9] bg-black/10 overflow-hidden">
+                      @if (directory.cover_photo_path) {
+                        <img
+                          class="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                          [src]="thumbnailUrl(directory.cover_photo_path, 640)"
+                          [alt]="directory.name"
+                          loading="lazy"
+                        />
+                      } @else {
+                        <div class="h-full flex items-center justify-center opacity-50">
+                          <mat-icon class="!text-5xl !w-14 !h-14">folder</mat-icon>
+                        </div>
+                      }
+                    </div>
+                    <div class="px-3 py-3">
+                      <div class="flex items-center gap-2">
+                        <mat-icon class="opacity-70">folder</mat-icon>
+                        <div class="min-w-0 flex-1">
+                          <div class="truncate text-sm font-medium" [matTooltip]="directory.path">{{ directory.name }}</div>
+                          <div class="truncate text-xs opacity-60" [matTooltip]="directory.path">{{ directory.path }}</div>
+                        </div>
+                      </div>
+                      <div class="mt-2 text-xs opacity-70">{{ 'gallery.photo_count' | translate:{ count: directory.photo_count } }}</div>
+                    </div>
+                  </button>
+                }
+              </div>
+            } @else {
+              <div class="flex flex-col items-center justify-center gap-3 rounded-md border border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] px-4 py-12 text-center opacity-70">
+                <mat-icon class="!text-5xl !w-14 !h-14">folder_off</mat-icon>
+                <p class="m-0">{{ 'gallery.scan_directories.empty' | translate }}</p>
+              </div>
+            }
+          </section>
+        } @else {
+        @if (selectedScanDirectoryPath()) {
+          <div class="mx-2 md:mx-4 mt-2 md:mt-4 px-3 py-2 rounded-md bg-[var(--mat-sys-surface-container)] border border-[var(--mat-sys-outline-variant)] flex items-center gap-2 text-sm">
+            <button mat-icon-button class="!w-9 !h-9" (click)="backToScanDirectories()" [matTooltip]="'gallery.scan_directories.back' | translate">
+              <mat-icon>arrow_back</mat-icon>
+            </button>
+            <mat-icon class="opacity-70">folder</mat-icon>
+            <div class="min-w-0 flex-1">
+              <div class="font-medium truncate">{{ selectedScanDirectory()?.name || selectedScanDirectoryPath() }}</div>
+              <div class="text-xs opacity-60 truncate" [matTooltip]="selectedScanDirectoryPath()">{{ selectedScanDirectoryPath() }}</div>
+            </div>
+          </div>
+        }
+
         <!-- Hidden-photos banner -->
         @if (showHiddenBanner()) {
           <div class="mx-2 md:mx-4 mt-2 md:mt-4 px-3 py-2 rounded-md bg-[var(--mat-sys-surface-container-high)] border border-[var(--mat-sys-outline-variant)] flex items-center gap-3 text-sm">
@@ -264,6 +337,7 @@ import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll
 
         <!-- Infinite scroll sentinel -->
         <div appInfiniteScroll (scrollReached)="onScrollReached()" class="h-1"></div>
+        }
       </mat-sidenav-content>
     </mat-sidenav-container>
 
@@ -404,6 +478,15 @@ export class GalleryComponent implements OnInit, OnDestroy {
   // Selection state lives in the store (survives navigation, visible to services)
   protected readonly selectedPaths = this.store.selectedPaths;
   protected readonly selectionCount = this.store.selectionCount;
+  protected readonly selectedScanDirectoryPath = computed(() => this.store.filters().path_prefix);
+  protected readonly selectedScanDirectory = computed(() =>
+    this.store.scanDirectories().find(d => d.path === this.selectedScanDirectoryPath()) ?? null,
+  );
+  protected readonly showScanDirectoryPicker = computed(() =>
+    !this.route.snapshot.paramMap.get('albumId')
+    && !this.store.currentAlbum()
+    && !this.store.filters().path_prefix,
+  );
 
   /** True when every loaded photo is already selected. */
   protected readonly allLoadedSelected = computed(() =>
@@ -606,7 +689,10 @@ export class GalleryComponent implements OnInit, OnDestroy {
       }
     }
     await Promise.all([this.store.loadFilterOptions(), this.store.loadTypeCounts()]);
-    await this.store.loadPhotos();
+    await this.store.loadScanDirectories();
+    if (!this.showScanDirectoryPicker()) {
+      await this.store.loadPhotos();
+    }
     this.store.initializing.set(false);
     // IntersectionObserver fires too early before DOM paint — defer recheck
     requestAnimationFrame(() => setTimeout(() => this.scrollDirective()?.recheck()));
@@ -676,6 +762,22 @@ export class GalleryComponent implements OnInit, OnDestroy {
 
   protected selectAll(): void {
     this.store.selectAllLoaded();
+  }
+
+  protected thumbnailUrl(path: string, size: number): string {
+    return this.api.thumbnailUrl(path, size);
+  }
+
+  protected reloadScanDirectories(): void {
+    void this.store.loadScanDirectories();
+  }
+
+  protected openScanDirectory(path: string): void {
+    void this.store.selectScanDirectory(path);
+  }
+
+  protected backToScanDirectories(): void {
+    void this.store.clearScanDirectory();
   }
 
   protected shortcutTooltip(labelKey: string, shortcut: string): string {

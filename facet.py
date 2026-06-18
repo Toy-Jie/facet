@@ -1419,7 +1419,7 @@ Configuration:
     init_global_plugin_manager(config=scorer.config.config)
 
     # 1. Gather files recursively from subfolders (or single files)
-    valid_suffixes = {'.jpg', '.jpeg'} | HEIF_EXTENSIONS | RAW_EXTENSIONS
+    valid_suffixes = {'.jpg', '.jpeg', '.png'} | HEIF_EXTENSIONS | RAW_EXTENSIONS
     all_files = []
 
     # Get scanning settings

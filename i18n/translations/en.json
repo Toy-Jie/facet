@@ -1054,6 +1054,12 @@
     "photo_grid": "Photo grid",
     "active_filters": "{count} active filters",
     "unknown_person": "Unknown",
+    "scan_directories": {
+      "title": "Scan Folders",
+      "subtitle": "Choose a scanned photo folder to view only photos from that folder.",
+      "empty": "No scanned photo folders found.",
+      "back": "Back to folders"
+    },
     "selection": {
       "count": "{count} selected",
       "clear": "Clear",

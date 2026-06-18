@@ -17,7 +17,7 @@ import time
 logger = logging.getLogger("facet.watcher")
 
 WATCH_SUFFIXES = {
-    '.jpg', '.jpeg', '.heic', '.heif',
+    '.jpg', '.jpeg', '.png', '.heic', '.heif',
     '.cr2', '.cr3', '.nef', '.arw', '.raf', '.rw2', '.dng', '.orf', '.srw', '.pef',
 }
 

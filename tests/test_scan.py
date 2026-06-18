@@ -36,6 +36,7 @@ class TestStartScan:
         with (
             mock.patch(f"{_AUTH_MODULE}.VIEWER_CONFIG", viewer_cfg),
             mock.patch(f"{_AUTH_MODULE}.is_multi_user_enabled", return_value=True),
+            mock.patch(f"{_ROUTER_MODULE}.is_multi_user_enabled", return_value=True),
         ):
             app = create_app()
             client = TestClient(app, raise_server_exceptions=False)
