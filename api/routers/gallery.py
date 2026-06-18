@@ -65,6 +65,22 @@ def _scan_dir_like_param(path: str) -> str:
     return escaped + '%'
 
 
+def _project_path_for_photo(scan_root: str, photo_path: str) -> str:
+    """Return the project folder for a photo under a configured scan root.
+
+    A scan root's immediate child folders are treated as separate projects. If
+    the photo is directly inside the scan root, the root itself is the project.
+    """
+    root = _normalize_path(scan_root).rstrip('/')
+    normalized_photo = _normalize_path(photo_path)
+    root_prefix = root + '/'
+    if not normalized_photo.startswith(root_prefix):
+        return root
+    relative = normalized_photo[len(root_prefix):]
+    child = relative.split('/', 1)[0]
+    return f"{root}/{child}" if '/' in relative and child else root
+
+
 def _apply_search_filter(where_clauses, sql_params, term: str, conn):
     """Apply the gallery free-text search filter.
 
@@ -252,7 +268,7 @@ async def api_gallery_scan_directories(
     hide_duplicates: str = Query('0'),
     user: Optional[CurrentUser] = Depends(get_optional_user),
 ):
-    """List configured scan roots with visible photo counts and cover photos."""
+    """List project folders under configured scan roots with counts and covers."""
     scan_dirs = get_all_scan_directories()
     user_id = user.user_id if user else None
     if not scan_dirs:
@@ -265,7 +281,7 @@ async def api_gallery_scan_directories(
             hide_clauses = build_hide_clauses(hide_blinks, hide_bursts, hide_duplicates)
             base_where = [vis_sql, *hide_clauses]
 
-            directories = []
+            directories_by_path: dict[str, dict] = {}
             for directory in scan_dirs:
                 where_clauses = [
                     *base_where,
@@ -273,35 +289,36 @@ async def api_gallery_scan_directories(
                 ]
                 params = list(from_params) + list(vis_params) + [_scan_dir_like_param(directory)]
                 where_str = " WHERE " + " AND ".join(where_clauses)
-                count_cur = await conn.execute(
-                    f"SELECT COUNT(*) AS photo_count FROM {from_clause}{where_str}",
-                    params,
-                )
-                count_row = await count_cur.fetchone()
-                await count_cur.close()
-
-                cover_cur = await conn.execute(
+                cur = await conn.execute(
                     f"""
-                    SELECT photos.path
+                    SELECT photos.path, COALESCE(photos.aggregate, 0) AS aggregate
                     FROM {from_clause}{where_str}
                     ORDER BY COALESCE(photos.aggregate, 0) DESC, photos.path ASC
-                    LIMIT 1
                     """,
                     params,
                 )
-                cover_row = await cover_cur.fetchone()
-                await cover_cur.close()
-                photo_count = int(count_row['photo_count'] or 0) if count_row else 0
-                directories.append({
-                    'path': directory,
-                    'name': directory.rstrip('/').split('/')[-1] or directory,
-                    'photo_count': photo_count,
-                    'cover_photo_path': cover_row['path'] if cover_row else None,
-                })
+                rows = await cur.fetchall()
+                await cur.close()
+                for row in rows:
+                    project_path = _project_path_for_photo(directory, row['path'])
+                    item = directories_by_path.setdefault(project_path, {
+                        'path': project_path,
+                        'name': project_path.rstrip('/').split('/')[-1] or project_path,
+                        'photo_count': 0,
+                        'cover_photo_path': row['path'],
+                        '_cover_score': row['aggregate'] or 0,
+                    })
+                    item['photo_count'] += 1
+                    score = row['aggregate'] or 0
+                    if score > item['_cover_score']:
+                        item['cover_photo_path'] = row['path']
+                        item['_cover_score'] = score
 
             return {
                 'directories': [
-                    d for d in directories if d['photo_count'] > 0
+                    {k: v for k, v in d.items() if not k.startswith('_')}
+                    for d in sorted(directories_by_path.values(), key=lambda item: item['path'].lower())
+                    if d['photo_count'] > 0
                 ],
             }
     except sqlite3.Error:

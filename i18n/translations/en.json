@@ -1055,10 +1055,10 @@
     "active_filters": "{count} active filters",
     "unknown_person": "Unknown",
     "scan_directories": {
-      "title": "Scan Folders",
-      "subtitle": "Choose a scanned photo folder to view only photos from that folder.",
-      "empty": "No scanned photo folders found.",
-      "back": "Back to folders"
+      "title": "Project Folders",
+      "subtitle": "Choose a project folder under your scan directories to view only that project.",
+      "empty": "No scanned project folders found.",
+      "back": "Back to project folders"
     },
     "selection": {
       "count": "{count} selected",

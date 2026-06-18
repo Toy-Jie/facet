@@ -498,10 +498,10 @@
     "active_filters": "{count} 个生效筛选",
     "unknown_person": "未知",
     "scan_directories": {
-      "title": "扫描文件夹",
-      "subtitle": "选择一个已扫描的图片文件夹，只查看该文件夹中的照片。",
-      "empty": "没有找到已扫描照片的文件夹。",
-      "back": "返回文件夹"
+      "title": "项目文件夹",
+      "subtitle": "选择扫描目录下的项目文件夹，只查看该项目中的照片。",
+      "empty": "没有找到已扫描照片的项目文件夹。",
+      "back": "返回项目文件夹"
     },
     "selection": {
       "count": "已选 {count} 项",

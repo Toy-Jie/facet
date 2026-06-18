@@ -309,7 +309,7 @@ class TestGalleryTypeCountsEndpoint:
 
 
 class TestGalleryScanDirectoriesEndpoint:
-    """GET /api/gallery/scan_directories — configured scan root summaries."""
+    """GET /api/gallery/scan_directories — project folder summaries."""
 
     def test_scan_directories_returns_counts_and_covers(self, tmp_path):
         db_path = str(tmp_path / "test.db")
@@ -334,6 +334,31 @@ class TestGalleryScanDirectoriesEndpoint:
         assert directories[0]["photo_count"] == 2
         assert directories[0]["cover_photo_path"] == f"{root_a}/best.png"
         assert directories[1]["photo_count"] == 1
+
+    def test_scan_directories_groups_immediate_child_folders_as_projects(self, tmp_path):
+        db_path = str(tmp_path / "test.db")
+        root = str(tmp_path / "library")
+        project_a = f"{root}/wedding_a"
+        project_b = f"{root}/portrait_b"
+        _make_db(db_path, [
+            _photo(f"{project_a}/001.jpg", "2024:01:01 10:00:00", aggregate=7.0),
+            _photo(f"{project_a}/nested/002.png", "2024:01:01 10:00:00", aggregate=9.0),
+            _photo(f"{project_b}/001.jpg", "2024:01:01 10:00:00", aggregate=6.0),
+        ])
+        app = _create_app_no_auth()
+        with (
+            mock.patch("api.routers.gallery.get_async_db", _async_conn_factory(db_path)),
+            mock.patch("api.routers.gallery.get_all_scan_directories", return_value=[root]),
+        ):
+            resp = TestClient(app).get("/api/gallery/scan_directories")
+
+        assert resp.status_code == 200
+        directories = resp.json()["directories"]
+        assert [d["path"] for d in directories] == [project_b, project_a]
+        by_path = {d["path"]: d for d in directories}
+        assert by_path[project_a]["photo_count"] == 2
+        assert by_path[project_a]["cover_photo_path"] == f"{project_a}/nested/002.png"
+        assert by_path[project_b]["photo_count"] == 1
 
 
 # ---------------------------------------------------------------------------
