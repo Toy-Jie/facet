@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -66,7 +66,7 @@ interface PreviewResponse {
   mask_provider: string;
 }
 
-interface ApplyResponse {
+export interface ApplyResponse {
   output_path: string;
   thumbnail_url: string;
 }
@@ -103,14 +103,16 @@ const DEFAULT_PARAMS: RetouchParams = {
     TranslatePipe,
   ],
   template: `
-    <h2 mat-dialog-title class="!flex items-center gap-2">
-      <mat-icon class="shrink-0">auto_fix_high</mat-icon>
-      <span class="truncate">{{ 'retouch.title' | translate }} · {{ data.filename }}</span>
-    </h2>
+    @if (!embedded()) {
+      <h2 mat-dialog-title class="!flex items-center gap-2">
+        <mat-icon class="shrink-0">auto_fix_high</mat-icon>
+        <span class="truncate">{{ 'retouch.title' | translate }} · {{ activeFilename() }}</span>
+      </h2>
+    }
 
-    <mat-dialog-content class="!p-0">
-      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]">
-        <div class="relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]">
+    <div [class]="embedded() ? 'retouch-panel' : 'retouch-dialog'">
+      <div [class]="embedded() ? 'grid grid-cols-1 min-h-0' : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]'">
+        <div [class]="embedded() ? 'relative flex items-center justify-center bg-black overflow-hidden min-h-56 max-h-80' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]'">
           @if (loadingPreview()) {
             <div class="absolute inset-0 z-20 grid place-items-center bg-black/35">
               <mat-spinner diameter="36" />
@@ -120,8 +122,8 @@ const DEFAULT_PARAMS: RetouchParams = {
             <img
               #previewImage
               [src]="previewSrc()"
-              [alt]="data.filename"
-              class="block max-w-full max-h-[72vh] object-contain select-none"
+              [alt]="activeFilename()"
+              [class]="embedded() ? 'block max-w-full max-h-80 object-contain select-none' : 'block max-w-full max-h-[72vh] object-contain select-none'"
               draggable="false"
               [class.cursor-crosshair]="inpaintMode()"
             />
@@ -164,7 +166,7 @@ const DEFAULT_PARAMS: RetouchParams = {
           </div>
         </div>
 
-        <div class="overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
+        <div [class]="embedded() ? 'overflow-y-auto bg-[var(--mat-sys-surface)]' : 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]'">
           <div class="p-4 flex items-center gap-2 border-b border-[var(--mat-sys-outline-variant)]">
             <button mat-icon-button (click)="undo()" [disabled]="!canUndo()" [matTooltip]="'retouch.undo' | translate">
               <mat-icon>undo</mat-icon>
@@ -264,15 +266,17 @@ const DEFAULT_PARAMS: RetouchParams = {
           </mat-tab-group>
         </div>
       </div>
-    </mat-dialog-content>
+    </div>
 
-    <mat-dialog-actions align="end">
-      <span class="mr-auto text-xs text-[var(--mat-sys-on-surface-variant)]">{{ statusText() }}</span>
-      <button mat-button mat-dialog-close>{{ 'ui.buttons.cancel' | translate }}</button>
-      <button mat-flat-button color="primary" (click)="saveCopy()" [disabled]="saving()">
-        {{ 'retouch.save_copy' | translate }}
-      </button>
-    </mat-dialog-actions>
+    @if (!embedded()) {
+      <mat-dialog-actions align="end">
+        <span class="mr-auto text-xs text-[var(--mat-sys-on-surface-variant)]">{{ statusText() }}</span>
+        <button mat-button mat-dialog-close>{{ 'ui.buttons.cancel' | translate }}</button>
+        <button mat-flat-button color="primary" (click)="saveCopy()" [disabled]="saving()">
+          {{ 'retouch.save_copy' | translate }}
+        </button>
+      </mat-dialog-actions>
+    }
 
     <ng-template #sliderTpl let-key="key" let-label="label" let-min="min" let-max="max">
       <div>
@@ -287,6 +291,16 @@ const DEFAULT_PARAMS: RetouchParams = {
     </ng-template>
   `,
   styles: [`
+    :host {
+      display: block;
+    }
+    .retouch-panel {
+      display: block;
+      min-height: 0;
+    }
+    .retouch-dialog {
+      display: block;
+    }
     .crop-box {
       position: absolute;
       z-index: 10;
@@ -355,8 +369,16 @@ export class RetouchDialogComponent {
   private readonly api = inject(ApiService);
   private readonly i18n = inject(I18nService);
   private readonly snackBar = inject(MatSnackBar);
-  private readonly dialogRef = inject(MatDialogRef<RetouchDialogComponent>);
-  readonly data: RetouchDialogData = inject(MAT_DIALOG_DATA);
+  private readonly dialogRef = inject(MatDialogRef<RetouchDialogComponent>, { optional: true });
+  private readonly dialogData = inject<RetouchDialogData | null>(MAT_DIALOG_DATA, { optional: true });
+
+  readonly embedded = input(false);
+  readonly imagePath = input<string | null>(null);
+  readonly filename = input('');
+  readonly saved = output<ApplyResponse>();
+  readonly cancelled = output<void>();
+  readonly activePath = computed(() => this.imagePath() || this.dialogData?.path || '');
+  readonly activeFilename = computed(() => this.filename() || this.dialogData?.filename || '');
 
   readonly previewImage = viewChild<ElementRef<HTMLImageElement>>('previewImage');
   readonly params = signal<RetouchParams>({ ...DEFAULT_PARAMS });
@@ -373,14 +395,27 @@ export class RetouchDialogComponent {
   private redoStack: RetouchParams[] = [];
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
   private cropDrag: CropDragState | null = null;
+  private currentPath = '';
 
   readonly canUndo = computed(() => this.undoStack.length > 0);
   readonly canRedo = computed(() => this.redoStack.length > 0);
   readonly cropEnabled = computed(() => !!this.params().crop);
 
   constructor() {
-    this.previewSrc.set(this.api.thumbnailUrl(this.data.path, 1920));
     this.statusText.set(this.i18n.t('retouch.preview_original'));
+    effect(() => {
+      const path = this.activePath();
+      if (!path || path === this.currentPath) return;
+      this.currentPath = path;
+      this.params.set({ ...DEFAULT_PARAMS });
+      this.spots.set([]);
+      this.undoStack = [];
+      this.redoStack = [];
+      this.previewWidth.set(0);
+      this.previewHeight.set(0);
+      this.previewSrc.set(this.api.thumbnailUrl(path, 1920));
+      this.statusText.set(this.i18n.t('retouch.preview_original'));
+    });
   }
 
   paramValue(key: keyof RetouchParams): number {
@@ -480,18 +515,21 @@ export class RetouchDialogComponent {
     this.pushHistory();
     this.params.set({ ...DEFAULT_PARAMS });
     this.spots.set([]);
-    this.previewSrc.set(this.api.thumbnailUrl(this.data.path, 1920));
+    this.previewSrc.set(this.api.thumbnailUrl(this.activePath(), 1920));
     this.statusText.set(this.i18n.t('retouch.preview_original'));
   }
 
   async saveCopy(): Promise<void> {
+    const path = this.activePath();
+    if (!path) return;
     this.saving.set(true);
     try {
       const res = await firstValueFrom(this.api.post<ApplyResponse>('/retouch/apply', {
-        image_path: this.data.path,
+        image_path: path,
         params: this.paramsWithMask(),
       }));
-      this.dialogRef.close(res);
+      this.saved.emit(res);
+      this.dialogRef?.close(res);
     } catch {
       this.snackBar.open(this.i18n.t('retouch.save_error'), '', { duration: 3500 });
     } finally {
@@ -518,7 +556,7 @@ export class RetouchDialogComponent {
     this.loadingPreview.set(true);
     try {
       const res = await firstValueFrom(this.api.post<PreviewResponse>('/retouch/preview', {
-        image_path: this.data.path,
+        image_path: this.activePath(),
         params: this.paramsWithMask({ includeCrop: false }),
         max_size: 1280,
       }));

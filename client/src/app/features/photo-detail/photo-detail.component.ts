@@ -25,6 +25,7 @@ import { HistogramComponent } from '../../shared/components/histogram/histogram.
 import { DownloadOption } from '../../shared/models/download.model';
 import { downloadAll } from '../../shared/utils/download';
 import { GalleryStore } from '../gallery/gallery.store';
+import { ApplyResponse, RetouchDialogComponent } from './retouch-dialog.component';
 import * as L from 'leaflet';
 import { createLeafletMap } from '../../shared/leaflet';
 
@@ -47,6 +48,7 @@ import { createLeafletMap } from '../../shared/leaflet';
     IsLensNamePipe,
     DownloadIconPipe,
     HistogramComponent,
+    RetouchDialogComponent,
   ],
   template: `
     @if (photo(); as p) {
@@ -90,7 +92,7 @@ import { createLeafletMap } from '../../shared/leaflet';
         }
 
         @if (auth.isEdition()) {
-          <button mat-button (click)="openRetouch(p)" [matTooltip]="'retouch.open' | translate">
+          <button mat-button (click)="showRetouchPanel()" [matTooltip]="'retouch.open' | translate">
             <mat-icon>auto_fix_high</mat-icon>
             {{ 'retouch.short_title' | translate }}
           </button>
@@ -150,8 +152,44 @@ import { createLeafletMap } from '../../shared/leaflet';
           />
         </div>
 
-        <!-- Info panel -->
-        <div class="lg:w-[380px] lg:shrink-0 lg:overflow-y-auto p-4 space-y-4 text-sm text-[var(--mat-sys-on-surface)]">
+        <!-- Side panel -->
+        <div class="lg:w-[420px] lg:shrink-0 lg:overflow-y-auto text-sm text-[var(--mat-sys-on-surface)] border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
+          <div class="sticky top-0 z-10 bg-[var(--mat-sys-surface)] border-b border-[var(--mat-sys-outline-variant)] p-3">
+            <div class="grid grid-cols-2 gap-1 rounded-lg bg-[var(--mat-sys-surface-container)] p-1">
+              <button
+                type="button"
+                class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors"
+                [class.bg-[var(--mat-sys-primary-container)]]="sidePanelMode() === 'details'"
+                [class.text-[var(--mat-sys-on-primary-container)]]="sidePanelMode() === 'details'"
+                (click)="sidePanelMode.set('details')"
+              >
+                <mat-icon class="!text-base !w-4 !h-4">info</mat-icon>
+                {{ 'photo_detail.details_panel' | translate }}
+              </button>
+              @if (auth.isEdition()) {
+                <button
+                  type="button"
+                  class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors"
+                  [class.bg-[var(--mat-sys-primary-container)]]="sidePanelMode() === 'retouch'"
+                  [class.text-[var(--mat-sys-on-primary-container)]]="sidePanelMode() === 'retouch'"
+                  (click)="sidePanelMode.set('retouch')"
+                >
+                  <mat-icon class="!text-base !w-4 !h-4">auto_fix_high</mat-icon>
+                  {{ 'retouch.short_title' | translate }}
+                </button>
+              }
+            </div>
+          </div>
+
+          @if (sidePanelMode() === 'retouch' && auth.isEdition()) {
+            <app-retouch-dialog
+              [embedded]="true"
+              [imagePath]="p.path"
+              [filename]="p.filename"
+              (saved)="onRetouchSaved($event)"
+            />
+          } @else {
+          <div class="p-4 space-y-4">
           <!-- Filename + Date + Category + Aggregate -->
           <div>
             <div class="font-semibold text-lg">{{ p.filename }}</div>
@@ -427,6 +465,8 @@ import { createLeafletMap } from '../../shared/leaflet';
               </div>
             </div>
           }
+          </div>
+          }
         </div>
       </div>
     } @else {
@@ -452,6 +492,7 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
   protected readonly downloading = signal(false);
   protected readonly downloadOptions = signal<DownloadOption[]>([]);
   protected readonly generatingCaption = signal(false);
+  protected readonly sidePanelMode = signal<'details' | 'retouch'>('details');
   protected readonly stars: readonly number[] = [1, 2, 3, 4, 5];
 
   // Zoom & pan state
@@ -559,19 +600,7 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
       // Fallback: load from API using query param
       const path = this.route.snapshot.queryParamMap.get('path');
       if (path) {
-        try {
-          const photo = await firstValueFrom(this.api.get<Photo>('/photo', { path }));
-          // Ensure tags_list exists
-          if (!photo.tags_list) {
-            photo.tags_list = photo.tags ? photo.tags.split(',').map(t => t.trim()) : [];
-          }
-          if (!photo.persons) {
-            photo.persons = [];
-          }
-          this.photo.set(photo);
-        } catch {
-          this.router.navigate(['/']);
-        }
+        await this.loadPhotoByPath(path);
       } else {
         this.router.navigate(['/']);
       }
@@ -609,6 +638,7 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     });
     this.photo.set(next);
     this.fullImageLoaded.set(false);
+    this.sidePanelMode.set('details');
   }
 
   protected async download(path: string, type = 'original', profile?: string): Promise<void> {
@@ -698,20 +728,32 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     });
   }
 
-  protected openRetouch(photo: Photo): void {
-    import('./retouch-dialog.component').then(m => {
-      const ref = this.dialog.open(m.RetouchDialogComponent, {
-        width: '96vw',
-        maxWidth: '1280px',
-        maxHeight: '92vh',
-        data: { path: photo.path, filename: photo.filename },
-      });
-      ref.afterClosed().subscribe((result: { output_path: string } | undefined) => {
-        if (!result?.output_path) return;
-        this.snackBar.open(this.i18n.t('retouch.saved_copy'), '', { duration: 3000 });
-        this.router.navigate(['/photo'], { queryParams: { path: result.output_path } });
-      });
-    });
+  protected showRetouchPanel(): void {
+    this.sidePanelMode.set('retouch');
+  }
+
+  protected async onRetouchSaved(result: ApplyResponse): Promise<void> {
+    if (!result?.output_path) return;
+    this.snackBar.open(this.i18n.t('retouch.saved_copy'), '', { duration: 3000 });
+    await this.router.navigate(['/photo'], { queryParams: { path: result.output_path } });
+    await this.loadPhotoByPath(result.output_path);
+    this.sidePanelMode.set('details');
+  }
+
+  private async loadPhotoByPath(path: string): Promise<void> {
+    try {
+      const photo = await firstValueFrom(this.api.get<Photo>('/photo', { path }));
+      if (!photo.tags_list) {
+        photo.tags_list = photo.tags ? photo.tags.split(',').map(t => t.trim()) : [];
+      }
+      if (!photo.persons) {
+        photo.persons = [];
+      }
+      this.photo.set(photo);
+      this.fullImageLoaded.set(false);
+    } catch {
+      this.router.navigate(['/']);
+    }
   }
 
   protected editGps(p: Photo): void {

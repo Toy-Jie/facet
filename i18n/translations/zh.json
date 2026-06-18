@@ -1565,6 +1565,7 @@
   },
   "photo_detail": {
     "back": "返回",
+    "details_panel": "详情",
     "download": "下载",
     "downloading": "正在下载...",
     "edit_location": "编辑位置",

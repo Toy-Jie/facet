@@ -1831,6 +1831,7 @@
   },
   "photo_detail": {
     "back": "Back",
+    "details_panel": "Details",
     "download": "Download",
     "downloading": "Downloading…",
     "edit_location": "Edit location",
