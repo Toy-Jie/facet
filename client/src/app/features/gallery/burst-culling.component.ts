@@ -99,8 +99,7 @@ interface CullingGroupsResponse {
                        [attr.aria-label]="photo.filename"
                        (click)="toggleSelection(photo.path, group)"
                        (keydown.enter)="toggleSelection(photo.path, group)"
-                       (keydown.space)="toggleSelection(photo.path, group); $event.preventDefault()"
-                       (dblclick)="selectExclusive(photo.path, group); $event.stopPropagation()">
+                       (keydown.space)="toggleSelection(photo.path, group); $event.preventDefault()">
                     <img [src]="photo.path | imageUrl"
                          class="h-72 md:h-96 w-auto object-contain" [alt]="photo.filename" loading="lazy" />
                     @if (photo.path === group.best_path) {
@@ -636,10 +635,6 @@ export class BurstCullingComponent implements OnDestroy {
     }
     map.set(key, kept);
     this.selectionsMap.set(map);
-  }
-
-  protected selectExclusive(path: string, group: CullingGroup): void {
-    this.updateMapSignal(this.selectionsMap, this.groupKey(group), new Set([path]));
   }
 
   protected async confirmGroup(group: CullingGroup): Promise<void> {

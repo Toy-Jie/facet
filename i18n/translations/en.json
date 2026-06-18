@@ -1598,7 +1598,7 @@
     "burst_help": "Photos taken in rapid succession are grouped together. Click photos to keep them (green border), unselected photos (red border) will be hidden. The best photo is auto-selected based on sharpness and quality.",
     "similar_help": "Visually similar photos across your library are grouped using AI embeddings. Review each group, keep the best shots, and discard near-duplicates. Adjust the threshold slider to control how similar photos must be to form a group.",
     "help": "Help",
-    "help_text": "Review groups of similar or burst photos. Click to select, double-click to select exclusively. Confirmed groups hide rejected photos from the gallery.",
+    "help_text": "Review groups of similar or burst photos. Click a photo to toggle keep/reject. Confirmed groups hide rejected photos from the gallery.",
     "type_burst": "Burst",
     "type_similar": "Similar",
     "confirm_all": "Confirm All",

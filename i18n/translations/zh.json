@@ -1418,7 +1418,7 @@
     "similar_groups": "相似分组",
     "similarity_threshold": "相似度阈值",
     "help": "帮助",
-    "help_text": "查看相似或连拍照片分组。点击选择，双击仅选择该张。确认后的分组会在图库中隐藏淘汰照片。",
+    "help_text": "查看相似或连拍照片分组。点击照片可切换保留/淘汰状态。确认后的分组会在图库中隐藏淘汰照片。",
     "type_burst": "连拍",
     "type_similar": "相似",
     "confirm_all": "全部确认",
