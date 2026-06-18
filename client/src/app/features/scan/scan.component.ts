@@ -194,7 +194,7 @@ export class ScanComponent implements OnInit {
   }
 
   protected async refresh(): Promise<void> {
-    if (!this.auth.isSuperadmin()) return;
+    if (!this.canScan()) return;
     this.loading.set(true);
     this.loadError.set(false);
     try {
