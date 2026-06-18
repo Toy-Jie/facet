@@ -89,6 +89,13 @@ import { createLeafletMap } from '../../shared/leaflet';
           </button>
         }
 
+        @if (auth.isEdition()) {
+          <button mat-button (click)="openRetouch(p)" [matTooltip]="'retouch.open' | translate">
+            <mat-icon>auto_fix_high</mat-icon>
+            {{ 'retouch.short_title' | translate }}
+          </button>
+        }
+
         @if (downloadOptions().length > 1) {
           <button mat-button [matMenuTriggerFor]="downloadMenu" [disabled]="downloading()" [matTooltip]="'photo_detail.download' | translate">
             @if (downloading()) { <mat-spinner diameter="18" class="!inline-block !align-baseline" /> } @else { <mat-icon>download</mat-icon> }
@@ -688,6 +695,22 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
   protected openAddPerson(photo: Photo): void {
     this.photoActions.openAddPerson(photo, () => {
       this.photo.update(p => p ? { ...p, unassigned_faces: Math.max(0, p.unassigned_faces - 1) } : p);
+    });
+  }
+
+  protected openRetouch(photo: Photo): void {
+    import('./retouch-dialog.component').then(m => {
+      const ref = this.dialog.open(m.RetouchDialogComponent, {
+        width: '96vw',
+        maxWidth: '1280px',
+        maxHeight: '92vh',
+        data: { path: photo.path, filename: photo.filename },
+      });
+      ref.afterClosed().subscribe((result: { output_path: string } | undefined) => {
+        if (!result?.output_path) return;
+        this.snackBar.open(this.i18n.t('retouch.saved_copy'), '', { duration: 3000 });
+        this.router.navigate(['/photo'], { queryParams: { path: result.output_path } });
+      });
     });
   }
 

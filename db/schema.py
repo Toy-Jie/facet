@@ -322,6 +322,23 @@ SCAN_RUNS_INDEXES = [
     ('idx_scan_failures_run', 'scan_failures', 'scan_run_id'),
 ]
 
+# Non-destructive portrait retouch history. Retouch outputs are saved as new
+# image files and then inserted into photos; this table keeps the provenance.
+RETOUCH_EDITS_COLUMNS = [
+    ('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+    ('original_path', 'TEXT NOT NULL REFERENCES photos(path) ON DELETE CASCADE'),
+    ('output_path', 'TEXT NOT NULL REFERENCES photos(path) ON DELETE CASCADE'),
+    ('params_json', 'TEXT NOT NULL'),
+    ('created_at', "TEXT DEFAULT (datetime('now'))"),
+    ('exif_strategy', 'TEXT'),
+]
+
+RETOUCH_EDITS_INDEXES = [
+    ('idx_retouch_original', 'retouch_edits', 'original_path'),
+    ('idx_retouch_output', 'retouch_edits', 'output_path'),
+    ('idx_retouch_created', 'retouch_edits', 'created_at DESC'),
+]
+
 # Stats cache table for precomputed aggregations (performance optimization)
 STATS_CACHE_COLUMNS = [
     ('key', 'TEXT PRIMARY KEY'),
@@ -646,6 +663,14 @@ def init_database(db_path='photo_scores_pro.db'):
             constraints=['PRIMARY KEY (scan_run_id, path)']
         ))
         for idx_name, table, column_expr in SCAN_RUNS_INDEXES:
+            conn.execute(
+                f'CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({column_expr})'
+            )
+
+        # Create retouch history table
+        conn.execute(_build_create_table_sql('retouch_edits', RETOUCH_EDITS_COLUMNS))
+        _migrate_add_missing_columns(conn, 'retouch_edits', RETOUCH_EDITS_COLUMNS)
+        for idx_name, table, column_expr in RETOUCH_EDITS_INDEXES:
             conn.execute(
                 f'CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({column_expr})'
             )
