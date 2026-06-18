@@ -10,7 +10,7 @@ import { MatSliderModule } from '@angular/material/slider';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { ApiService } from '../../core/services/api.service';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
-import { ThumbnailUrlPipe } from '../../shared/pipes/thumbnail-url.pipe';
+import { ImageUrlPipe } from '../../shared/pipes/thumbnail-url.pipe';
 import { I18nService } from '../../core/services/i18n.service';
 import { UndoService } from '../../core/services/undo.service';
 import { InfiniteScrollDirective } from '../../shared/directives/infinite-scroll.directive';
@@ -40,7 +40,7 @@ interface CullingGroupsResponse {
     MatSliderModule,
     MatCheckboxModule,
     TranslatePipe,
-    ThumbnailUrlPipe,
+    ImageUrlPipe,
     IsKeptPipe,
     IsDecidedPipe,
     IsConfirmedPipe,
@@ -106,7 +106,7 @@ interface CullingGroupsResponse {
                        (keydown.enter)="openLightbox(group, pIdx)"
                        (keydown.space)="openLightbox(group, pIdx); $event.preventDefault()"
                        (dblclick)="selectExclusive(photo.path, group); $event.stopPropagation()">
-                    <img [src]="photo.path | thumbnailUrl:640"
+                    <img [src]="photo.path | imageUrl"
                          class="h-72 md:h-96 w-auto object-contain" [alt]="photo.filename" loading="lazy" />
                     @if (photo.path === group.best_path) {
                       <div class="absolute top-2 left-2 px-2 py-0.5 rounded bg-green-600 text-white text-xs font-bold">
@@ -225,7 +225,7 @@ interface CullingGroupsResponse {
                role="presentation"
                (click)="$event.stopPropagation()"
                (keydown)="$event.stopPropagation()">
-            <img [src]="lbPhoto.path | thumbnailUrl:1920"
+            <img [src]="lbPhoto.path | imageUrl"
                  class="max-h-full max-w-full object-contain"
                  [alt]="lbPhoto.filename" />
           </div>
