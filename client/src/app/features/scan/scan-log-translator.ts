@@ -52,6 +52,10 @@ const RULES_ZH: TranslationRule[] = [
     replace: () => '正在使用默认 SimpleTokenizer。',
   },
   {
+    pattern: /^Warning: You are sending unauthenticated requests to the HF Hub\. Please set a HF_TOKEN to enable higher rate limits and faster downloads\.$/,
+    replace: () => '警告：正在向 Hugging Face Hub 发送未认证请求。请设置 HF_TOKEN，以获得更高请求限额和更快下载速度。',
+  },
+  {
     pattern: /^Using (.+)$/,
     replace: (_, device) => `正在使用 ${device}`,
   },
@@ -233,7 +237,7 @@ const RULES_ZH: TranslationRule[] = [
   },
   {
     pattern: /^Final image preprocessing configuration set: (.+)$/,
-    replace: (_, config) => `最终图像预处理配置：${config}`,
+    replace: (_, config) => `最终图像预处理配置：${translatePreprocessConfig(config)}`,
   },
   {
     pattern: /^Model (.+) creation process complete\.$/,
@@ -252,7 +256,15 @@ const RULES_ZH: TranslationRule[] = [
     replace: () => '异常追踪（最近一次调用）：',
   },
   {
+    pattern: /^File "([^"]+)", line (\d+), in (.+)$/,
+    replace: (_, path, line, fn) => `文件 "${path}"，第 ${line} 行，位于 ${fn}`,
+  },
+  {
     pattern: /^sqlite3\.OperationalError: no such module: vec0$/,
+    replace: () => 'SQLite 操作错误：缺少 vec0 模块',
+  },
+  {
+    pattern: /^SQLite OperationalError: no such module: vec0$/,
     replace: () => 'SQLite 操作错误：缺少 vec0 模块',
   },
   {
@@ -267,6 +279,19 @@ const RULES_ZH: TranslationRule[] = [
 
 function isChinese(locale: Locale): boolean {
   return locale.toLowerCase().startsWith('zh');
+}
+
+function translatePreprocessConfig(config: string): string {
+  return config
+    .replace(/'size'/g, "'尺寸'")
+    .replace(/'mode'/g, "'模式'")
+    .replace(/'mean'/g, "'均值'")
+    .replace(/'std'/g, "'标准差'")
+    .replace(/'interpolation'/g, "'插值'")
+    .replace(/'resize_mode'/g, "'缩放模式'")
+    .replace(/'fill_color'/g, "'填充颜色'")
+    .replace(/'shortest'/g, "'短边优先'")
+    .replace(/'bicubic'/g, "'双三次'");
 }
 
 function translateMessageToChinese(message: string): string {

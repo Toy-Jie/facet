@@ -113,8 +113,33 @@ describe('scan log translator', () => {
     ).toBe('异常追踪（最近一次调用）：');
 
     expect(
+      translateScanLogLine(
+        '  File "/Users/example/facet.py", line 1730, in main',
+        'zh',
+      ),
+    ).toBe('  文件 "/Users/example/facet.py"，第 1730 行，位于 main');
+
+    expect(
       translateScanLogLine('sqlite3.OperationalError: no such module: vec0', 'zh'),
     ).toBe('SQLite 操作错误：缺少 vec0 模块');
+  });
+
+  it('translates HF Hub warning and preprocessing config details', () => {
+    expect(
+      translateScanLogLine(
+        'Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.',
+        'zh',
+      ),
+    ).toBe('警告：正在向 Hugging Face Hub 发送未认证请求。请设置 HF_TOKEN，以获得更高请求限额和更快下载速度。');
+
+    expect(
+      translateScanLogLine(
+        "2026-06-19 06:29:00 INFO  [open_clip] Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}",
+        'zh',
+      ),
+    ).toBe(
+      "2026-06-19 06:29:00 信息：最终图像预处理配置：{'尺寸': (224, 224), '模式': 'RGB', '插值': '双三次', '缩放模式': '短边优先', '填充颜色': 0}",
+    );
   });
 
   it('does not translate English locale output', () => {
