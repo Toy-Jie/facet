@@ -1614,7 +1614,8 @@
       "reject": "Reject",
       "kept": "Kept",
       "rejected": "Rejected",
-      "undecided": "Undecided"
+      "undecided": "Undecided",
+      "zoom_pan": "Wheel zoom / Drag pan"
     }
   },
   "memories": {

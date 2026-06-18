@@ -210,6 +210,7 @@ interface CullingGroupsResponse {
             <span>← → {{ 'culling.lightbox.navigate' | translate }}</span>
             <span>↑ {{ 'culling.lightbox.keep' | translate }}</span>
             <span>↓ {{ 'culling.lightbox.reject' | translate }}</span>
+            <span>{{ 'culling.lightbox.zoom_pan' | translate }}</span>
             <span>Space {{ 'culling.confirm' | translate }}</span>
             <span>Esc {{ 'dialog.cancel' | translate }}</span>
           </div>
@@ -221,12 +222,22 @@ interface CullingGroupsResponse {
         </div>
         <!-- Image -->
         @if (lbGroup.photos[lightboxIndex()]; as lbPhoto) {
-          <div class="flex-1 flex items-center justify-center overflow-hidden"
+          <div class="flex-1 flex items-center justify-center overflow-hidden select-none touch-none"
+               [class.cursor-grab]="lightboxZoomScale() > 1 && !isLightboxPanning()"
+               [class.cursor-grabbing]="isLightboxPanning()"
                role="presentation"
+               (wheel)="onLightboxWheel($event)"
+               (pointerdown)="onLightboxPanStart($event)"
+               (pointermove)="onLightboxPanMove($event)"
+               (pointerup)="onLightboxPanEnd($event)"
+               (pointercancel)="onLightboxPanEnd($event)"
+               (dblclick)="resetLightboxZoom(); $event.stopPropagation()"
                (click)="$event.stopPropagation()"
                (keydown)="$event.stopPropagation()">
             <img [src]="lbPhoto.path | imageUrl"
-                 class="max-h-full max-w-full object-contain"
+                 class="max-h-full max-w-full object-contain pointer-events-none select-none will-change-transform"
+                 [style.transform]="lightboxTransform()"
+                 [style.transition]="isLightboxPanning() ? 'none' : 'transform 120ms ease-out'"
                  [alt]="lbPhoto.filename" />
           </div>
           <!-- Footer status -->
@@ -287,6 +298,10 @@ export class BurstCullingComponent implements OnDestroy {
 
   /** Active timers for passing groups (for cleanup) */
   private readonly passTimers = new Map<string, { timeoutId: ReturnType<typeof setTimeout>; intervalId: ReturnType<typeof setInterval> }>();
+  private lightboxPanStartX = 0;
+  private lightboxPanStartY = 0;
+  private lightboxPanOriginX = 0;
+  private lightboxPanOriginY = 0;
 
   protected readonly currentPage = signal(1);
   protected readonly totalPages = signal(1);
@@ -297,6 +312,16 @@ export class BurstCullingComponent implements OnDestroy {
   /** Lightbox state — group being viewed, and current photo index inside it. */
   protected readonly lightboxGroupId = signal<string | null>(null);
   protected readonly lightboxIndex = signal(0);
+  protected readonly lightboxZoomScale = signal(1);
+  protected readonly lightboxPanX = signal(0);
+  protected readonly lightboxPanY = signal(0);
+  protected readonly isLightboxPanning = signal(false);
+  protected readonly lightboxTransform = computed(() => {
+    const scale = this.lightboxZoomScale();
+    const x = this.lightboxPanX();
+    const y = this.lightboxPanY();
+    return scale === 1 && x === 0 && y === 0 ? '' : `translate(${x}px, ${y}px) scale(${scale})`;
+  });
   protected readonly lightboxGroup = computed<CullingGroup | null>(() => {
     const key = this.lightboxGroupId();
     if (!key) return null;
@@ -443,10 +468,70 @@ export class BurstCullingComponent implements OnDestroy {
   protected openLightbox(group: CullingGroup, index: number): void {
     this.lightboxGroupId.set(this.groupKey(group));
     this.lightboxIndex.set(index);
+    this.resetLightboxZoom();
   }
 
   protected closeLightbox(): void {
     this.lightboxGroupId.set(null);
+    this.resetLightboxZoom();
+  }
+
+  protected resetLightboxZoom(): void {
+    this.lightboxZoomScale.set(1);
+    this.lightboxPanX.set(0);
+    this.lightboxPanY.set(0);
+    this.isLightboxPanning.set(false);
+  }
+
+  protected onLightboxWheel(event: WheelEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const previousScale = this.lightboxZoomScale();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    const nextScale = Math.min(8, Math.max(1, previousScale + direction * 0.25));
+    if (nextScale === previousScale) return;
+
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left - rect.width / 2;
+    const offsetY = event.clientY - rect.top - rect.height / 2;
+    const scaleRatio = nextScale / previousScale;
+
+    this.lightboxPanX.set(this.lightboxPanX() - offsetX * (scaleRatio - 1));
+    this.lightboxPanY.set(this.lightboxPanY() - offsetY * (scaleRatio - 1));
+    this.lightboxZoomScale.set(nextScale);
+    if (nextScale === 1) {
+      this.lightboxPanX.set(0);
+      this.lightboxPanY.set(0);
+    }
+  }
+
+  protected onLightboxPanStart(event: PointerEvent): void {
+    if (this.lightboxZoomScale() <= 1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.isLightboxPanning.set(true);
+    this.lightboxPanStartX = event.clientX;
+    this.lightboxPanStartY = event.clientY;
+    this.lightboxPanOriginX = this.lightboxPanX();
+    this.lightboxPanOriginY = this.lightboxPanY();
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+  }
+
+  protected onLightboxPanMove(event: PointerEvent): void {
+    if (!this.isLightboxPanning()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.lightboxPanX.set(this.lightboxPanOriginX + event.clientX - this.lightboxPanStartX);
+    this.lightboxPanY.set(this.lightboxPanOriginY + event.clientY - this.lightboxPanStartY);
+  }
+
+  protected onLightboxPanEnd(event: PointerEvent): void {
+    if (!this.isLightboxPanning()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.isLightboxPanning.set(false);
+    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
   }
 
   private clampIndex(value: number, max: number): number {
@@ -459,6 +544,7 @@ export class BurstCullingComponent implements OnDestroy {
     const group = this.lightboxGroup();
     if (!group) return;
     event.preventDefault();
+    this.resetLightboxZoom();
     this.lightboxIndex.update(i => this.clampIndex(i - 1, group.photos.length));
   }
 
@@ -467,6 +553,7 @@ export class BurstCullingComponent implements OnDestroy {
     const group = this.lightboxGroup();
     if (!group) return;
     event.preventDefault();
+    this.resetLightboxZoom();
     this.lightboxIndex.update(i => this.clampIndex(i + 1, group.photos.length));
   }
 
