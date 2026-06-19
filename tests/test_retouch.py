@@ -213,6 +213,49 @@ def test_retouch_apply_saves_copy_and_records_history(retouch_client, tmp_path):
     assert "whiten_skin" in edit[2]
 
 
+def test_retouch_apply_preserves_exif_and_normalizes_orientation(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path = tmp_path / "exif_portrait.jpg"
+    img = Image.new("RGB", (80, 60), (128, 94, 74))
+    exif = img.getexif()
+    exif[274] = 6
+    exif[315] = "FacetTest"
+    img.save(img_path, format="JPEG", quality=95, exif=exif.tobytes())
+    original_bytes = img_path.read_bytes()
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """INSERT INTO photos
+           (path, filename, image_width, image_height, thumbnail, aggregate, aesthetic, is_burst_lead, is_duplicate_lead)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        [str(img_path), img_path.name, 80, 60, b"thumb", 7.0, 7.0, 1, 1],
+    )
+    conn.commit()
+    conn.close()
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {"brightness": 8},
+    })
+
+    assert resp.status_code == 200
+    assert resp.json()["exif_strategy"] == "orientation_applied_exif_icc_preserved"
+    output_path = resp.json()["output_path"]
+    assert img_path.read_bytes() == original_bytes
+    with Image.open(output_path) as out:
+        out_exif = out.getexif()
+        assert out_exif.get(274) == 1
+        assert out_exif.get(315) == "FacetTest"
+
+    conn = sqlite3.connect(db_path)
+    strategy = conn.execute(
+        "SELECT exif_strategy FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()[0]
+    conn.close()
+    assert strategy == "orientation_applied_exif_icc_preserved"
+
+
 def test_retouch_download_returns_processed_jpeg_without_saving_photo(retouch_client, tmp_path):
     client, db_path = retouch_client
     img_path, original_bytes = _make_photo(tmp_path, db_path, size=(96, 72), filename="download_portrait.jpg")

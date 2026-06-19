@@ -28,6 +28,8 @@ from api.path_validation import resolve_photo_disk_path
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["retouch"])
+_RETOUCH_EXIF_STRATEGY = "orientation_applied_exif_icc_preserved"
+_EXIF_ORIENTATION_TAG = 274
 
 
 class CropRect(BaseModel):
@@ -249,6 +251,24 @@ def _load_image(path: str) -> Image.Image:
             return ImageOps.exif_transpose(img).convert("RGB")
     except Exception as exc:
         raise HTTPException(status_code=415, detail="Unsupported image file") from exc
+
+
+def _jpeg_save_kwargs(source_path: str, quality: int = 95) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {"quality": quality, "subsampling": 0}
+    try:
+        with Image.open(source_path) as source:
+            exif = source.getexif()
+            if exif:
+                exif[_EXIF_ORIENTATION_TAG] = 1
+                exif_bytes = exif.tobytes()
+                if exif_bytes:
+                    kwargs["exif"] = exif_bytes
+            icc_profile = source.info.get("icc_profile")
+            if icc_profile:
+                kwargs["icc_profile"] = icc_profile
+    except Exception as exc:
+        logger.debug("Could not preserve source metadata for retouch output %s: %s", source_path, exc)
+    return kwargs
 
 
 def _downsample(img: Image.Image, max_size: int) -> Image.Image:
@@ -1346,7 +1366,7 @@ def _record_edit(conn: sqlite3.Connection, original_path: str, output_path: str,
             original_path,
             output_path,
             json.dumps(params.model_dump(), ensure_ascii=False),
-            "orientation_applied_metadata_not_preserved",
+            _RETOUCH_EXIF_STRATEGY,
         ],
     )
 
@@ -1407,7 +1427,7 @@ def api_retouch_apply(
         result = _process_image(img, body.params, face_boxes, face_landmarks, source_size)
         output_disk, output_db_path = _next_output_paths(disk_path, db_path, body.output_suffix)
         try:
-            result.save(output_disk, format="JPEG", quality=95, subsampling=0)
+            result.save(output_disk, format="JPEG", **_jpeg_save_kwargs(disk_path, quality=95))
         except Exception as exc:
             logger.exception("Failed to save retouch copy")
             raise HTTPException(status_code=500, detail="Failed to save retouch copy") from exc
@@ -1421,7 +1441,7 @@ def api_retouch_apply(
         "original_path": db_path,
         "output_path": output_db_path,
         "thumbnail_url": f"/thumbnail?path={output_db_path}&size=640",
-        "exif_strategy": "orientation_applied_metadata_not_preserved",
+        "exif_strategy": _RETOUCH_EXIF_STRATEGY,
     }
 
 
@@ -1441,7 +1461,7 @@ def api_retouch_download(
     img = _load_image(disk_path)
     result = _process_image(img, body.params, face_boxes, face_landmarks, source_size)
     buf = BytesIO()
-    result.save(buf, format="JPEG", quality=95, subsampling=0)
+    result.save(buf, format="JPEG", **_jpeg_save_kwargs(disk_path, quality=95))
     buf.seek(0)
     stem = Path(db_path).stem
     download_name = f"{stem}.retouch.jpg"
