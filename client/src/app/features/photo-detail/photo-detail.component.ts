@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, effect, OnInit, HostListener, DestroyRef, ElementRef, viewChild, afterNextRender } from '@angular/core';
+import { Component, inject, signal, computed, effect, OnInit, HostListener, DestroyRef, ElementRef, viewChild } from '@angular/core';
 import { Location, NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -142,82 +142,21 @@ import { createLeafletMap } from '../../shared/leaflet';
       </ng-template>
 
       <div class="flex flex-col lg:h-[calc(100vh-105px)] lg:overflow-hidden">
-        @if (sidePanelMode() === 'retouch' && auth.isEdition()) {
-          <div class="flex-1 min-h-0 overflow-hidden">
-            <app-retouch-dialog
-              class="block h-full min-h-0"
-              [embedded]="true"
-              [imagePath]="p.path"
-              [filename]="p.filename"
-              (saved)="onRetouchSaved($event)"
-              (cancelled)="sidePanelMode.set('details')"
-            >
+        <div class="flex-1 min-h-0 overflow-hidden">
+          <app-retouch-dialog
+            class="block h-full min-h-0"
+            [embedded]="true"
+            [panelMode]="activePanelMode()"
+            [imagePath]="p.path"
+            [filename]="p.filename"
+            (panelModeChange)="sidePanelMode.set($event)"
+            (saved)="onRetouchSaved($event)"
+            (cancelled)="sidePanelMode.set('details')"
+          >
+            <div retouch-filmstrip>
               <ng-container [ngTemplateOutlet]="filmstripTpl" />
-            </app-retouch-dialog>
-          </div>
-        } @else {
-        <!-- Main content: image + info -->
-        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] lg:grid-rows-[minmax(0,1fr)_auto] lg:flex-1 lg:min-h-0 lg:overflow-hidden">
-          <!-- Image panel -->
-          <div #imagePanel class="min-h-[42vh] lg:min-h-0 lg:col-start-1 lg:row-start-1 flex items-center justify-center bg-black relative overflow-hidden cursor-grab"
-            [class.cursor-grabbing]="isPanning()"
-            (dblclick)="resetZoom()"
-            (pointerdown)="onPanStart($event)"
-            (pointermove)="onPanMove($event)"
-            (pointerup)="onPanEnd($event)"
-            (pointercancel)="onPanEnd($event)"
-            (touchstart)="onTouchStart($event)"
-            (touchend)="onTouchEnd()">
-            <img
-              [src]="p.path | thumbnailUrl:640"
-              [alt]="p.filename"
-              class="w-full lg:max-w-full lg:max-h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-              [class.opacity-0]="fullImageLoaded()"
-              [style.transform]="zoomTransform()"
-            />
-            <img
-              [src]="fullImageUrl()"
-              [alt]="p.filename"
-              class="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-              [class.opacity-0]="!fullImageLoaded()"
-              (load)="onFullImageLoad()"
-              [style.transform]="zoomTransform()"
-            />
-          </div>
-          <div class="lg:col-start-1 lg:row-start-2 min-w-0">
-            <ng-container [ngTemplateOutlet]="filmstripTpl" />
-          </div>
-
-          <!-- Side panel -->
-          <div class="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:overflow-y-auto text-sm text-[var(--mat-sys-on-surface)] border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
-          <div class="sticky top-0 z-10 bg-[var(--mat-sys-surface)] border-b border-[var(--mat-sys-outline-variant)] p-3">
-            <div class="grid grid-cols-2 gap-1 rounded-lg bg-[var(--mat-sys-surface-container)] p-1">
-              <button
-                type="button"
-                class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors"
-                [class.bg-[var(--mat-sys-primary-container)]]="sidePanelMode() === 'details'"
-                [class.text-[var(--mat-sys-on-primary-container)]]="sidePanelMode() === 'details'"
-                (click)="sidePanelMode.set('details')"
-              >
-                <mat-icon class="!text-base !w-4 !h-4">info</mat-icon>
-                {{ 'photo_detail.details_panel' | translate }}
-              </button>
-              @if (auth.isEdition()) {
-                <button
-                  type="button"
-                  class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors"
-                  [class.bg-[var(--mat-sys-primary-container)]]="sidePanelMode() === 'retouch'"
-                  [class.text-[var(--mat-sys-on-primary-container)]]="sidePanelMode() === 'retouch'"
-                  (click)="sidePanelMode.set('retouch')"
-                >
-                  <mat-icon class="!text-base !w-4 !h-4">auto_fix_high</mat-icon>
-                  {{ 'retouch.short_title' | translate }}
-                </button>
-              }
             </div>
-          </div>
-
-          <div class="p-4 space-y-4">
+            <div retouch-details-panel class="p-4 space-y-4 text-sm text-[var(--mat-sys-on-surface)]">
           <!-- Filename + Date + Category + Aggregate -->
           <div>
             <div class="font-semibold text-lg">{{ p.filename }}</div>
@@ -493,10 +432,9 @@ import { createLeafletMap } from '../../shared/leaflet';
               </div>
             </div>
           }
-          </div>
-          </div>
+            </div>
+          </app-retouch-dialog>
         </div>
-        }
       </div>
     } @else {
       <div class="flex items-center justify-center h-full">
@@ -523,28 +461,12 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
   protected readonly downloadOptions = signal<DownloadOption[]>([]);
   protected readonly generatingCaption = signal(false);
   protected readonly sidePanelMode = signal<'details' | 'retouch'>('details');
+  protected readonly activePanelMode = computed(() => this.auth.isEdition() ? this.sidePanelMode() : 'details');
   protected readonly filmstripPhotos = computed(() => this.store.photos().length ? this.store.photos() : this.localFilmstripPhotos());
   protected readonly stars: readonly number[] = [1, 2, 3, 4, 5];
   private readonly returnPathPrefix = signal('');
 
-  // Zoom & pan state
-  private readonly imagePanel = viewChild<ElementRef<HTMLDivElement>>('imagePanel');
   private readonly filmstrip = viewChild<ElementRef<HTMLDivElement>>('filmstrip');
-  protected readonly zoomScale = signal(1);
-  protected readonly panX = signal(0);
-  protected readonly panY = signal(0);
-  protected readonly isPanning = signal(false);
-  protected readonly zoomTransform = computed(() => {
-    const s = this.zoomScale();
-    const x = this.panX();
-    const y = this.panY();
-    return s === 1 && x === 0 && y === 0 ? '' : `scale(${s}) translate(${x}px, ${y}px)`;
-  });
-  private panStartX = 0;
-  private panStartY = 0;
-  private panOriginX = 0;
-  private panOriginY = 0;
-  private lastPinchDist = 0;
 
   // Download options
   private downloadOptionsEffect = effect(() => {
@@ -621,13 +543,6 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
       if (this.locationMapTimeout !== null) clearTimeout(this.locationMapTimeout);
       if (this.locationMap) { this.locationMap.remove(); this.locationMap = null; }
     });
-    // Register wheel and touchmove as non-passive so preventDefault() works
-    afterNextRender(() => {
-      const el = this.imagePanel()?.nativeElement;
-      if (!el) return;
-      el.addEventListener('wheel', (e: WheelEvent) => this.onWheel(e), { passive: false });
-      el.addEventListener('touchmove', (e: TouchEvent) => this.onTouchMove(e), { passive: false });
-    });
   }
 
   async ngOnInit(): Promise<void> {
@@ -688,7 +603,6 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
       state: { photo: next },
     });
     this.photo.set(next);
-    this.fullImageLoaded.set(false);
     this.sidePanelMode.set('details');
   }
 
@@ -698,8 +612,6 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
       state: { photo },
     });
     this.photo.set(photo);
-    this.fullImageLoaded.set(false);
-    this.resetZoom();
   }
 
   protected async download(path: string, type = 'original', profile?: string): Promise<void> {
@@ -831,7 +743,6 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
         photo.persons = [];
       }
       this.photo.set(photo);
-      this.fullImageLoaded.set(false);
     } catch {
       this.router.navigate(['/']);
     }
@@ -876,82 +787,4 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     });
   }
 
-  // Zoom & pan
-
-  private applyZoom(raw: number): void {
-    const clamped = Math.min(5, Math.max(0.5, raw));
-    if (clamped === 1) { this.panX.set(0); this.panY.set(0); }
-    this.zoomScale.set(clamped);
-  }
-
-  protected onWheel(e: WheelEvent): void {
-    e.preventDefault();
-    this.applyZoom(this.zoomScale() + (e.deltaY > 0 ? -0.15 : 0.15));
-  }
-
-  protected resetZoom(): void {
-    this.zoomScale.set(1);
-    this.panX.set(0);
-    this.panY.set(0);
-  }
-
-  protected onPanStart(e: PointerEvent): void {
-    if (this.zoomScale() <= 1) return;
-    this.isPanning.set(true);
-    this.panStartX = e.clientX;
-    this.panStartY = e.clientY;
-    this.panOriginX = this.panX();
-    this.panOriginY = this.panY();
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-  }
-
-  protected onPanMove(e: PointerEvent): void {
-    if (!this.isPanning()) return;
-    const scale = this.zoomScale();
-    const rawX = this.panOriginX + (e.clientX - this.panStartX) / scale;
-    const rawY = this.panOriginY + (e.clientY - this.panStartY) / scale;
-    // Clamp pan so the image can't be dragged entirely off-screen
-    const el = this.imagePanel()?.nativeElement;
-    if (el) {
-      const limit = Math.max(el.clientWidth, el.clientHeight) / (2 * scale);
-      this.panX.set(Math.max(-limit, Math.min(limit, rawX)));
-      this.panY.set(Math.max(-limit, Math.min(limit, rawY)));
-    } else {
-      this.panX.set(rawX);
-      this.panY.set(rawY);
-    }
-  }
-
-  protected onPanEnd(e: PointerEvent): void {
-    if (!this.isPanning()) return;
-    this.isPanning.set(false);
-    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-  }
-
-  protected onTouchStart(e: TouchEvent): void {
-    if (e.touches.length === 2) {
-      this.lastPinchDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY,
-      );
-    }
-  }
-
-  protected onTouchMove(e: TouchEvent): void {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY,
-      );
-      if (this.lastPinchDist > 0) {
-        this.applyZoom(this.zoomScale() * (dist / this.lastPinchDist));
-      }
-      this.lastPinchDist = dist;
-    }
-  }
-
-  protected onTouchEnd(): void {
-    this.lastPinchDist = 0;
-  }
 }

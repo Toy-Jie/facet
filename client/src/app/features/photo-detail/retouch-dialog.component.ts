@@ -218,7 +218,7 @@ const DEFAULT_PARAMS: RetouchParams = {
         </div>
         @if (embedded()) {
           <div class="lg:col-start-1 lg:row-start-2 min-w-0">
-            <ng-content />
+            <ng-content select="[retouch-filmstrip]" />
           </div>
         }
 
@@ -229,76 +229,86 @@ const DEFAULT_PARAMS: RetouchParams = {
                 <button
                   type="button"
                   class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors"
-                  (click)="cancelled.emit()"
+                  [class.bg-[var(--mat-sys-primary-container)]]="panelMode() === 'details'"
+                  [class.text-[var(--mat-sys-on-primary-container)]]="panelMode() === 'details'"
+                  (click)="panelModeChange.emit('details')"
                 >
                   <mat-icon class="!text-base !w-4 !h-4">info</mat-icon>
                   {{ 'photo_detail.details_panel' | translate }}
                 </button>
                 <button
                   type="button"
-                  class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors bg-[var(--mat-sys-primary-container)] text-[var(--mat-sys-on-primary-container)]"
+                  class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors"
+                  [class.bg-[var(--mat-sys-primary-container)]]="panelMode() === 'retouch'"
+                  [class.text-[var(--mat-sys-on-primary-container)]]="panelMode() === 'retouch'"
+                  (click)="panelModeChange.emit('retouch')"
                 >
                   <mat-icon class="!text-base !w-4 !h-4">auto_fix_high</mat-icon>
                   {{ 'retouch.short_title' | translate }}
                 </button>
               </div>
             }
-            <div class="flex items-center gap-2">
-              <button mat-icon-button (click)="undo()" [disabled]="!canUndo()" [matTooltip]="'retouch.undo' | translate">
-                <mat-icon>undo</mat-icon>
-              </button>
-              <button mat-icon-button (click)="redo()" [disabled]="!canRedo()" [matTooltip]="'retouch.redo' | translate">
-                <mat-icon>redo</mat-icon>
-              </button>
-              <button mat-button (click)="reset()">
-                <mat-icon>restart_alt</mat-icon>
-                {{ 'retouch.reset' | translate }}
-              </button>
-            </div>
+            @if (!embedded() || panelMode() === 'retouch') {
+              <div class="flex items-center gap-2">
+                <button mat-icon-button (click)="undo()" [disabled]="!canUndo()" [matTooltip]="'retouch.undo' | translate">
+                  <mat-icon>undo</mat-icon>
+                </button>
+                <button mat-icon-button (click)="redo()" [disabled]="!canRedo()" [matTooltip]="'retouch.redo' | translate">
+                  <mat-icon>redo</mat-icon>
+                </button>
+                <button mat-button (click)="reset()">
+                  <mat-icon>restart_alt</mat-icon>
+                  {{ 'retouch.reset' | translate }}
+                </button>
+              </div>
+            }
           </div>
 
-          <mat-tab-group mat-stretch-tabs="false" mat-align-tabs="start">
-            <mat-tab>
-              <ng-template mat-tab-label>
-                <mat-icon class="!mr-1">tune</mat-icon>
-                {{ 'retouch.basic' | translate }}
-              </ng-template>
-              <div class="p-4 space-y-5">
-                <div class="flex flex-wrap gap-2">
-                  <button mat-stroked-button (click)="rotate(-90)"><mat-icon>rotate_left</mat-icon>{{ 'retouch.rotate_left' | translate }}</button>
-                  <button mat-stroked-button (click)="rotate(90)"><mat-icon>rotate_right</mat-icon>{{ 'retouch.rotate_right' | translate }}</button>
-                  <button mat-stroked-button (click)="toggleFlip('flip_horizontal')"><mat-icon>flip</mat-icon>{{ 'retouch.flip_horizontal' | translate }}</button>
-                  <button mat-stroked-button (click)="toggleFlip('flip_vertical')"><mat-icon class="rotate-90">flip</mat-icon>{{ 'retouch.flip_vertical' | translate }}</button>
-                </div>
-                <label class="flex items-center gap-2 text-sm">
-                  <input type="checkbox" [ngModel]="cropEnabled()" (ngModelChange)="setCropEnabled($event)" />
-                  {{ 'retouch.enable_crop' | translate }}
-                </label>
-                @if (cropEnabled()) {
-                  <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 space-y-3">
-                    <p class="m-0 text-xs text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.crop_hint' | translate }}</p>
-                    <div class="flex flex-wrap gap-2">
-                      <button mat-button (click)="resetCrop()">
-                        <mat-icon>crop_free</mat-icon>
-                        {{ 'retouch.reset_crop' | translate }}
-                      </button>
-                      <button mat-stroked-button (click)="confirmCrop()" [disabled]="cropPreviewConfirmed()">
-                        <mat-icon>check</mat-icon>
-                        {{ 'retouch.confirm_crop' | translate }}
-                      </button>
-                      <button mat-stroked-button (click)="continueCrop()" [disabled]="!cropPreviewConfirmed()">
-                        <mat-icon>crop</mat-icon>
-                        {{ 'retouch.continue_crop' | translate }}
-                      </button>
-                    </div>
+          @if (embedded() && panelMode() === 'details') {
+            <ng-content select="[retouch-details-panel]" />
+          } @else {
+            <mat-tab-group mat-stretch-tabs="false" mat-align-tabs="start">
+              <mat-tab>
+                <ng-template mat-tab-label>
+                  <mat-icon class="!mr-1">tune</mat-icon>
+                  {{ 'retouch.basic' | translate }}
+                </ng-template>
+                <div class="p-4 space-y-5">
+                  <div class="flex flex-wrap gap-2">
+                    <button mat-stroked-button (click)="rotate(-90)"><mat-icon>rotate_left</mat-icon>{{ 'retouch.rotate_left' | translate }}</button>
+                    <button mat-stroked-button (click)="rotate(90)"><mat-icon>rotate_right</mat-icon>{{ 'retouch.rotate_right' | translate }}</button>
+                    <button mat-stroked-button (click)="toggleFlip('flip_horizontal')"><mat-icon>flip</mat-icon>{{ 'retouch.flip_horizontal' | translate }}</button>
+                    <button mat-stroked-button (click)="toggleFlip('flip_vertical')"><mat-icon class="rotate-90">flip</mat-icon>{{ 'retouch.flip_vertical' | translate }}</button>
                   </div>
-                }
-                <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'brightness', label: ('retouch.brightness' | translate), min: -100, max: 100 }" />
-                <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'contrast', label: ('retouch.contrast' | translate), min: -100, max: 100 }" />
-                <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'saturation', label: ('retouch.saturation' | translate), min: -100, max: 100 }" />
-                <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'temperature', label: ('retouch.temperature' | translate), min: -100, max: 100 }" />
-              </div>
-            </mat-tab>
+                  <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" [ngModel]="cropEnabled()" (ngModelChange)="setCropEnabled($event)" />
+                    {{ 'retouch.enable_crop' | translate }}
+                  </label>
+                  @if (cropEnabled()) {
+                    <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 space-y-3">
+                      <p class="m-0 text-xs text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.crop_hint' | translate }}</p>
+                      <div class="flex flex-wrap gap-2">
+                        <button mat-button (click)="resetCrop()">
+                          <mat-icon>crop_free</mat-icon>
+                          {{ 'retouch.reset_crop' | translate }}
+                        </button>
+                        <button mat-stroked-button (click)="confirmCrop()" [disabled]="cropPreviewConfirmed()">
+                          <mat-icon>check</mat-icon>
+                          {{ 'retouch.confirm_crop' | translate }}
+                        </button>
+                        <button mat-stroked-button (click)="continueCrop()" [disabled]="!cropPreviewConfirmed()">
+                          <mat-icon>crop</mat-icon>
+                          {{ 'retouch.continue_crop' | translate }}
+                        </button>
+                      </div>
+                    </div>
+                  }
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'brightness', label: ('retouch.brightness' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'contrast', label: ('retouch.contrast' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'saturation', label: ('retouch.saturation' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'temperature', label: ('retouch.temperature' | translate), min: -100, max: 100 }" />
+                </div>
+              </mat-tab>
 
             <mat-tab>
               <ng-template mat-tab-label>
@@ -380,7 +390,8 @@ const DEFAULT_PARAMS: RetouchParams = {
                 </button>
               </div>
             </mat-tab>
-          </mat-tab-group>
+            </mat-tab-group>
+          }
         </div>
       </div>
     </div>
@@ -492,10 +503,12 @@ export class RetouchDialogComponent {
   private readonly dialogData = inject<RetouchDialogData | null>(MAT_DIALOG_DATA, { optional: true });
 
   readonly embedded = input(false);
+  readonly panelMode = input<'details' | 'retouch'>('retouch');
   readonly imagePath = input<string | null>(null);
   readonly filename = input('');
   readonly saved = output<ApplyResponse>();
   readonly cancelled = output<void>();
+  readonly panelModeChange = output<'details' | 'retouch'>();
   readonly activePath = computed(() => this.imagePath() || this.dialogData?.path || '');
   readonly activeFilename = computed(() => this.filename() || this.dialogData?.filename || '');
 
