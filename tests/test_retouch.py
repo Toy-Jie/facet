@@ -351,3 +351,53 @@ def test_retouch_accepts_depth_blur_advanced_controls(retouch_client, tmp_path):
     assert edit is not None
     assert '"background_depth_strength": 140.0' in edit[0]
     assert '"background_far_blur": 175.0' in edit[0]
+
+
+def test_retouch_accepts_beauty_advanced_controls(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_photo(tmp_path, db_path, filename="beauty_controls.jpg")
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {
+            "smooth_skin": 35,
+            "whiten_skin": 25,
+            "skin_texture": 20,
+            "teeth": 30,
+            "eye_enhance": 25,
+            "beauty_skin_mask_strength": 135,
+            "beauty_skin_mask_feather": 85,
+            "beauty_detail_protection": 140,
+            "beauty_smooth_color": 125,
+            "beauty_smooth_radius": 115,
+            "beauty_smooth_blend": 90,
+            "beauty_whiten_brightness": 130,
+            "beauty_whiten_saturation": 75,
+            "beauty_whiten_blend": 95,
+            "beauty_skin_tone_temperature": 120,
+            "beauty_texture_amount": 80,
+            "beauty_texture_radius": 140,
+            "beauty_feature_detail": 150,
+            "beauty_feature_radius": 125,
+            "beauty_teeth_brightness": 140,
+            "beauty_teeth_saturation": 80,
+            "beauty_teeth_threshold": 110,
+            "beauty_inpaint_radius": 175,
+        },
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    assert os.path.exists(output_path)
+    assert img_path.read_bytes() == original_bytes
+
+    conn = sqlite3.connect(db_path)
+    edit = conn.execute(
+        "SELECT params_json FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()
+    conn.close()
+
+    assert edit is not None
+    assert '"beauty_smooth_color": 125.0' in edit[0]
+    assert '"beauty_inpaint_radius": 175.0' in edit[0]

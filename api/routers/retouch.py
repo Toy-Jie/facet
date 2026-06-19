@@ -63,6 +63,24 @@ class RetouchAdjustments(BaseModel):
     close_mouth: float = Field(default=0, ge=0, le=100)
     teeth: float = Field(default=0, ge=0, le=100)
     eye_enhance: float = Field(default=0, ge=0, le=100)
+    beauty_skin_mask_strength: float = Field(default=100, ge=0, le=200)
+    beauty_skin_mask_feather: float = Field(default=100, ge=0, le=200)
+    beauty_detail_protection: float = Field(default=100, ge=0, le=200)
+    beauty_smooth_color: float = Field(default=100, ge=0, le=200)
+    beauty_smooth_radius: float = Field(default=100, ge=0, le=200)
+    beauty_smooth_blend: float = Field(default=100, ge=0, le=200)
+    beauty_whiten_brightness: float = Field(default=100, ge=0, le=200)
+    beauty_whiten_saturation: float = Field(default=100, ge=0, le=200)
+    beauty_whiten_blend: float = Field(default=100, ge=0, le=200)
+    beauty_skin_tone_temperature: float = Field(default=100, ge=0, le=200)
+    beauty_texture_amount: float = Field(default=100, ge=0, le=200)
+    beauty_texture_radius: float = Field(default=100, ge=25, le=300)
+    beauty_feature_detail: float = Field(default=100, ge=0, le=200)
+    beauty_feature_radius: float = Field(default=100, ge=25, le=300)
+    beauty_teeth_brightness: float = Field(default=100, ge=0, le=200)
+    beauty_teeth_saturation: float = Field(default=100, ge=0, le=200)
+    beauty_teeth_threshold: float = Field(default=100, ge=0, le=200)
+    beauty_inpaint_radius: float = Field(default=100, ge=25, le=300)
     background_blur: float = Field(default=0, ge=0, le=100)
     background_subject_protection: float = Field(default=100, ge=0, le=150)
     background_subject_expand: float = Field(default=100, ge=0, le=200)
@@ -207,7 +225,7 @@ def _apply_temperature(arr: np.ndarray, value: float) -> np.ndarray:
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def _skin_mask(rgb: np.ndarray) -> np.ndarray:
+def _skin_mask(rgb: np.ndarray, strength: float = 100, feather: float = 100) -> np.ndarray:
     """Conservative skin mask using YCrCb + HSV, feathered for blending."""
     ycrcb = cv2.cvtColor(rgb, cv2.COLOR_RGB2YCrCb)
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
@@ -225,8 +243,9 @@ def _skin_mask(rgb: np.ndarray) -> np.ndarray:
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=5, sigmaY=5)
-    return mask.astype(np.float32) / 255.0
+    sigma = max(0.1, 5 * (feather / 100.0))
+    mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=sigma, sigmaY=sigma)
+    return np.clip((mask.astype(np.float32) / 255.0) * (strength / 100.0), 0, 1)
 
 
 def _detail_protection_mask(rgb: np.ndarray) -> np.ndarray:
@@ -592,7 +611,7 @@ def _apply_portrait_effects(
     face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
 ) -> np.ndarray:
     result = rgb
-    skin = _skin_mask(result)
+    skin = _skin_mask(result, params.beauty_skin_mask_strength, params.beauty_skin_mask_feather)
     blemish_strength = max(params.face_blemish, params.body_blemish) / 100.0
     wrinkle_strength = params.face_wrinkle / 100.0
     texture_strength = params.skin_texture / 100.0
@@ -600,9 +619,15 @@ def _apply_portrait_effects(
     smooth_amount = max(params.smooth_skin / 100.0, blemish_strength * 0.65, wrinkle_strength * 0.45)
     if smooth_amount > 0 and skin.max() > 0.05:
         strength = smooth_amount
-        smooth = cv2.bilateralFilter(result, d=0, sigmaColor=28 + 52 * strength, sigmaSpace=12 + 24 * strength)
+        smooth = cv2.bilateralFilter(
+            result,
+            d=0,
+            sigmaColor=(28 + 52 * strength) * (params.beauty_smooth_color / 100.0),
+            sigmaSpace=(12 + 24 * strength) * (params.beauty_smooth_radius / 100.0),
+        )
         protect = _detail_protection_mask(result)
-        alpha = (skin * protect * (0.12 + 0.42 * strength))[:, :, None]
+        protect = 1.0 - (1.0 - protect) * (params.beauty_detail_protection / 100.0)
+        alpha = (skin * protect * (0.12 + 0.42 * strength) * (params.beauty_smooth_blend / 100.0))[:, :, None]
         result = np.clip(result.astype(np.float32) * (1 - alpha) + smooth.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
 
     tone_amount = params.skin_tone / 100.0
@@ -610,34 +635,40 @@ def _apply_portrait_effects(
         strength = params.whiten_skin / 100.0
         source = result.astype(np.float32)
         hsv = cv2.cvtColor(result, cv2.COLOR_RGB2HSV).astype(np.float32)
-        alpha = (skin * (0.18 + 0.50 * max(strength, abs(tone_amount))))[:, :, None]
-        hsv[:, :, 1:2] *= 1 - 0.30 * max(strength, abs(tone_amount))
-        hsv[:, :, 2:3] *= 1 + (0.18 * strength + 0.10 * tone_amount)
+        alpha = (skin * (0.18 + 0.50 * max(strength, abs(tone_amount))) * (params.beauty_whiten_blend / 100.0))[:, :, None]
+        hsv[:, :, 1:2] *= 1 - 0.30 * max(strength, abs(tone_amount)) * (params.beauty_whiten_saturation / 100.0)
+        hsv[:, :, 2:3] *= 1 + ((0.18 * strength * (params.beauty_whiten_brightness / 100.0)) + 0.10 * tone_amount)
         toned = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB).astype(np.float32)
         result = np.clip(source * (1 - alpha) + toned * alpha, 0, 255).astype(np.uint8)
         if abs(tone_amount) > 0.01:
-            adjusted = _apply_temperature(result, tone_amount * 45)
+            adjusted = _apply_temperature(result, tone_amount * 45 * (params.beauty_skin_tone_temperature / 100.0))
             alpha_rgb = (skin * min(0.45, abs(tone_amount) * 0.45))[:, :, None]
             result = np.clip(result.astype(np.float32) * (1 - alpha_rgb) + adjusted.astype(np.float32) * alpha_rgb, 0, 255).astype(np.uint8)
 
     if texture_strength > 0 and skin.max() > 0.05:
-        detail = cv2.addWeighted(result, 1.35, cv2.GaussianBlur(result, (0, 0), 1.2), -0.35, 0)
-        alpha = (skin * 0.22 * texture_strength)[:, :, None]
+        radius = max(0.1, 1.2 * (params.beauty_texture_radius / 100.0))
+        amount = 0.35 * (params.beauty_texture_amount / 100.0)
+        detail = cv2.addWeighted(result, 1.0 + amount, cv2.GaussianBlur(result, (0, 0), radius), -amount, 0)
+        alpha = (skin * 0.22 * texture_strength * (params.beauty_texture_amount / 100.0))[:, :, None]
         result = np.clip(result.astype(np.float32) * (1 - alpha) + detail.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
 
     enhance_strength = max(abs(params.eyes), params.eye_enhance, params.teeth, abs(params.eyebrow), abs(params.nose), abs(params.mouth), abs(params.face_shape), params.close_mouth, params.face_fullness) / 100.0
     if enhance_strength > 0:
         non_skin_detail = (1.0 - np.clip(skin * 1.4, 0, 1))[:, :, None]
-        detail = cv2.addWeighted(result, 1.22, cv2.GaussianBlur(result, (0, 0), 1.0), -0.22, 0)
-        alpha = non_skin_detail * min(0.20, enhance_strength * 0.20)
+        feature_amount = 0.22 * (params.beauty_feature_detail / 100.0)
+        feature_radius = max(0.1, 1.0 * (params.beauty_feature_radius / 100.0))
+        detail = cv2.addWeighted(result, 1.0 + feature_amount, cv2.GaussianBlur(result, (0, 0), feature_radius), -feature_amount, 0)
+        alpha = non_skin_detail * min(0.20, enhance_strength * 0.20 * (params.beauty_feature_detail / 100.0))
         result = np.clip(result.astype(np.float32) * (1 - alpha) + detail.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
 
     if params.teeth > 0:
         hsv = cv2.cvtColor(result, cv2.COLOR_RGB2HSV).astype(np.float32)
-        bright_low_sat = ((hsv[:, :, 2] > 145) & (hsv[:, :, 1] < 95)).astype(np.float32)
+        value_threshold = np.clip(145 * (params.beauty_teeth_threshold / 100.0), 70, 230)
+        sat_threshold = np.clip(95 * (2.0 - params.beauty_teeth_threshold / 100.0), 35, 180)
+        bright_low_sat = ((hsv[:, :, 2] > value_threshold) & (hsv[:, :, 1] < sat_threshold)).astype(np.float32)
         alpha = cv2.GaussianBlur(bright_low_sat, (0, 0), 2)[:, :, None] * (params.teeth / 100.0) * 0.18
-        hsv[:, :, 1:2] *= (1 - alpha * 0.35)
-        hsv[:, :, 2:3] *= (1 + alpha)
+        hsv[:, :, 1:2] *= (1 - alpha * 0.35 * (params.beauty_teeth_saturation / 100.0))
+        hsv[:, :, 2:3] *= (1 + alpha * (params.beauty_teeth_brightness / 100.0))
         result = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
 
     if params.background_blur > 0:
@@ -658,14 +689,14 @@ def _decode_mask(mask_base64: str, size: tuple[int, int]) -> np.ndarray:
         raise HTTPException(status_code=422, detail="Invalid inpaint mask") from exc
 
 
-def _apply_inpaint(rgb: np.ndarray, mask_base64: Optional[str]) -> np.ndarray:
+def _apply_inpaint(rgb: np.ndarray, mask_base64: Optional[str], radius_percent: float = 100) -> np.ndarray:
     if not mask_base64:
         return rgb
     mask = _decode_mask(mask_base64, (rgb.shape[1], rgb.shape[0]))
     if mask.max() == 0:
         return rgb
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    repaired = cv2.inpaint(bgr, mask, 3, cv2.INPAINT_TELEA)
+    repaired = cv2.inpaint(bgr, mask, max(1, 3 * (radius_percent / 100.0)), cv2.INPAINT_TELEA)
     return cv2.cvtColor(repaired, cv2.COLOR_BGR2RGB)
 
 
@@ -758,7 +789,7 @@ def _process_image(
     rgb = np.array(out.convert("RGB"))
     rgb = _apply_temperature(rgb, params.temperature)
     rgb = _apply_portrait_effects(rgb, params, transformed_faces)
-    rgb = _apply_inpaint(rgb, params.inpaint_mask_base64)
+    rgb = _apply_inpaint(rgb, params.inpaint_mask_base64, params.beauty_inpaint_radius)
     out = Image.fromarray(rgb, mode="RGB")
     if params.crop:
         out = _apply_crop(out, params.crop)

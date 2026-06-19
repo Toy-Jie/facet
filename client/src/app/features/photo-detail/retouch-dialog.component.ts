@@ -52,6 +52,24 @@ interface RetouchParams {
   close_mouth: number;
   teeth: number;
   eye_enhance: number;
+  beauty_skin_mask_strength: number;
+  beauty_skin_mask_feather: number;
+  beauty_detail_protection: number;
+  beauty_smooth_color: number;
+  beauty_smooth_radius: number;
+  beauty_smooth_blend: number;
+  beauty_whiten_brightness: number;
+  beauty_whiten_saturation: number;
+  beauty_whiten_blend: number;
+  beauty_skin_tone_temperature: number;
+  beauty_texture_amount: number;
+  beauty_texture_radius: number;
+  beauty_feature_detail: number;
+  beauty_feature_radius: number;
+  beauty_teeth_brightness: number;
+  beauty_teeth_saturation: number;
+  beauty_teeth_threshold: number;
+  beauty_inpaint_radius: number;
   background_blur: number;
   background_subject_protection: number;
   background_subject_expand: number;
@@ -128,6 +146,24 @@ const DEFAULT_PARAMS: RetouchParams = {
   close_mouth: 0,
   teeth: 0,
   eye_enhance: 0,
+  beauty_skin_mask_strength: 100,
+  beauty_skin_mask_feather: 100,
+  beauty_detail_protection: 100,
+  beauty_smooth_color: 100,
+  beauty_smooth_radius: 100,
+  beauty_smooth_blend: 100,
+  beauty_whiten_brightness: 100,
+  beauty_whiten_saturation: 100,
+  beauty_whiten_blend: 100,
+  beauty_skin_tone_temperature: 100,
+  beauty_texture_amount: 100,
+  beauty_texture_radius: 100,
+  beauty_feature_detail: 100,
+  beauty_feature_radius: 100,
+  beauty_teeth_brightness: 100,
+  beauty_teeth_saturation: 100,
+  beauty_teeth_threshold: 100,
+  beauty_inpaint_radius: 100,
   background_blur: 0,
   background_subject_protection: 100,
   background_subject_expand: 100,
@@ -386,6 +422,44 @@ const DEFAULT_PARAMS: RetouchParams = {
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'close_mouth', label: ('retouch.close_mouth' | translate), min: 0, max: 100 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'teeth', label: ('retouch.teeth' | translate), min: 0, max: 100 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'eye_enhance', label: ('retouch.eye_enhance' | translate), min: 0, max: 100 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.beauty_mask_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_skin_mask_strength', label: ('retouch.beauty_skin_mask_strength' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_skin_mask_feather', label: ('retouch.beauty_skin_mask_feather' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_detail_protection', label: ('retouch.beauty_detail_protection' | translate), min: 0, max: 200 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.beauty_smooth_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_smooth_color', label: ('retouch.beauty_smooth_color' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_smooth_radius', label: ('retouch.beauty_smooth_radius' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_smooth_blend', label: ('retouch.beauty_smooth_blend' | translate), min: 0, max: 200 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.beauty_color_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_whiten_brightness', label: ('retouch.beauty_whiten_brightness' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_whiten_saturation', label: ('retouch.beauty_whiten_saturation' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_whiten_blend', label: ('retouch.beauty_whiten_blend' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_skin_tone_temperature', label: ('retouch.beauty_skin_tone_temperature' | translate), min: 0, max: 200 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.beauty_detail_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_texture_amount', label: ('retouch.beauty_texture_amount' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_texture_radius', label: ('retouch.beauty_texture_radius' | translate), min: 25, max: 300 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_feature_detail', label: ('retouch.beauty_feature_detail' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_feature_radius', label: ('retouch.beauty_feature_radius' | translate), min: 25, max: 300 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.beauty_teeth_inpaint_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_teeth_brightness', label: ('retouch.beauty_teeth_brightness' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_teeth_saturation', label: ('retouch.beauty_teeth_saturation' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_teeth_threshold', label: ('retouch.beauty_teeth_threshold' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_inpaint_radius', label: ('retouch.beauty_inpaint_radius' | translate), min: 25, max: 300 }" />
                 </div>
 
                 <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 text-xs text-[var(--mat-sys-on-surface-variant)]">
@@ -1060,6 +1134,24 @@ export class RetouchDialogComponent {
       'close_mouth',
       'teeth',
       'eye_enhance',
+      'beauty_skin_mask_strength',
+      'beauty_skin_mask_feather',
+      'beauty_detail_protection',
+      'beauty_smooth_color',
+      'beauty_smooth_radius',
+      'beauty_smooth_blend',
+      'beauty_whiten_brightness',
+      'beauty_whiten_saturation',
+      'beauty_whiten_blend',
+      'beauty_skin_tone_temperature',
+      'beauty_texture_amount',
+      'beauty_texture_radius',
+      'beauty_feature_detail',
+      'beauty_feature_radius',
+      'beauty_teeth_brightness',
+      'beauty_teeth_saturation',
+      'beauty_teeth_threshold',
+      'beauty_inpaint_radius',
       'background_blur',
       'background_subject_protection',
       'background_subject_expand',
