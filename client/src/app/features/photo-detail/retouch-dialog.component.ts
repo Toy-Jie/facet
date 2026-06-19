@@ -112,58 +112,63 @@ const DEFAULT_PARAMS: RetouchParams = {
 
     <div [class]="embedded() ? 'retouch-panel' : 'retouch-dialog'">
       <div [class]="embedded() ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] min-h-0 h-full overflow-hidden' : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]'">
-        <div [class]="embedded() ? 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh] lg:min-h-0 h-full' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]'">
-          @if (loadingPreview()) {
-            <div class="absolute inset-0 z-20 grid place-items-center bg-black/35">
-              <mat-spinner diameter="36" />
-            </div>
-          }
-          <div [class]="embedded() ? 'relative max-w-full max-h-full h-full flex items-center justify-center' : 'relative max-w-full max-h-full'" (click)="onPreviewClick($event)">
-            <img
-              #previewImage
-              [src]="previewSrc()"
-              [alt]="activeFilename()"
-              [class]="embedded() ? 'block max-w-full max-h-full object-contain select-none' : 'block max-w-full max-h-[72vh] object-contain select-none'"
-              draggable="false"
-              [class.cursor-crosshair]="inpaintMode()"
-            />
-            @if (!cropPreviewConfirmed() && params().crop; as crop) {
-              <div
-                class="crop-box"
-                [style.left.%]="crop.x * 100"
-                [style.top.%]="crop.y * 100"
-                [style.width.%]="crop.width * 100"
-                [style.height.%]="crop.height * 100"
-                (pointerdown)="startCropDrag($event, 'move')"
-                (click)="$event.stopPropagation()"
-                [matTooltip]="'retouch.crop_drag_hint' | translate"
-              >
-                <span class="crop-rule crop-rule-v crop-rule-v-1"></span>
-                <span class="crop-rule crop-rule-v crop-rule-v-2"></span>
-                <span class="crop-rule crop-rule-h crop-rule-h-1"></span>
-                <span class="crop-rule crop-rule-h crop-rule-h-2"></span>
-                <span class="crop-edge crop-edge-n" (pointerdown)="startCropDrag($event, 'n')"></span>
-                <span class="crop-edge crop-edge-s" (pointerdown)="startCropDrag($event, 's')"></span>
-                <span class="crop-edge crop-edge-e" (pointerdown)="startCropDrag($event, 'e')"></span>
-                <span class="crop-edge crop-edge-w" (pointerdown)="startCropDrag($event, 'w')"></span>
-                <span class="crop-handle crop-handle-nw" (pointerdown)="startCropDrag($event, 'nw')"></span>
-                <span class="crop-handle crop-handle-ne" (pointerdown)="startCropDrag($event, 'ne')"></span>
-                <span class="crop-handle crop-handle-sw" (pointerdown)="startCropDrag($event, 'sw')"></span>
-                <span class="crop-handle crop-handle-se" (pointerdown)="startCropDrag($event, 'se')"></span>
+        <div [class]="embedded() ? 'flex flex-col min-h-0 h-full' : 'flex flex-col'">
+          <div [class]="embedded() ? 'relative flex flex-1 items-center justify-center bg-black overflow-hidden min-h-[42vh] lg:min-h-0' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]'">
+            @if (loadingPreview()) {
+              <div class="absolute inset-0 z-20 grid place-items-center bg-black/35">
+                <mat-spinner diameter="36" />
               </div>
             }
-            @for (spot of spots(); track spot.x + ':' + spot.y) {
-              <span
-                class="absolute rounded-full border-2 border-white/90 bg-red-500/25 pointer-events-none"
-                [style.left.%]="spot.x * 100"
-                [style.top.%]="spot.y * 100"
-                [style.width.px]="spot.radius * 2"
-                [style.height.px]="spot.radius * 2"
-                [style.marginLeft.px]="-spot.radius"
-                [style.marginTop.px]="-spot.radius"
-              ></span>
-            }
+            <div [class]="embedded() ? 'relative max-w-full max-h-full h-full flex items-center justify-center' : 'relative max-w-full max-h-full'" (click)="onPreviewClick($event)">
+              <img
+                #previewImage
+                [src]="previewSrc()"
+                [alt]="activeFilename()"
+                [class]="embedded() ? 'block max-w-full max-h-full object-contain select-none' : 'block max-w-full max-h-[72vh] object-contain select-none'"
+                draggable="false"
+                [class.cursor-crosshair]="inpaintMode()"
+              />
+              @if (!cropPreviewConfirmed() && params().crop; as crop) {
+                <div
+                  class="crop-box"
+                  [style.left.%]="crop.x * 100"
+                  [style.top.%]="crop.y * 100"
+                  [style.width.%]="crop.width * 100"
+                  [style.height.%]="crop.height * 100"
+                  (pointerdown)="startCropDrag($event, 'move')"
+                  (click)="$event.stopPropagation()"
+                  [matTooltip]="'retouch.crop_drag_hint' | translate"
+                >
+                  <span class="crop-rule crop-rule-v crop-rule-v-1"></span>
+                  <span class="crop-rule crop-rule-v crop-rule-v-2"></span>
+                  <span class="crop-rule crop-rule-h crop-rule-h-1"></span>
+                  <span class="crop-rule crop-rule-h crop-rule-h-2"></span>
+                  <span class="crop-edge crop-edge-n" (pointerdown)="startCropDrag($event, 'n')"></span>
+                  <span class="crop-edge crop-edge-s" (pointerdown)="startCropDrag($event, 's')"></span>
+                  <span class="crop-edge crop-edge-e" (pointerdown)="startCropDrag($event, 'e')"></span>
+                  <span class="crop-edge crop-edge-w" (pointerdown)="startCropDrag($event, 'w')"></span>
+                  <span class="crop-handle crop-handle-nw" (pointerdown)="startCropDrag($event, 'nw')"></span>
+                  <span class="crop-handle crop-handle-ne" (pointerdown)="startCropDrag($event, 'ne')"></span>
+                  <span class="crop-handle crop-handle-sw" (pointerdown)="startCropDrag($event, 'sw')"></span>
+                  <span class="crop-handle crop-handle-se" (pointerdown)="startCropDrag($event, 'se')"></span>
+                </div>
+              }
+              @for (spot of spots(); track spot.x + ':' + spot.y) {
+                <span
+                  class="absolute rounded-full border-2 border-white/90 bg-red-500/25 pointer-events-none"
+                  [style.left.%]="spot.x * 100"
+                  [style.top.%]="spot.y * 100"
+                  [style.width.px]="spot.radius * 2"
+                  [style.height.px]="spot.radius * 2"
+                  [style.marginLeft.px]="-spot.radius"
+                  [style.marginTop.px]="-spot.radius"
+                ></span>
+              }
+            </div>
           </div>
+          @if (embedded()) {
+            <ng-content />
+          }
         </div>
 
         <div [class]="embedded() ? 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]' : 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]'">

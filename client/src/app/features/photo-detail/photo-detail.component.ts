@@ -1,5 +1,5 @@
 import { Component, inject, signal, computed, effect, OnInit, HostListener, DestroyRef, ElementRef, viewChild, afterNextRender } from '@angular/core';
-import { Location } from '@angular/common';
+import { Location, NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,6 +39,7 @@ import { createLeafletMap } from '../../shared/leaflet';
     MatDialogModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
+    NgTemplateOutlet,
     FixedPipe,
     ShutterSpeedPipe,
     TranslatePipe,
@@ -116,6 +117,30 @@ import { createLeafletMap } from '../../shared/leaflet';
         }
       </div>
 
+      <ng-template #filmstripTpl>
+        @if (filmstripPhotos().length) {
+          <div class="shrink-0 border-t border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] px-3 py-2">
+            <div #filmstrip class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1">
+              @for (thumb of filmstripPhotos(); track thumb.path) {
+                <button
+                  type="button"
+                  class="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border transition-colors bg-black"
+                  [attr.data-photo-path]="thumb.path"
+                  [class.border-[var(--mat-sys-primary)]]="thumb.path === p.path"
+                  [class.border-transparent]="thumb.path !== p.path"
+                  [class.ring-2]="thumb.path === p.path"
+                  [class.ring-[var(--mat-sys-primary)]]="thumb.path === p.path"
+                  (click)="selectFilmstripPhoto(thumb)"
+                  [matTooltip]="thumb.filename"
+                >
+                  <img [src]="thumb.path | thumbnailUrl:240" [alt]="thumb.filename" class="w-full h-full object-cover" />
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </ng-template>
+
       <div class="flex flex-col lg:h-[calc(100vh-105px)] lg:overflow-hidden">
         @if (sidePanelMode() === 'retouch' && auth.isEdition()) {
           <div class="flex-1 min-h-0 overflow-hidden">
@@ -126,36 +151,41 @@ import { createLeafletMap } from '../../shared/leaflet';
               [filename]="p.filename"
               (saved)="onRetouchSaved($event)"
               (cancelled)="sidePanelMode.set('details')"
-            />
+            >
+              <ng-container [ngTemplateOutlet]="filmstripTpl" />
+            </app-retouch-dialog>
           </div>
         } @else {
         <!-- Main content: image + info -->
         <div class="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           <!-- Image panel -->
-          <div #imagePanel class="shrink-0 lg:h-auto lg:flex-1 flex items-center justify-center bg-black lg:min-h-0 relative overflow-hidden cursor-grab"
-            [class.cursor-grabbing]="isPanning()"
-            (dblclick)="resetZoom()"
-            (pointerdown)="onPanStart($event)"
-            (pointermove)="onPanMove($event)"
-            (pointerup)="onPanEnd($event)"
-            (pointercancel)="onPanEnd($event)"
-            (touchstart)="onTouchStart($event)"
-            (touchend)="onTouchEnd()">
-            <img
-              [src]="p.path | thumbnailUrl:640"
-              [alt]="p.filename"
-              class="w-full lg:max-w-full lg:max-h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-              [class.opacity-0]="fullImageLoaded()"
-              [style.transform]="zoomTransform()"
-            />
-            <img
-              [src]="fullImageUrl()"
-              [alt]="p.filename"
-              class="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-              [class.opacity-0]="!fullImageLoaded()"
-              (load)="onFullImageLoad()"
-              [style.transform]="zoomTransform()"
-            />
+          <div class="flex flex-col lg:flex-1 lg:min-h-0">
+            <div #imagePanel class="shrink-0 lg:h-auto lg:flex-1 flex items-center justify-center bg-black lg:min-h-0 relative overflow-hidden cursor-grab"
+              [class.cursor-grabbing]="isPanning()"
+              (dblclick)="resetZoom()"
+              (pointerdown)="onPanStart($event)"
+              (pointermove)="onPanMove($event)"
+              (pointerup)="onPanEnd($event)"
+              (pointercancel)="onPanEnd($event)"
+              (touchstart)="onTouchStart($event)"
+              (touchend)="onTouchEnd()">
+              <img
+                [src]="p.path | thumbnailUrl:640"
+                [alt]="p.filename"
+                class="w-full lg:max-w-full lg:max-h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
+                [class.opacity-0]="fullImageLoaded()"
+                [style.transform]="zoomTransform()"
+              />
+              <img
+                [src]="fullImageUrl()"
+                [alt]="p.filename"
+                class="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
+                [class.opacity-0]="!fullImageLoaded()"
+                (load)="onFullImageLoad()"
+                [style.transform]="zoomTransform()"
+              />
+            </div>
+            <ng-container [ngTemplateOutlet]="filmstripTpl" />
           </div>
 
           <!-- Side panel -->
@@ -466,27 +496,6 @@ import { createLeafletMap } from '../../shared/leaflet';
           </div>
           </div>
         </div>
-        }
-        @if (filmstripPhotos().length) {
-          <div class="shrink-0 border-t border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] px-3 py-2 lg:w-[calc(100%_-_420px)]">
-            <div #filmstrip class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1">
-              @for (thumb of filmstripPhotos(); track thumb.path) {
-                <button
-                  type="button"
-                  class="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border transition-colors bg-black"
-                  [attr.data-photo-path]="thumb.path"
-                  [class.border-[var(--mat-sys-primary)]]="thumb.path === p.path"
-                  [class.border-transparent]="thumb.path !== p.path"
-                  [class.ring-2]="thumb.path === p.path"
-                  [class.ring-[var(--mat-sys-primary)]]="thumb.path === p.path"
-                  (click)="selectFilmstripPhoto(thumb)"
-                  [matTooltip]="thumb.filename"
-                >
-                  <img [src]="thumb.path | thumbnailUrl:240" [alt]="thumb.filename" class="w-full h-full object-cover" />
-                </button>
-              }
-            </div>
-          </div>
         }
       </div>
     } @else {
