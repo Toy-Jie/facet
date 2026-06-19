@@ -127,7 +127,7 @@ const DEFAULT_PARAMS: RetouchParams = {
               draggable="false"
               [class.cursor-crosshair]="inpaintMode()"
             />
-            @if (params().crop; as crop) {
+            @if (!cropPreviewConfirmed() && params().crop; as crop) {
               <div
                 class="crop-box"
                 [style.left.%]="crop.x * 100"
@@ -167,23 +167,38 @@ const DEFAULT_PARAMS: RetouchParams = {
         </div>
 
         <div [class]="embedded() ? 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]' : 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]'">
-          <div class="p-4 flex items-center gap-2 border-b border-[var(--mat-sys-outline-variant)]">
+          <div class="p-3 border-b border-[var(--mat-sys-outline-variant)] space-y-3">
             @if (embedded()) {
-              <button mat-button (click)="cancelled.emit()">
-                <mat-icon>info</mat-icon>
-                {{ 'photo_detail.details_panel' | translate }}
-              </button>
+              <div class="grid grid-cols-2 gap-1 rounded-lg bg-[var(--mat-sys-surface-container)] p-1">
+                <button
+                  type="button"
+                  class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors"
+                  (click)="cancelled.emit()"
+                >
+                  <mat-icon class="!text-base !w-4 !h-4">info</mat-icon>
+                  {{ 'photo_detail.details_panel' | translate }}
+                </button>
+                <button
+                  type="button"
+                  class="h-9 rounded-md inline-flex items-center justify-center gap-2 text-sm transition-colors bg-[var(--mat-sys-primary-container)] text-[var(--mat-sys-on-primary-container)]"
+                >
+                  <mat-icon class="!text-base !w-4 !h-4">auto_fix_high</mat-icon>
+                  {{ 'retouch.short_title' | translate }}
+                </button>
+              </div>
             }
-            <button mat-icon-button (click)="undo()" [disabled]="!canUndo()" [matTooltip]="'retouch.undo' | translate">
-              <mat-icon>undo</mat-icon>
-            </button>
-            <button mat-icon-button (click)="redo()" [disabled]="!canRedo()" [matTooltip]="'retouch.redo' | translate">
-              <mat-icon>redo</mat-icon>
-            </button>
-            <button mat-button (click)="reset()">
-              <mat-icon>restart_alt</mat-icon>
-              {{ 'retouch.reset' | translate }}
-            </button>
+            <div class="flex items-center gap-2">
+              <button mat-icon-button (click)="undo()" [disabled]="!canUndo()" [matTooltip]="'retouch.undo' | translate">
+                <mat-icon>undo</mat-icon>
+              </button>
+              <button mat-icon-button (click)="redo()" [disabled]="!canRedo()" [matTooltip]="'retouch.redo' | translate">
+                <mat-icon>redo</mat-icon>
+              </button>
+              <button mat-button (click)="reset()">
+                <mat-icon>restart_alt</mat-icon>
+                {{ 'retouch.reset' | translate }}
+              </button>
+            </div>
           </div>
 
           <mat-tab-group mat-stretch-tabs="false" mat-align-tabs="start">
@@ -206,10 +221,20 @@ const DEFAULT_PARAMS: RetouchParams = {
                 @if (cropEnabled()) {
                   <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 space-y-3">
                     <p class="m-0 text-xs text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.crop_hint' | translate }}</p>
-                    <button mat-button (click)="resetCrop()">
-                      <mat-icon>crop_free</mat-icon>
-                      {{ 'retouch.reset_crop' | translate }}
-                    </button>
+                    <div class="flex flex-wrap gap-2">
+                      <button mat-button (click)="resetCrop()">
+                        <mat-icon>crop_free</mat-icon>
+                        {{ 'retouch.reset_crop' | translate }}
+                      </button>
+                      <button mat-stroked-button (click)="confirmCrop()" [disabled]="cropPreviewConfirmed()">
+                        <mat-icon>check</mat-icon>
+                        {{ 'retouch.confirm_crop' | translate }}
+                      </button>
+                      <button mat-stroked-button (click)="continueCrop()" [disabled]="!cropPreviewConfirmed()">
+                        <mat-icon>crop</mat-icon>
+                        {{ 'retouch.continue_crop' | translate }}
+                      </button>
+                    </div>
                   </div>
                 }
                 <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'brightness', label: ('retouch.brightness' | translate), min: -100, max: 100 }" />
@@ -398,6 +423,7 @@ export class RetouchDialogComponent {
   readonly previewWidth = signal(0);
   readonly previewHeight = signal(0);
   readonly statusText = signal('');
+  readonly cropPreviewConfirmed = signal(false);
 
   private undoStack: RetouchParams[] = [];
   private redoStack: RetouchParams[] = [];
@@ -417,6 +443,7 @@ export class RetouchDialogComponent {
       this.currentPath = path;
       this.params.set({ ...DEFAULT_PARAMS });
       this.spots.set([]);
+      this.cropPreviewConfirmed.set(false);
       this.undoStack = [];
       this.redoStack = [];
       this.previewWidth.set(0);
@@ -451,15 +478,31 @@ export class RetouchDialogComponent {
 
   setCropEnabled(enabled: boolean): void {
     this.pushHistory();
+    this.cropPreviewConfirmed.set(false);
     this.params.update(p => ({
       ...p,
       crop: enabled ? this.defaultCrop() : null,
     }));
+    if (!enabled) this.schedulePreview();
   }
 
   resetCrop(): void {
     this.pushHistory();
+    this.cropPreviewConfirmed.set(false);
     this.params.update(p => ({ ...p, crop: this.defaultCrop() }));
+    this.schedulePreview();
+  }
+
+  confirmCrop(): void {
+    if (!this.params().crop || this.cropPreviewConfirmed()) return;
+    this.cropPreviewConfirmed.set(true);
+    this.schedulePreview();
+  }
+
+  continueCrop(): void {
+    if (!this.params().crop || !this.cropPreviewConfirmed()) return;
+    this.cropPreviewConfirmed.set(false);
+    this.schedulePreview();
   }
 
   startCropDrag(event: PointerEvent, handle: CropDragHandle): void {
@@ -469,6 +512,7 @@ export class RetouchDialogComponent {
     event.preventDefault();
     event.stopPropagation();
     this.pushHistory();
+    this.cropPreviewConfirmed.set(false);
     this.cropDrag = {
       handle,
       startX: event.clientX,
@@ -523,6 +567,7 @@ export class RetouchDialogComponent {
     this.pushHistory();
     this.params.set({ ...DEFAULT_PARAMS });
     this.spots.set([]);
+    this.cropPreviewConfirmed.set(false);
     this.previewSrc.set(this.api.thumbnailUrl(this.activePath(), 1920));
     this.statusText.set(this.i18n.t('retouch.preview_original'));
   }
@@ -565,7 +610,7 @@ export class RetouchDialogComponent {
     try {
       const res = await firstValueFrom(this.api.post<PreviewResponse>('/retouch/preview', {
         image_path: this.activePath(),
-        params: this.paramsWithMask({ includeCrop: false }),
+        params: this.paramsWithMask({ includeCrop: this.cropPreviewConfirmed() }),
         max_size: 1280,
       }));
       this.previewSrc.set(res.image_base64);

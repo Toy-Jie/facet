@@ -91,13 +91,6 @@ import { createLeafletMap } from '../../shared/leaflet';
           </button>
         }
 
-        @if (auth.isEdition()) {
-          <button mat-button (click)="showRetouchPanel()" [matTooltip]="'retouch.open' | translate">
-            <mat-icon>auto_fix_high</mat-icon>
-            {{ 'retouch.short_title' | translate }}
-          </button>
-        }
-
         @if (downloadOptions().length > 1) {
           <button mat-button [matMenuTriggerFor]="downloadMenu" [disabled]="downloading()" [matTooltip]="'photo_detail.download' | translate">
             @if (downloading()) { <mat-spinner diameter="18" class="!inline-block !align-baseline" /> } @else { <mat-icon>download</mat-icon> }
@@ -476,7 +469,7 @@ import { createLeafletMap } from '../../shared/leaflet';
         }
         @if (filmstripPhotos().length) {
           <div class="shrink-0 border-t border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] px-3 py-2">
-            <div #filmstrip class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1">
+            <div #filmstrip class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 lg:w-[calc(100%_-_420px)]">
               @for (thumb of filmstripPhotos(); track thumb.path) {
                 <button
                   type="button"
@@ -776,10 +769,6 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     this.photoActions.openAddPerson(photo, () => {
       this.photo.update(p => p ? { ...p, unassigned_faces: Math.max(0, p.unassigned_faces - 1) } : p);
     });
-  }
-
-  protected showRetouchPanel(): void {
-    this.sidePanelMode.set('retouch');
   }
 
   protected async onRetouchSaved(result: ApplyResponse): Promise<void> {

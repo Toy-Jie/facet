@@ -1874,6 +1874,8 @@
     "flip_vertical": "Flip V",
     "enable_crop": "Enable crop",
     "reset_crop": "Reset crop",
+    "confirm_crop": "Confirm crop",
+    "continue_crop": "Continue crop",
     "crop_hint": "Drag the crop frame edges, corners, or center on the preview.",
     "crop_drag_hint": "Drag to adjust crop",
     "crop_x": "Left %",

@@ -1608,6 +1608,8 @@
     "flip_vertical": "垂直翻转",
     "enable_crop": "启用裁剪",
     "reset_crop": "重置裁剪",
+    "confirm_crop": "确认裁剪",
+    "continue_crop": "继续裁剪",
     "crop_hint": "直接拖动预览图上的裁剪框边缘、角点或中间区域来调整裁剪范围。",
     "crop_drag_hint": "拖动调整裁剪",
     "crop_x": "左边距 %",
