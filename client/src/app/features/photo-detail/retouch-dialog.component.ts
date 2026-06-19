@@ -554,8 +554,7 @@ export class RetouchDialogComponent {
       this.markHistoryChanged();
       this.previewWidth.set(0);
       this.previewHeight.set(0);
-      this.previewSrc.set(this.api.thumbnailUrl(path, 1920));
-      this.statusText.set(this.i18n.t('retouch.preview_original'));
+      this.setOriginalPreview(path);
       this.resetPreviewZoom();
     });
   }
@@ -679,8 +678,7 @@ export class RetouchDialogComponent {
     this.spots.set([]);
     this.cropPreviewConfirmed.set(false);
     this.resetPreviewZoom();
-    this.previewSrc.set(this.api.thumbnailUrl(this.activePath(), 1920));
-    this.statusText.set(this.i18n.t('retouch.preview_original'));
+    this.setOriginalPreview();
   }
 
   onPreviewWheel(event: WheelEvent): void {
@@ -793,12 +791,16 @@ export class RetouchDialogComponent {
   }
 
   private async refreshPreview(): Promise<void> {
+    if (this.isOriginalPreviewState()) {
+      this.setOriginalPreview();
+      return;
+    }
     this.loadingPreview.set(true);
     try {
       const res = await firstValueFrom(this.api.post<PreviewResponse>('/retouch/preview', {
         image_path: this.activePath(),
         params: this.paramsWithMask({ includeCrop: this.cropPreviewConfirmed() }),
-        max_size: 1280,
+        max_size: 4096,
       }));
       this.previewSrc.set(res.image_base64);
       this.previewWidth.set(res.width);
@@ -815,6 +817,22 @@ export class RetouchDialogComponent {
     const mask = this.buildMask();
     const includeCrop = options.includeCrop !== false;
     return { ...this.params(), crop: includeCrop ? this.params().crop : null, inpaint_mask_base64: mask };
+  }
+
+  private setOriginalPreview(path = this.activePath()): void {
+    this.previewWidth.set(0);
+    this.previewHeight.set(0);
+    this.previewSrc.set(path ? this.api.imageUrl(path) : '');
+    this.statusText.set(this.i18n.t('retouch.preview_original'));
+  }
+
+  private isOriginalPreviewState(): boolean {
+    if (this.spots().length || this.cropPreviewConfirmed()) return false;
+    const params = this.params();
+    return (Object.keys(DEFAULT_PARAMS) as Array<keyof RetouchParams>).every(key => {
+      if (key === 'inpaint_mask_base64') return true;
+      return JSON.stringify(params[key]) === JSON.stringify(DEFAULT_PARAMS[key]);
+    });
   }
 
   private readonly onCropPointerMove = (event: PointerEvent): void => {

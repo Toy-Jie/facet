@@ -69,7 +69,7 @@ class RetouchPreviewBody(BaseModel):
     photo_id: Optional[str] = None
     image_path: Optional[str] = None
     params: RetouchAdjustments = Field(default_factory=RetouchAdjustments)
-    max_size: int = Field(default=1280, ge=320, le=1920)
+    max_size: int = Field(default=2560, ge=320, le=4096)
 
 
 class RetouchApplyBody(BaseModel):
@@ -320,9 +320,9 @@ def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
     return out
 
 
-def _jpeg_base64(img: Image.Image, quality: int = 86) -> str:
+def _jpeg_base64(img: Image.Image, quality: int = 94) -> str:
     buf = BytesIO()
-    img.save(buf, format="JPEG", quality=quality, optimize=True)
+    img.save(buf, format="JPEG", quality=quality, optimize=True, subsampling=0)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
