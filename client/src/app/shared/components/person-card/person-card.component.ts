@@ -147,6 +147,9 @@ export interface PersonProject {
               <button mat-icon-button [matTooltip]="'persons.view_photos' | translate" (click)="viewPhotos.emit(person().id)">
                 <mat-icon class="opacity-60">photo_library</mat-icon>
               </button>
+              <button mat-icon-button [matTooltip]="'retouch.title' | translate" (click)="retouch.emit(person().id)">
+                <mat-icon class="opacity-60">face_retouching_natural</mat-icon>
+              </button>
               <button mat-icon-button [matTooltip]="'persons.delete' | translate" (click)="deleted.emit(person().id)">
                 <mat-icon class="opacity-60">delete</mat-icon>
               </button>
@@ -167,6 +170,7 @@ export class PersonCardComponent {
 
   readonly selected = output<number>();
   readonly viewPhotos = output<number>();
+  readonly retouch = output<number>();
   readonly projectSelected = output<{ personId: number; projectPath: string }>();
   readonly editStart = output<number>();
   readonly editSave = output<{ id: number; name: string }>();

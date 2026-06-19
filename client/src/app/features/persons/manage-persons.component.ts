@@ -175,6 +175,7 @@ export class NewPersonDialogComponent {
                   (editSave)="onNeedsNamingSave($event)"
                   (editCancel)="onNeedsNamingCancel()"
                   (viewPhotos)="onViewPhotos($event)"
+                  (retouch)="onRetouchPerson($event)"
                   (projectSelected)="onViewProject($event)"
                 />
               }
@@ -193,6 +194,7 @@ export class NewPersonDialogComponent {
             [canEdit]="auth.isEdition()"
             (selected)="onPersonSelected($event)"
             (viewPhotos)="onViewPhotos($event)"
+            (retouch)="onRetouchPerson($event)"
             (projectSelected)="onViewProject($event)"
             (editStart)="startEdit($event)"
             (editSave)="onEditSave($event)"
@@ -451,6 +453,28 @@ export class ManagePersonsComponent implements OnInit {
 
   onViewPhotos(id: number): void {
     this.router.navigate(['/'], { queryParams: { person_id: String(id) } });
+  }
+
+  async onRetouchPerson(id: number): Promise<void> {
+    try {
+      const res = await firstValueFrom(
+        this.api.get<{ photos: { path: string }[] }>('/photos', {
+          person_id: String(id),
+          sort: 'aggregate',
+          sort_direction: 'DESC',
+          page: 1,
+          per_page: 1,
+        }),
+      );
+      const path = res.photos?.[0]?.path;
+      if (!path) {
+        this.snackBar.open(this.i18n.t('persons.no_photos'), '', { duration: 2500 });
+        return;
+      }
+      this.router.navigate(['/photo'], { queryParams: { path, panel: 'retouch' } });
+    } catch {
+      this.snackBar.open(this.i18n.t('persons.error_loading'), '', { duration: 3000 });
+    }
   }
 
   onViewProject(event: { personId: number; projectPath: string }): void {

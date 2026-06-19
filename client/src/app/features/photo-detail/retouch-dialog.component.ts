@@ -38,6 +38,20 @@ interface RetouchParams {
   temperature: number;
   smooth_skin: number;
   whiten_skin: number;
+  face_blemish: number;
+  face_wrinkle: number;
+  body_blemish: number;
+  skin_texture: number;
+  skin_tone: number;
+  face_fullness: number;
+  face_shape: number;
+  eyebrow: number;
+  nose: number;
+  eyes: number;
+  mouth: number;
+  close_mouth: number;
+  teeth: number;
+  eye_enhance: number;
   background_blur: number;
   inpaint_mask_base64?: string | null;
 }
@@ -46,6 +60,11 @@ interface Spot {
   x: number;
   y: number;
   radius: number;
+}
+
+interface RetouchHistoryState {
+  params: RetouchParams;
+  spots: Spot[];
 }
 
 type CropDragHandle = 'move' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
@@ -67,6 +86,7 @@ interface PreviewResponse {
 }
 
 export interface ApplyResponse {
+  original_path?: string;
   output_path: string;
   thumbnail_url: string;
 }
@@ -82,6 +102,20 @@ const DEFAULT_PARAMS: RetouchParams = {
   temperature: 0,
   smooth_skin: 0,
   whiten_skin: 0,
+  face_blemish: 0,
+  face_wrinkle: 0,
+  body_blemish: 0,
+  skin_texture: 0,
+  skin_tone: 0,
+  face_fullness: 0,
+  face_shape: 0,
+  eyebrow: 0,
+  nose: 0,
+  eyes: 0,
+  mouth: 0,
+  close_mouth: 0,
+  teeth: 0,
+  eye_enhance: 0,
   background_blur: 0,
   inpaint_mask_base64: null,
 };
@@ -257,8 +291,38 @@ const DEFAULT_PARAMS: RetouchParams = {
                 {{ 'retouch.portrait' | translate }}
               </ng-template>
               <div class="p-4 space-y-5">
-                <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'smooth_skin', label: ('retouch.smooth_skin' | translate), min: 0, max: 100 }" />
-                <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'whiten_skin', label: ('retouch.whiten_skin' | translate), min: 0, max: 100 }" />
+                <div class="space-y-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.blemish_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_blemish', label: ('retouch.face_blemish' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_wrinkle', label: ('retouch.face_wrinkle' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'body_blemish', label: ('retouch.body_blemish' | translate), min: 0, max: 100 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.skin_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'smooth_skin', label: ('retouch.smooth_skin' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_fullness', label: ('retouch.face_fullness' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'skin_texture', label: ('retouch.skin_texture' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'skin_tone', label: ('retouch.skin_tone' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'whiten_skin', label: ('retouch.whiten_skin' | translate), min: 0, max: 100 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.face_reshape_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_shape', label: ('retouch.face_shape' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'eyebrow', label: ('retouch.eyebrow' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'nose', label: ('retouch.nose' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'eyes', label: ('retouch.eyes' | translate), min: -100, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'mouth', label: ('retouch.mouth' | translate), min: -100, max: 100 }" />
+                </div>
+
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.expression_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'close_mouth', label: ('retouch.close_mouth' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'teeth', label: ('retouch.teeth' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'eye_enhance', label: ('retouch.eye_enhance' | translate), min: 0, max: 100 }" />
+                </div>
+
                 <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 text-xs text-[var(--mat-sys-on-surface-variant)]">
                   {{ 'retouch.skin_mask_note' | translate }}
                 </div>
@@ -431,15 +495,16 @@ export class RetouchDialogComponent {
   readonly previewHeight = signal(0);
   readonly statusText = signal('');
   readonly cropPreviewConfirmed = signal(false);
+  private readonly historyVersion = signal(0);
 
-  private undoStack: RetouchParams[] = [];
-  private redoStack: RetouchParams[] = [];
+  private undoStack: RetouchHistoryState[] = [];
+  private redoStack: RetouchHistoryState[] = [];
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
   private cropDrag: CropDragState | null = null;
   private currentPath = '';
 
-  readonly canUndo = computed(() => this.undoStack.length > 0);
-  readonly canRedo = computed(() => this.redoStack.length > 0);
+  readonly canUndo = computed(() => (this.historyVersion(), this.undoStack.length > 0));
+  readonly canRedo = computed(() => (this.historyVersion(), this.redoStack.length > 0));
   readonly cropEnabled = computed(() => !!this.params().crop);
 
   constructor() {
@@ -453,6 +518,7 @@ export class RetouchDialogComponent {
       this.cropPreviewConfirmed.set(false);
       this.undoStack = [];
       this.redoStack = [];
+      this.markHistoryChanged();
       this.previewWidth.set(0);
       this.previewHeight.set(0);
       this.previewSrc.set(this.api.thumbnailUrl(path, 1920));
@@ -557,16 +623,18 @@ export class RetouchDialogComponent {
   undo(): void {
     const prev = this.undoStack.pop();
     if (!prev) return;
-    this.redoStack.push(this.cloneParams(this.params()));
-    this.params.set(prev);
+    this.redoStack.push(this.currentHistoryState());
+    this.restoreHistoryState(prev);
+    this.markHistoryChanged();
     this.schedulePreview();
   }
 
   redo(): void {
     const next = this.redoStack.pop();
     if (!next) return;
-    this.undoStack.push(this.cloneParams(this.params()));
-    this.params.set(next);
+    this.undoStack.push(this.currentHistoryState());
+    this.restoreHistoryState(next);
+    this.markHistoryChanged();
     this.schedulePreview();
   }
 
@@ -598,13 +666,31 @@ export class RetouchDialogComponent {
   }
 
   private pushHistory(): void {
-    this.undoStack.push(this.cloneParams(this.params()));
+    this.undoStack.push(this.currentHistoryState());
     if (this.undoStack.length > 30) this.undoStack.shift();
     this.redoStack = [];
+    this.markHistoryChanged();
+  }
+
+  private markHistoryChanged(): void {
+    this.historyVersion.update(v => v + 1);
   }
 
   private cloneParams(params: RetouchParams): RetouchParams {
     return JSON.parse(JSON.stringify(params));
+  }
+
+  private currentHistoryState(): RetouchHistoryState {
+    return {
+      params: this.cloneParams(this.params()),
+      spots: this.spots().map(spot => ({ ...spot })),
+    };
+  }
+
+  private restoreHistoryState(state: RetouchHistoryState): void {
+    this.params.set(this.cloneParams(state.params));
+    this.spots.set(state.spots.map(spot => ({ ...spot })));
+    this.cropPreviewConfirmed.set(false);
   }
 
   private schedulePreview(): void {

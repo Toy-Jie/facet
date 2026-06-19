@@ -621,6 +621,23 @@ export class GalleryStore {
     );
   }
 
+  /** Insert a newly created photo into the current in-memory gallery near its source. */
+  insertPhotoAfter(sourcePath: string, photo: Photo): void {
+    let inserted = false;
+    this.photos.update(photos => {
+      if (photos.some(p => p.path === photo.path)) return photos;
+      const sourceIndex = photos.findIndex(p => p.path === sourcePath);
+      inserted = true;
+      if (sourceIndex < 0) return [photo, ...photos];
+      return [
+        ...photos.slice(0, sourceIndex + 1),
+        photo,
+        ...photos.slice(sourceIndex + 1),
+      ];
+    });
+    if (inserted) this.total.update(total => total + 1);
+  }
+
   /** Patch many photos at once. */
   private patchPhotos(pathSet: ReadonlySet<string>, partial: Partial<Photo>): void {
     this.photos.update(photos =>

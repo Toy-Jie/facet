@@ -885,7 +885,7 @@ export class GalleryComponent implements OnInit, OnDestroy {
   protected downloadPhoto(photo: Photo): void {
     this.router.navigate(['/photo'], {
       queryParams: { path: photo.path },
-      state: { photo },
+      state: { photo, path_prefix: this.store.filters().path_prefix },
     });
   }
 

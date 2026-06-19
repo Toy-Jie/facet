@@ -525,6 +525,7 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
   protected readonly sidePanelMode = signal<'details' | 'retouch'>('details');
   protected readonly filmstripPhotos = computed(() => this.store.photos().length ? this.store.photos() : this.localFilmstripPhotos());
   protected readonly stars: readonly number[] = [1, 2, 3, 4, 5];
+  private readonly returnPathPrefix = signal('');
 
   // Zoom & pan state
   private readonly imagePanel = viewChild<ElementRef<HTMLDivElement>>('imagePanel');
@@ -635,6 +636,7 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     }
     // Try router state (passed from gallery via navigate(..., { state }))
     const statePhoto = history.state?.['photo'] as Photo | undefined;
+    this.returnPathPrefix.set(history.state?.['path_prefix'] || this.store.filters().path_prefix || '');
 
     if (statePhoto) {
       this.photo.set(statePhoto);
@@ -647,11 +649,18 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
         this.router.navigate(['/']);
       }
     }
+    if (this.route.snapshot.queryParamMap.get('panel') === 'retouch' && this.auth.isEdition()) {
+      this.sidePanelMode.set('retouch');
+    }
   }
 
   @HostListener('document:keydown.escape')
   protected goBack(): void {
-    this.location.back();
+    const current = this.photo();
+    const projectPath = this.returnPathPrefix() || this.store.filters().path_prefix || (current ? this.projectPathForPhoto(current.path) : '');
+    this.router.navigate(['/'], {
+      queryParams: projectPath ? { path_prefix: projectPath } : {},
+    });
   }
 
   @HostListener('document:keydown.arrowleft')
@@ -782,10 +791,34 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
 
   protected async onRetouchSaved(result: ApplyResponse): Promise<void> {
     if (!result?.output_path) return;
+    const sourcePath = this.photo()?.path ?? result.original_path ?? '';
     this.snackBar.open(this.i18n.t('retouch.saved_copy'), '', { duration: 3000 });
     await this.router.navigate(['/photo'], { queryParams: { path: result.output_path } });
     await this.loadPhotoByPath(result.output_path);
+    const savedPhoto = this.photo();
+    if (savedPhoto) {
+      this.store.insertPhotoAfter(sourcePath, savedPhoto);
+      this.localFilmstripPhotos.update(photos => {
+        if (photos.some(p => p.path === savedPhoto.path)) return photos;
+        const sourceIndex = photos.findIndex(p => p.path === sourcePath);
+        if (sourceIndex < 0) return [savedPhoto, ...photos];
+        return [
+          ...photos.slice(0, sourceIndex + 1),
+          savedPhoto,
+          ...photos.slice(sourceIndex + 1),
+        ];
+      });
+    }
     this.sidePanelMode.set('details');
+  }
+
+  private projectPathForPhoto(path: string): string {
+    const scanRoots = this.store.scanDirectories().map(d => d.path);
+    const normalized = path.replace(/\\/g, '/');
+    const root = scanRoots.find(d => normalized === d || normalized.startsWith(d.replace(/\\/g, '/').replace(/\/$/, '') + '/'));
+    if (root) return root;
+    const slash = normalized.lastIndexOf('/');
+    return slash > 0 ? normalized.slice(0, slash) : '';
   }
 
   private async loadPhotoByPath(path: string): Promise<void> {

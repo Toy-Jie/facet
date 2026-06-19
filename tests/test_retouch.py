@@ -119,3 +119,44 @@ def test_retouch_apply_rotates_flips_and_crops_copy(retouch_client, tmp_path):
     assert edit is not None
     assert '"flip_horizontal": true' in edit[0]
     assert '"flip_vertical": true' in edit[0]
+
+
+def test_retouch_accepts_extended_portrait_controls(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_photo(tmp_path, db_path)
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {
+            "face_blemish": 30,
+            "face_wrinkle": 20,
+            "body_blemish": 10,
+            "skin_texture": 15,
+            "skin_tone": 12,
+            "face_fullness": 8,
+            "face_shape": -5,
+            "eyebrow": 6,
+            "nose": -4,
+            "eyes": 25,
+            "mouth": 5,
+            "close_mouth": 7,
+            "teeth": 35,
+            "eye_enhance": 30,
+        },
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    assert os.path.exists(output_path)
+    assert img_path.read_bytes() == original_bytes
+
+    conn = sqlite3.connect(db_path)
+    edit = conn.execute(
+        "SELECT params_json FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()
+    conn.close()
+
+    assert edit is not None
+    assert '"face_blemish": 30.0' in edit[0]
+    assert '"eye_enhance": 30.0' in edit[0]
