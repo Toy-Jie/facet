@@ -76,14 +76,44 @@ def _make_depth_photo(tmp_path, db_path, size=(160, 120), filename="depth_portra
     return img_path, original_bytes
 
 
-def _insert_face_box(db_path, photo_path, box):
+def _make_face_landmarks(box):
+    x1, y1, x2, y2 = box
+    w = x2 - x1
+    h = y2 - y1
+    lm = np.zeros((106, 2), dtype=np.float32)
+    left_eye = np.array([
+        [x1 + w * 0.30, y1 + h * 0.36],
+        [x1 + w * 0.42, y1 + h * 0.36],
+        [x1 + w * 0.34, y1 + h * 0.33],
+        [x1 + w * 0.38, y1 + h * 0.33],
+        [x1 + w * 0.34, y1 + h * 0.39],
+        [x1 + w * 0.38, y1 + h * 0.39],
+    ], dtype=np.float32)
+    right_eye = left_eye.copy()
+    right_eye[:, 0] += w * 0.28
+    lm[[35, 39, 37, 38, 41, 40]] = left_eye
+    lm[[89, 93, 91, 92, 95, 94]] = right_eye
+    for idx, t in zip(range(52, 72), np.linspace(0, 2 * np.pi, 20, endpoint=False)):
+        lm[idx] = [x1 + w * (0.50 + 0.18 * np.cos(t)), y1 + h * (0.74 + 0.07 * np.sin(t))]
+    return lm
+
+
+def _insert_face_box(db_path, photo_path, box, landmarks=None):
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        """INSERT INTO faces
-           (photo_path, face_index, embedding, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        [str(photo_path), 0, b"0" * (512 * 4), *box],
-    )
+    if landmarks is None:
+        conn.execute(
+            """INSERT INTO faces
+               (photo_path, face_index, embedding, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            [str(photo_path), 0, b"0" * (512 * 4), *box],
+        )
+    else:
+        conn.execute(
+            """INSERT INTO faces
+               (photo_path, face_index, embedding, bbox_x1, bbox_y1, bbox_x2, bbox_y2, landmark_2d_106)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            [str(photo_path), 0, b"0" * (512 * 4), *box, landmarks.astype(np.float32).tobytes()],
+        )
     conn.commit()
     conn.close()
 
@@ -401,3 +431,41 @@ def test_retouch_accepts_beauty_advanced_controls(retouch_client, tmp_path):
     assert edit is not None
     assert '"beauty_smooth_color": 125.0' in edit[0]
     assert '"beauty_inpaint_radius": 175.0' in edit[0]
+
+
+def test_retouch_accepts_targeted_wrinkle_controls_with_landmarks(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_photo(tmp_path, db_path, size=(160, 120), filename="wrinkle_controls.jpg")
+    face_box = (48, 22, 112, 98)
+    _insert_face_box(db_path, img_path, face_box, _make_face_landmarks(face_box))
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {
+            "face_wrinkle": 15,
+            "wrinkle_nasolabial_fold": 70,
+            "wrinkle_under_eye": 45,
+            "wrinkle_forehead": 35,
+            "wrinkle_glabella": 55,
+            "wrinkle_mouth_corner": 40,
+            "wrinkle_smooth_radius": 135,
+            "wrinkle_blend": 120,
+            "wrinkle_detail_protection": 150,
+        },
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    assert os.path.exists(output_path)
+    assert img_path.read_bytes() == original_bytes
+
+    conn = sqlite3.connect(db_path)
+    edit = conn.execute(
+        "SELECT params_json FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()
+    conn.close()
+
+    assert edit is not None
+    assert '"wrinkle_nasolabial_fold": 70.0' in edit[0]
+    assert '"wrinkle_detail_protection": 150.0' in edit[0]

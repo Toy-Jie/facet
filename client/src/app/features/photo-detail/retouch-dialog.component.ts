@@ -40,6 +40,14 @@ interface RetouchParams {
   whiten_skin: number;
   face_blemish: number;
   face_wrinkle: number;
+  wrinkle_nasolabial_fold: number;
+  wrinkle_under_eye: number;
+  wrinkle_forehead: number;
+  wrinkle_glabella: number;
+  wrinkle_mouth_corner: number;
+  wrinkle_smooth_radius: number;
+  wrinkle_blend: number;
+  wrinkle_detail_protection: number;
   body_blemish: number;
   skin_texture: number;
   skin_tone: number;
@@ -134,6 +142,14 @@ const DEFAULT_PARAMS: RetouchParams = {
   whiten_skin: 0,
   face_blemish: 0,
   face_wrinkle: 0,
+  wrinkle_nasolabial_fold: 0,
+  wrinkle_under_eye: 0,
+  wrinkle_forehead: 0,
+  wrinkle_glabella: 0,
+  wrinkle_mouth_corner: 0,
+  wrinkle_smooth_radius: 100,
+  wrinkle_blend: 100,
+  wrinkle_detail_protection: 100,
   body_blemish: 0,
   skin_texture: 0,
   skin_tone: 0,
@@ -396,6 +412,11 @@ const DEFAULT_PARAMS: RetouchParams = {
                   <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.blemish_group' | translate }}</div>
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_blemish', label: ('retouch.face_blemish' | translate), min: 0, max: 100 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_wrinkle', label: ('retouch.face_wrinkle' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_nasolabial_fold', label: ('retouch.wrinkle_nasolabial_fold' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_under_eye', label: ('retouch.wrinkle_under_eye' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_forehead', label: ('retouch.wrinkle_forehead' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_glabella', label: ('retouch.wrinkle_glabella' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_mouth_corner', label: ('retouch.wrinkle_mouth_corner' | translate), min: 0, max: 100 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'body_blemish', label: ('retouch.body_blemish' | translate), min: 0, max: 100 }" />
                 </div>
 
@@ -433,6 +454,9 @@ const DEFAULT_PARAMS: RetouchParams = {
 
                 <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
                   <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.beauty_smooth_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_smooth_radius', label: ('retouch.wrinkle_smooth_radius' | translate), min: 25, max: 300 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_blend', label: ('retouch.wrinkle_blend' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_detail_protection', label: ('retouch.wrinkle_detail_protection' | translate), min: 0, max: 200 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_smooth_color', label: ('retouch.beauty_smooth_color' | translate), min: 0, max: 200 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_smooth_radius', label: ('retouch.beauty_smooth_radius' | translate), min: 0, max: 200 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_smooth_blend', label: ('retouch.beauty_smooth_blend' | translate), min: 0, max: 200 }" />
@@ -1122,6 +1146,14 @@ export class RetouchDialogComponent {
       'whiten_skin',
       'face_blemish',
       'face_wrinkle',
+      'wrinkle_nasolabial_fold',
+      'wrinkle_under_eye',
+      'wrinkle_forehead',
+      'wrinkle_glabella',
+      'wrinkle_mouth_corner',
+      'wrinkle_smooth_radius',
+      'wrinkle_blend',
+      'wrinkle_detail_protection',
       'body_blemish',
       'skin_texture',
       'skin_tone',

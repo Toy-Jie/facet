@@ -51,6 +51,14 @@ class RetouchAdjustments(BaseModel):
     whiten_skin: float = Field(default=0, ge=0, le=100)
     face_blemish: float = Field(default=0, ge=0, le=100)
     face_wrinkle: float = Field(default=0, ge=0, le=100)
+    wrinkle_nasolabial_fold: float = Field(default=0, ge=0, le=100)
+    wrinkle_under_eye: float = Field(default=0, ge=0, le=100)
+    wrinkle_forehead: float = Field(default=0, ge=0, le=100)
+    wrinkle_glabella: float = Field(default=0, ge=0, le=100)
+    wrinkle_mouth_corner: float = Field(default=0, ge=0, le=100)
+    wrinkle_smooth_radius: float = Field(default=100, ge=25, le=300)
+    wrinkle_blend: float = Field(default=100, ge=0, le=200)
+    wrinkle_detail_protection: float = Field(default=100, ge=0, le=200)
     body_blemish: float = Field(default=0, ge=0, le=100)
     skin_texture: float = Field(default=0, ge=0, le=100)
     skin_tone: float = Field(default=0, ge=-100, le=100)
@@ -160,7 +168,8 @@ def _face_boxes_for_photo(conn: sqlite3.Connection, db_path: str) -> list[tuple[
                FROM faces
                WHERE photo_path = ?
                  AND bbox_x1 IS NOT NULL AND bbox_y1 IS NOT NULL
-                 AND bbox_x2 IS NOT NULL AND bbox_y2 IS NOT NULL""",
+                 AND bbox_x2 IS NOT NULL AND bbox_y2 IS NOT NULL
+               ORDER BY face_index, id""",
             [db_path],
         ).fetchall()
     except sqlite3.Error:
@@ -171,6 +180,34 @@ def _face_boxes_for_photo(conn: sqlite3.Connection, db_path: str) -> list[tuple[
         if x2 > x1 and y2 > y1:
             boxes.append((x1, y1, x2, y2))
     return boxes
+
+
+def _face_landmarks_for_photo(conn: sqlite3.Connection, db_path: str) -> list[Optional[np.ndarray]]:
+    try:
+        rows = conn.execute(
+            """SELECT landmark_2d_106
+               FROM faces
+               WHERE photo_path = ?
+               ORDER BY face_index, id""",
+            [db_path],
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    landmarks: list[Optional[np.ndarray]] = []
+    for row in rows:
+        if row[0] is None:
+            landmarks.append(None)
+            continue
+        try:
+            lm = np.frombuffer(row[0], dtype=np.float32).reshape(106, 2).copy()
+        except Exception:
+            landmarks.append(None)
+            continue
+        if np.isfinite(lm).all() and lm.shape == (106, 2):
+            landmarks.append(lm)
+        else:
+            landmarks.append(None)
+    return landmarks
 
 
 def _load_image(path: str) -> Image.Image:
@@ -443,6 +480,129 @@ def _face_subject_prior(shape: tuple[int, int], face_boxes: Optional[list[tuple[
     return np.clip(prior, 0, 1)
 
 
+def _add_soft_ellipse(mask: np.ndarray, center: tuple[float, float], axes: tuple[float, float], value: float, angle: float = 0):
+    if value <= 0:
+        return
+    h, w = mask.shape
+    cx = int(round(center[0]))
+    cy = int(round(center[1]))
+    ax = max(1, int(round(axes[0])))
+    ay = max(1, int(round(axes[1])))
+    if cx < -ax or cx > w + ax or cy < -ay or cy > h + ay:
+        return
+    layer = np.zeros_like(mask, dtype=np.float32)
+    cv2.ellipse(layer, (cx, cy), (ax, ay), angle, 0, 360, float(value), -1, lineType=cv2.LINE_AA)
+    np.maximum(mask, layer, out=mask)
+
+
+def _add_soft_line(mask: np.ndarray, start: tuple[float, float], end: tuple[float, float], width: float, value: float):
+    if value <= 0:
+        return
+    layer = np.zeros_like(mask, dtype=np.float32)
+    cv2.line(
+        layer,
+        (int(round(start[0])), int(round(start[1]))),
+        (int(round(end[0])), int(round(end[1]))),
+        float(value),
+        max(1, int(round(width))),
+        lineType=cv2.LINE_AA,
+    )
+    np.maximum(mask, layer, out=mask)
+
+
+def _wrinkle_zone_mask(
+    shape: tuple[int, int],
+    params: RetouchAdjustments,
+    face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
+    face_landmarks: Optional[list[Optional[np.ndarray]]] = None,
+) -> np.ndarray:
+    h, w = shape
+    mask = np.zeros((h, w), dtype=np.float32)
+    strengths = {
+        "nasolabial": params.wrinkle_nasolabial_fold / 100.0,
+        "under_eye": params.wrinkle_under_eye / 100.0,
+        "forehead": params.wrinkle_forehead / 100.0,
+        "glabella": params.wrinkle_glabella / 100.0,
+        "mouth_corner": params.wrinkle_mouth_corner / 100.0,
+    }
+    if max(strengths.values()) <= 0:
+        return mask
+
+    boxes = face_boxes or []
+    landmarks = face_landmarks or []
+    count = max(len(boxes), len(landmarks))
+    for idx in range(count):
+        lm = landmarks[idx] if idx < len(landmarks) else None
+        if idx < len(boxes):
+            x1, y1, x2, y2 = boxes[idx]
+        elif lm is not None:
+            valid = lm[np.any(lm > 0, axis=1)]
+            if valid.size == 0:
+                continue
+            x1, y1 = valid.min(axis=0)
+            x2, y2 = valid.max(axis=0)
+        else:
+            continue
+        x1, y1, x2, y2 = float(x1), float(y1), float(x2), float(y2)
+        fw = max(1.0, x2 - x1)
+        fh = max(1.0, y2 - y1)
+        cx = (x1 + x2) / 2.0
+
+        if lm is not None and lm.shape[0] >= 96:
+            left_eye = lm[[35, 39, 37, 38, 41, 40]]
+            right_eye = lm[[89, 93, 91, 92, 95, 94]]
+            mouth = lm[52:72] if lm.shape[0] >= 72 else np.empty((0, 2), dtype=np.float32)
+            left_eye_c = left_eye.mean(axis=0)
+            right_eye_c = right_eye.mean(axis=0)
+            eye_c = (left_eye_c + right_eye_c) / 2.0
+            mouth_c = mouth.mean(axis=0) if mouth.size else np.array([cx, y1 + fh * 0.72], dtype=np.float32)
+            mouth_left = mouth[np.argmin(mouth[:, 0])] if mouth.size else np.array([cx - fw * 0.16, y1 + fh * 0.72], dtype=np.float32)
+            mouth_right = mouth[np.argmax(mouth[:, 0])] if mouth.size else np.array([cx + fw * 0.16, y1 + fh * 0.72], dtype=np.float32)
+            eye_span = max(1.0, float(np.linalg.norm(right_eye_c - left_eye_c)))
+        else:
+            left_eye_c = np.array([x1 + fw * 0.34, y1 + fh * 0.38], dtype=np.float32)
+            right_eye_c = np.array([x1 + fw * 0.66, y1 + fh * 0.38], dtype=np.float32)
+            eye_c = (left_eye_c + right_eye_c) / 2.0
+            mouth_c = np.array([cx, y1 + fh * 0.74], dtype=np.float32)
+            mouth_left = np.array([x1 + fw * 0.36, y1 + fh * 0.74], dtype=np.float32)
+            mouth_right = np.array([x1 + fw * 0.64, y1 + fh * 0.74], dtype=np.float32)
+            eye_span = fw * 0.32
+
+        nose_left = np.array([cx - fw * 0.10, eye_c[1] + (mouth_c[1] - eye_c[1]) * 0.45], dtype=np.float32)
+        nose_right = np.array([cx + fw * 0.10, eye_c[1] + (mouth_c[1] - eye_c[1]) * 0.45], dtype=np.float32)
+        _add_soft_line(mask, nose_left, mouth_left, fw * 0.045, strengths["nasolabial"])
+        _add_soft_line(mask, nose_right, mouth_right, fw * 0.045, strengths["nasolabial"])
+
+        _add_soft_ellipse(mask, (left_eye_c[0], left_eye_c[1] + fh * 0.10), (eye_span * 0.30, fh * 0.055), strengths["under_eye"], -8)
+        _add_soft_ellipse(mask, (right_eye_c[0], right_eye_c[1] + fh * 0.10), (eye_span * 0.30, fh * 0.055), strengths["under_eye"], 8)
+        _add_soft_ellipse(mask, (cx, y1 + fh * 0.18), (fw * 0.34, fh * 0.085), strengths["forehead"])
+        _add_soft_ellipse(mask, (cx, eye_c[1] - fh * 0.055), (fw * 0.075, fh * 0.085), strengths["glabella"])
+        _add_soft_ellipse(mask, (mouth_left[0], mouth_left[1]), (fw * 0.10, fh * 0.075), strengths["mouth_corner"], -18)
+        _add_soft_ellipse(mask, (mouth_right[0], mouth_right[1]), (fw * 0.10, fh * 0.075), strengths["mouth_corner"], 18)
+
+    feather = max(0.1, 3.0 * (params.beauty_skin_mask_feather / 100.0))
+    mask = cv2.GaussianBlur(mask, (0, 0), feather)
+    return np.clip(mask, 0, 1)
+
+
+def _apply_targeted_wrinkle_smoothing(
+    rgb: np.ndarray,
+    wrinkle_mask: np.ndarray,
+    params: RetouchAdjustments,
+) -> np.ndarray:
+    if wrinkle_mask.max() <= 0.01:
+        return rgb
+    radius = max(1.0, 32.0 * (params.wrinkle_smooth_radius / 100.0))
+    try:
+        smoothed = cv2.edgePreservingFilter(rgb, flags=1, sigma_s=radius, sigma_r=0.24)
+    except Exception:
+        smoothed = cv2.bilateralFilter(rgb, d=0, sigmaColor=48, sigmaSpace=radius)
+    protect = _detail_protection_mask(rgb)
+    protect = 1.0 - (1.0 - protect) * (params.wrinkle_detail_protection / 100.0)
+    alpha = (wrinkle_mask * protect * 0.55 * (params.wrinkle_blend / 100.0))[:, :, None]
+    return np.clip(rgb.astype(np.float32) * (1 - alpha) + smoothed.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
+
+
 def _grabcut_subject_mask(rgb: np.ndarray, seed: np.ndarray) -> np.ndarray:
     small_rgb, scale = _small_mask(rgb, 820)
     if scale != 1.0:
@@ -609,6 +769,7 @@ def _apply_portrait_effects(
     rgb: np.ndarray,
     params: RetouchAdjustments,
     face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
+    face_landmarks: Optional[list[Optional[np.ndarray]]] = None,
 ) -> np.ndarray:
     result = rgb
     skin = _skin_mask(result, params.beauty_skin_mask_strength, params.beauty_skin_mask_feather)
@@ -629,6 +790,9 @@ def _apply_portrait_effects(
         protect = 1.0 - (1.0 - protect) * (params.beauty_detail_protection / 100.0)
         alpha = (skin * protect * (0.12 + 0.42 * strength) * (params.beauty_smooth_blend / 100.0))[:, :, None]
         result = np.clip(result.astype(np.float32) * (1 - alpha) + smooth.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
+
+    wrinkle_mask = _wrinkle_zone_mask(result.shape[:2], params, face_boxes, face_landmarks)
+    result = _apply_targeted_wrinkle_smoothing(result, wrinkle_mask, params)
 
     tone_amount = params.skin_tone / 100.0
     if (params.whiten_skin > 0 or abs(tone_amount) > 0.01) and skin.max() > 0.05:
@@ -731,6 +895,21 @@ def _scale_face_boxes(
     ]
 
 
+def _scale_face_landmarks(
+    face_landmarks: Optional[list[Optional[np.ndarray]]],
+    source_size: tuple[int, int],
+    target_size: tuple[int, int],
+) -> list[Optional[np.ndarray]]:
+    if not face_landmarks:
+        return []
+    source_w, source_h = source_size
+    target_w, target_h = target_size
+    if source_w <= 0 or source_h <= 0:
+        return [lm.copy() if lm is not None else None for lm in face_landmarks]
+    scale = np.array([target_w / float(source_w), target_h / float(source_h)], dtype=np.float32)
+    return [(lm.astype(np.float32) * scale).copy() if lm is not None else None for lm in face_landmarks]
+
+
 def _transform_face_boxes(
     face_boxes: Optional[list[tuple[int, int, int, int]]],
     source_size: tuple[int, int],
@@ -769,16 +948,52 @@ def _transform_face_boxes(
     return [box for box in boxes if box[2] > box[0] and box[3] > box[1]]
 
 
+def _transform_face_landmarks(
+    face_landmarks: Optional[list[Optional[np.ndarray]]],
+    source_size: tuple[int, int],
+    output_size: tuple[int, int],
+    params: RetouchAdjustments,
+) -> list[Optional[np.ndarray]]:
+    if not face_landmarks:
+        return []
+    source_w, source_h = source_size
+    out_w, out_h = output_size
+    rotate = params.rotate % 360
+    transformed = []
+    for lm in face_landmarks:
+        if lm is None:
+            transformed.append(None)
+            continue
+        pts = lm.astype(np.float32).copy()
+        if rotate == 90:
+            pts = np.column_stack([source_h - pts[:, 1], pts[:, 0]]).astype(np.float32)
+        elif rotate == 180:
+            pts = np.column_stack([source_w - pts[:, 0], source_h - pts[:, 1]]).astype(np.float32)
+        elif rotate == 270:
+            pts = np.column_stack([pts[:, 1], source_w - pts[:, 0]]).astype(np.float32)
+        elif rotate:
+            return []
+        if params.flip_horizontal:
+            pts[:, 0] = out_w - pts[:, 0]
+        if params.flip_vertical:
+            pts[:, 1] = out_h - pts[:, 1]
+        transformed.append(pts)
+    return transformed
+
+
 def _process_image(
     img: Image.Image,
     params: RetouchAdjustments,
     face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
+    face_landmarks: Optional[list[Optional[np.ndarray]]] = None,
     face_source_size: Optional[tuple[int, int]] = None,
 ) -> Image.Image:
     original_size = img.size
     scaled_faces = _scale_face_boxes(face_boxes, face_source_size or original_size, original_size)
+    scaled_landmarks = _scale_face_landmarks(face_landmarks, face_source_size or original_size, original_size)
     out = _process_geometry(img, params)
     transformed_faces = _transform_face_boxes(scaled_faces, original_size, out.size, params)
+    transformed_landmarks = _transform_face_landmarks(scaled_landmarks, original_size, out.size, params)
     if params.brightness:
         out = ImageEnhance.Brightness(out).enhance(_factor(params.brightness, 0.75))
     if params.contrast:
@@ -788,7 +1003,7 @@ def _process_image(
 
     rgb = np.array(out.convert("RGB"))
     rgb = _apply_temperature(rgb, params.temperature)
-    rgb = _apply_portrait_effects(rgb, params, transformed_faces)
+    rgb = _apply_portrait_effects(rgb, params, transformed_faces, transformed_landmarks)
     rgb = _apply_inpaint(rgb, params.inpaint_mask_base64, params.beauty_inpaint_radius)
     out = Image.fromarray(rgb, mode="RGB")
     if params.crop:
@@ -895,12 +1110,13 @@ def api_retouch_preview(
     with get_db() as conn:
         row, disk_path = _resolve_visible_path(conn, db_path, user)
         face_boxes = _face_boxes_for_photo(conn, db_path)
+        face_landmarks = _face_landmarks_for_photo(conn, db_path)
     source_size = (row["image_width"], row["image_height"]) if row["image_width"] and row["image_height"] else None
     img = _downsample(_load_image(disk_path), body.max_size)
     if body.compare:
         result = _process_geometry(img, body.params)
     else:
-        result = _process_image(img, body.params, face_boxes, source_size)
+        result = _process_image(img, body.params, face_boxes, face_landmarks, source_size)
     if body.compare and body.params.crop:
         result = _apply_crop(result, body.params.crop)
     return {
@@ -922,9 +1138,10 @@ def api_retouch_apply(
     with get_db() as conn:
         source_row, disk_path = _resolve_visible_path(conn, db_path, user)
         face_boxes = _face_boxes_for_photo(conn, db_path)
+        face_landmarks = _face_landmarks_for_photo(conn, db_path)
         source_size = (source_row["image_width"], source_row["image_height"]) if source_row["image_width"] and source_row["image_height"] else None
         img = _load_image(disk_path)
-        result = _process_image(img, body.params, face_boxes, source_size)
+        result = _process_image(img, body.params, face_boxes, face_landmarks, source_size)
         output_disk, output_db_path = _next_output_paths(disk_path, db_path, body.output_suffix)
         try:
             result.save(output_disk, format="JPEG", quality=95, subsampling=0)
@@ -954,10 +1171,11 @@ def api_retouch_download(
     with get_db() as conn:
         row, disk_path = _resolve_visible_path(conn, db_path, user)
         face_boxes = _face_boxes_for_photo(conn, db_path)
+        face_landmarks = _face_landmarks_for_photo(conn, db_path)
         source_size = (row["image_width"], row["image_height"]) if row["image_width"] and row["image_height"] else None
 
     img = _load_image(disk_path)
-    result = _process_image(img, body.params, face_boxes, source_size)
+    result = _process_image(img, body.params, face_boxes, face_landmarks, source_size)
     buf = BytesIO()
     result.save(buf, format="JPEG", quality=95, subsampling=0)
     buf.seek(0)
