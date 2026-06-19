@@ -105,6 +105,7 @@ class RetouchAdjustments(BaseModel):
     background_near_blur: float = Field(default=100, ge=0, le=200)
     background_mid_blur: float = Field(default=100, ge=0, le=200)
     background_far_blur: float = Field(default=100, ge=0, le=200)
+    selected_face_ids: Optional[list[int]] = Field(default=None, max_length=200)
     inpaint_mask_base64: Optional[str] = None
 
 
@@ -167,10 +168,22 @@ def _resolve_visible_path(conn: sqlite3.Connection, db_path: str, user: CurrentU
     return row, resolve_photo_disk_path(db_path)
 
 
-def _face_boxes_for_photo(conn: sqlite3.Connection, db_path: str) -> list[tuple[int, int, int, int]]:
+def _selected_face_id_set(params: RetouchAdjustments) -> Optional[set[int]]:
+    if params.selected_face_ids is None:
+        return None
+    return {int(face_id) for face_id in params.selected_face_ids if int(face_id) > 0}
+
+
+def _face_boxes_for_photo(
+    conn: sqlite3.Connection,
+    db_path: str,
+    selected_face_ids: Optional[set[int]] = None,
+) -> list[tuple[int, int, int, int]]:
+    if selected_face_ids is not None and not selected_face_ids:
+        return []
     try:
         rows = conn.execute(
-            """SELECT bbox_x1, bbox_y1, bbox_x2, bbox_y2
+            """SELECT id, bbox_x1, bbox_y1, bbox_x2, bbox_y2
                FROM faces
                WHERE photo_path = ?
                  AND bbox_x1 IS NOT NULL AND bbox_y1 IS NOT NULL
@@ -182,16 +195,24 @@ def _face_boxes_for_photo(conn: sqlite3.Connection, db_path: str) -> list[tuple[
         return []
     boxes: list[tuple[int, int, int, int]] = []
     for row in rows:
-        x1, y1, x2, y2 = [int(v) for v in row]
+        if selected_face_ids is not None and int(row[0]) not in selected_face_ids:
+            continue
+        x1, y1, x2, y2 = int(row[1]), int(row[2]), int(row[3]), int(row[4])
         if x2 > x1 and y2 > y1:
             boxes.append((x1, y1, x2, y2))
     return boxes
 
 
-def _face_landmarks_for_photo(conn: sqlite3.Connection, db_path: str) -> list[Optional[np.ndarray]]:
+def _face_landmarks_for_photo(
+    conn: sqlite3.Connection,
+    db_path: str,
+    selected_face_ids: Optional[set[int]] = None,
+) -> list[Optional[np.ndarray]]:
+    if selected_face_ids is not None and not selected_face_ids:
+        return []
     try:
         rows = conn.execute(
-            """SELECT landmark_2d_106
+            """SELECT id, landmark_2d_106
                FROM faces
                WHERE photo_path = ?
                ORDER BY face_index, id""",
@@ -201,11 +222,13 @@ def _face_landmarks_for_photo(conn: sqlite3.Connection, db_path: str) -> list[Op
         return []
     landmarks: list[Optional[np.ndarray]] = []
     for row in rows:
-        if row[0] is None:
+        if selected_face_ids is not None and int(row[0]) not in selected_face_ids:
+            continue
+        if row[1] is None:
             landmarks.append(None)
             continue
         try:
-            lm = np.frombuffer(row[0], dtype=np.float32).reshape(106, 2).copy()
+            lm = np.frombuffer(row[1], dtype=np.float32).reshape(106, 2).copy()
         except Exception:
             landmarks.append(None)
             continue
@@ -337,10 +360,17 @@ def _hair_mask(rgb: np.ndarray, feather: float = 100) -> np.ndarray:
     return mask
 
 
-def _apply_hair_effects(rgb: np.ndarray, params: RetouchAdjustments, skin: np.ndarray) -> np.ndarray:
+def _apply_hair_effects(
+    rgb: np.ndarray,
+    params: RetouchAdjustments,
+    skin: np.ndarray,
+    effect_mask: Optional[np.ndarray] = None,
+) -> np.ndarray:
     if max(params.hair_recolor, params.hair_part_fill, params.hair_smooth) <= 0:
         return rgb
     hair = _hair_mask(rgb, params.hair_mask_feather)
+    if effect_mask is not None:
+        hair = hair * np.clip(effect_mask, 0, 1)
     if hair.max() <= 0.01:
         return rgb
     result = rgb
@@ -576,6 +606,31 @@ def _face_subject_prior(shape: tuple[int, int], face_boxes: Optional[list[tuple[
         prior = np.maximum(prior, np.maximum(head, np.maximum(torso * 0.72, shoulders * 0.52)))
 
     return np.clip(prior, 0, 1)
+
+
+def _selected_face_effect_mask(
+    shape: tuple[int, int],
+    face_boxes: Optional[list[tuple[int, int, int, int]]],
+) -> np.ndarray:
+    h, w = shape
+    mask = np.zeros((h, w), dtype=np.float32)
+    if not face_boxes:
+        return mask
+    for x1, y1, x2, y2 in face_boxes:
+        x1 = max(0, min(w - 1, int(x1)))
+        y1 = max(0, min(h - 1, int(y1)))
+        x2 = max(x1 + 1, min(w, int(x2)))
+        y2 = max(y1 + 1, min(h, int(y2)))
+        face_w = max(1, x2 - x1)
+        face_h = max(1, y2 - y1)
+        center = (int(round((x1 + x2) / 2)), int(round(y1 + face_h * 0.44)))
+        axes = (max(3, int(round(face_w * 0.90))), max(3, int(round(face_h * 1.28))))
+        cv2.ellipse(mask, center, axes, 0, 0, 360, 1.0, -1, lineType=cv2.LINE_AA)
+        hair_center = (center[0], int(round(y1 + face_h * 0.12)))
+        hair_axes = (max(3, int(round(face_w * 1.25))), max(3, int(round(face_h * 0.78))))
+        cv2.ellipse(mask, hair_center, hair_axes, 0, 0, 360, 1.0, -1, lineType=cv2.LINE_AA)
+    sigma = max(1.2, min(h, w) / 180)
+    return np.clip(cv2.GaussianBlur(mask, (0, 0), sigma), 0, 1)
 
 
 def _add_soft_ellipse(mask: np.ndarray, center: tuple[float, float], axes: tuple[float, float], value: float, angle: float = 0):
@@ -871,6 +926,10 @@ def _apply_portrait_effects(
 ) -> np.ndarray:
     result = rgb
     skin = _skin_mask(result, params.beauty_skin_mask_strength, params.beauty_skin_mask_feather)
+    effect_mask: Optional[np.ndarray] = None
+    if params.selected_face_ids is not None:
+        effect_mask = _selected_face_effect_mask(result.shape[:2], face_boxes)
+        skin = skin * effect_mask
     blemish_strength = max(params.face_blemish, params.body_blemish) / 100.0
     wrinkle_strength = params.face_wrinkle / 100.0
     texture_strength = params.skin_texture / 100.0
@@ -916,7 +975,10 @@ def _apply_portrait_effects(
 
     enhance_strength = max(abs(params.eyes), params.eye_enhance, params.teeth, abs(params.eyebrow), abs(params.nose), abs(params.mouth), abs(params.face_shape), params.close_mouth, params.face_fullness) / 100.0
     if enhance_strength > 0:
-        non_skin_detail = (1.0 - np.clip(skin * 1.4, 0, 1))[:, :, None]
+        non_skin_detail = (1.0 - np.clip(skin * 1.4, 0, 1))
+        if effect_mask is not None:
+            non_skin_detail = non_skin_detail * effect_mask
+        non_skin_detail = non_skin_detail[:, :, None]
         feature_amount = 0.22 * (params.beauty_feature_detail / 100.0)
         feature_radius = max(0.1, 1.0 * (params.beauty_feature_radius / 100.0))
         detail = cv2.addWeighted(result, 1.0 + feature_amount, cv2.GaussianBlur(result, (0, 0), feature_radius), -feature_amount, 0)
@@ -928,12 +990,14 @@ def _apply_portrait_effects(
         value_threshold = np.clip(145 * (params.beauty_teeth_threshold / 100.0), 70, 230)
         sat_threshold = np.clip(95 * (2.0 - params.beauty_teeth_threshold / 100.0), 35, 180)
         bright_low_sat = ((hsv[:, :, 2] > value_threshold) & (hsv[:, :, 1] < sat_threshold)).astype(np.float32)
+        if effect_mask is not None:
+            bright_low_sat *= effect_mask
         alpha = cv2.GaussianBlur(bright_low_sat, (0, 0), 2)[:, :, None] * (params.teeth / 100.0) * 0.18
         hsv[:, :, 1:2] *= (1 - alpha * 0.35 * (params.beauty_teeth_saturation / 100.0))
         hsv[:, :, 2:3] *= (1 + alpha * (params.beauty_teeth_brightness / 100.0))
         result = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
 
-    result = _apply_hair_effects(result, params, skin)
+    result = _apply_hair_effects(result, params, skin, effect_mask)
 
     if params.background_blur > 0:
         subject = _subject_mask_for_depth_blur(result, skin, params, face_boxes)
@@ -1209,8 +1273,9 @@ def api_retouch_preview(
     db_path = _photo_path(body)
     with get_db() as conn:
         row, disk_path = _resolve_visible_path(conn, db_path, user)
-        face_boxes = _face_boxes_for_photo(conn, db_path)
-        face_landmarks = _face_landmarks_for_photo(conn, db_path)
+        selected_face_ids = _selected_face_id_set(body.params)
+        face_boxes = _face_boxes_for_photo(conn, db_path, selected_face_ids)
+        face_landmarks = _face_landmarks_for_photo(conn, db_path, selected_face_ids)
     source_size = (row["image_width"], row["image_height"]) if row["image_width"] and row["image_height"] else None
     img = _downsample(_load_image(disk_path), body.max_size)
     if body.compare:
@@ -1237,8 +1302,9 @@ def api_retouch_apply(
     db_path = _photo_path(body)
     with get_db() as conn:
         source_row, disk_path = _resolve_visible_path(conn, db_path, user)
-        face_boxes = _face_boxes_for_photo(conn, db_path)
-        face_landmarks = _face_landmarks_for_photo(conn, db_path)
+        selected_face_ids = _selected_face_id_set(body.params)
+        face_boxes = _face_boxes_for_photo(conn, db_path, selected_face_ids)
+        face_landmarks = _face_landmarks_for_photo(conn, db_path, selected_face_ids)
         source_size = (source_row["image_width"], source_row["image_height"]) if source_row["image_width"] and source_row["image_height"] else None
         img = _load_image(disk_path)
         result = _process_image(img, body.params, face_boxes, face_landmarks, source_size)
@@ -1270,8 +1336,9 @@ def api_retouch_download(
     db_path = _photo_path(body)
     with get_db() as conn:
         row, disk_path = _resolve_visible_path(conn, db_path, user)
-        face_boxes = _face_boxes_for_photo(conn, db_path)
-        face_landmarks = _face_landmarks_for_photo(conn, db_path)
+        selected_face_ids = _selected_face_id_set(body.params)
+        face_boxes = _face_boxes_for_photo(conn, db_path, selected_face_ids)
+        face_landmarks = _face_landmarks_for_photo(conn, db_path, selected_face_ids)
         source_size = (row["image_width"], row["image_height"]) if row["image_width"] and row["image_height"] else None
 
     img = _load_image(disk_path)

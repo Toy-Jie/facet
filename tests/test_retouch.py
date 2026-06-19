@@ -100,22 +100,28 @@ def _make_face_landmarks(box):
 
 def _insert_face_box(db_path, photo_path, box, landmarks=None):
     conn = sqlite3.connect(db_path)
+    face_index = conn.execute(
+        "SELECT COUNT(*) FROM faces WHERE photo_path = ?",
+        [str(photo_path)],
+    ).fetchone()[0]
     if landmarks is None:
-        conn.execute(
+        cur = conn.execute(
             """INSERT INTO faces
                (photo_path, face_index, embedding, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            [str(photo_path), 0, b"0" * (512 * 4), *box],
+            [str(photo_path), face_index, b"0" * (512 * 4), *box],
         )
     else:
-        conn.execute(
+        cur = conn.execute(
             """INSERT INTO faces
                (photo_path, face_index, embedding, bbox_x1, bbox_y1, bbox_x2, bbox_y2, landmark_2d_106)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            [str(photo_path), 0, b"0" * (512 * 4), *box, landmarks.astype(np.float32).tobytes()],
+            [str(photo_path), face_index, b"0" * (512 * 4), *box, landmarks.astype(np.float32).tobytes()],
         )
+    face_id = int(cur.lastrowid)
     conn.commit()
     conn.close()
+    return face_id
 
 
 def test_retouch_preview_returns_base64(retouch_client, tmp_path):
@@ -505,3 +511,34 @@ def test_retouch_accepts_hair_controls_without_model(retouch_client, tmp_path, m
     assert edit is not None
     assert '"hair_recolor": 55.0' in edit[0]
     assert '"hair_color": "#6b3f24"' in edit[0]
+
+
+def test_retouch_accepts_selected_face_ids(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_depth_photo(tmp_path, db_path, size=(180, 120), filename="selected_faces.jpg")
+    face_one = _insert_face_box(db_path, img_path, (35, 30, 70, 76))
+    _insert_face_box(db_path, img_path, (118, 28, 154, 78))
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {
+            "smooth_skin": 45,
+            "whiten_skin": 20,
+            "selected_face_ids": [face_one],
+        },
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    assert os.path.exists(output_path)
+    assert img_path.read_bytes() == original_bytes
+
+    conn = sqlite3.connect(db_path)
+    edit = conn.execute(
+        "SELECT params_json FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()
+    conn.close()
+
+    assert edit is not None
+    assert f'"selected_face_ids": [{face_one}]' in edit[0]

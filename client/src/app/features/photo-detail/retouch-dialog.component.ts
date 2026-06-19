@@ -94,6 +94,7 @@ interface RetouchParams {
   background_near_blur: number;
   background_mid_blur: number;
   background_far_blur: number;
+  selected_face_ids?: number[] | null;
   inpaint_mask_base64?: string | null;
 }
 
@@ -106,6 +107,18 @@ interface Spot {
 interface RetouchHistoryState {
   params: RetouchParams;
   spots: Spot[];
+  selectedFaceIds: number[];
+}
+
+interface PhotoFace {
+  id: number;
+  face_index: number;
+  bbox_x1: number;
+  bbox_y1: number;
+  bbox_x2: number;
+  bbox_y2: number;
+  person_id: number | null;
+  person_name: string | null;
 }
 
 type CropDragHandle = 'move' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
@@ -202,6 +215,7 @@ const DEFAULT_PARAMS: RetouchParams = {
   background_near_blur: 100,
   background_mid_blur: 100,
   background_far_blur: 100,
+  selected_face_ids: null,
   inpaint_mask_base64: null,
 };
 
@@ -420,6 +434,56 @@ const DEFAULT_PARAMS: RetouchParams = {
                 {{ 'retouch.portrait' | translate }}
               </ng-template>
               <div class="p-4 space-y-5">
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.face_selection' | translate }}</div>
+                    @if (photoFaces().length > 0) {
+                      <div class="flex items-center gap-1">
+                        <button mat-button class="!h-8 !px-2 !text-xs" (click)="selectAllFaces()">{{ 'retouch.select_all_faces' | translate }}</button>
+                        <button mat-button class="!h-8 !px-2 !text-xs" (click)="clearSelectedFaces()">{{ 'retouch.clear_face_selection' | translate }}</button>
+                      </div>
+                    }
+                  </div>
+                  @if (loadingFaces()) {
+                    <div class="flex items-center gap-2 rounded border border-[var(--mat-sys-outline-variant)] p-3 text-xs text-[var(--mat-sys-on-surface-variant)]">
+                      <mat-spinner diameter="18" />
+                      {{ 'retouch.loading_faces' | translate }}
+                    </div>
+                  } @else if (photoFaces().length > 0) {
+                    <div class="flex gap-2 overflow-x-auto pb-1">
+                      @for (face of photoFaces(); track face.id; let i = $index) {
+                        <label
+                          class="relative flex w-24 shrink-0 cursor-pointer flex-col items-center gap-1 rounded-md border p-2 text-center text-xs transition-colors"
+                          [class.border-[var(--mat-sys-primary)]]="isFaceSelected(face.id)"
+                          [class.bg-[var(--mat-sys-primary-container)]]="isFaceSelected(face.id)"
+                          [class.text-[var(--mat-sys-on-primary-container)]]="isFaceSelected(face.id)"
+                          [class.border-[var(--mat-sys-outline-variant)]]="!isFaceSelected(face.id)"
+                        >
+                          <input
+                            type="checkbox"
+                            class="sr-only"
+                            [ngModel]="isFaceSelected(face.id)"
+                            (ngModelChange)="toggleFaceSelection(face.id, $event)"
+                          />
+                          <img
+                            [src]="faceThumbnailUrl(face.id)"
+                            [alt]="faceLabel(face, i)"
+                            class="h-14 w-14 rounded-full object-cover"
+                          />
+                          <span class="w-full truncate">{{ faceLabel(face, i) }}</span>
+                          @if (isFaceSelected(face.id)) {
+                            <mat-icon class="absolute right-1 top-1 !h-5 !w-5 !text-[20px]">check_circle</mat-icon>
+                          }
+                        </label>
+                      }
+                    </div>
+                  } @else {
+                    <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 text-xs text-[var(--mat-sys-on-surface-variant)]">
+                      {{ 'retouch.no_faces_detected' | translate }}
+                    </div>
+                  }
+                </div>
+
                 <div class="space-y-4">
                   <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.blemish_group' | translate }}</div>
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_blemish', label: ('retouch.face_blemish' | translate), min: 0, max: 100 }" />
@@ -733,6 +797,9 @@ export class RetouchDialogComponent {
   readonly downloading = signal(false);
   readonly inpaintMode = signal(false);
   readonly spots = signal<Spot[]>([]);
+  readonly photoFaces = signal<PhotoFace[]>([]);
+  readonly selectedFaceIds = signal<number[]>([]);
+  readonly loadingFaces = signal(false);
   readonly previewWidth = signal(0);
   readonly previewHeight = signal(0);
   readonly statusText = signal('');
@@ -789,6 +856,7 @@ export class RetouchDialogComponent {
       this.clearComparePreview();
       this.setOriginalPreview(path);
       this.resetPreviewZoom();
+      void this.loadPhotoFaces(path);
     });
   }
 
@@ -897,6 +965,50 @@ export class RetouchDialogComponent {
     this.schedulePreview();
   }
 
+  isFaceSelected(faceId: number): boolean {
+    return this.selectedFaceIds().includes(faceId);
+  }
+
+  faceThumbnailUrl(faceId: number): string {
+    return this.api.faceThumbnailUrl(faceId);
+  }
+
+  faceLabel(face: PhotoFace, index: number): string {
+    const faceNumber = Number.isFinite(face.face_index) ? face.face_index + 1 : index + 1;
+    return face.person_name || `${this.i18n.t('retouch.face_label')} ${faceNumber}`;
+  }
+
+  toggleFaceSelection(faceId: number, selected: boolean): void {
+    this.pushHistory();
+    this.selectedFaceIds.update(ids => {
+      const set = new Set(ids);
+      if (selected) {
+        set.add(faceId);
+      } else {
+        set.delete(faceId);
+      }
+      return this.photoFaces()
+        .map(face => face.id)
+        .filter(id => set.has(id));
+    });
+    this.clearComparePreview();
+    this.schedulePreview();
+  }
+
+  selectAllFaces(): void {
+    this.pushHistory();
+    this.selectedFaceIds.set(this.photoFaces().map(face => face.id));
+    this.clearComparePreview();
+    this.schedulePreview();
+  }
+
+  clearSelectedFaces(): void {
+    this.pushHistory();
+    this.selectedFaceIds.set([]);
+    this.clearComparePreview();
+    this.schedulePreview();
+  }
+
   undo(): void {
     const prev = this.undoStack.pop();
     if (!prev) return;
@@ -921,6 +1033,7 @@ export class RetouchDialogComponent {
     this.pushHistory();
     this.params.set({ ...DEFAULT_PARAMS });
     this.spots.set([]);
+    this.selectedFaceIds.set(this.photoFaces().map(face => face.id));
     this.cropPreviewConfirmed.set(false);
     this.resetPreviewZoom();
     this.clearComparePreview();
@@ -1084,12 +1197,14 @@ export class RetouchDialogComponent {
     return {
       params: this.cloneParams(this.params()),
       spots: this.spots().map(spot => ({ ...spot })),
+      selectedFaceIds: [...this.selectedFaceIds()],
     };
   }
 
   private restoreHistoryState(state: RetouchHistoryState): void {
     this.params.set(this.cloneParams(state.params));
     this.spots.set(state.spots.map(spot => ({ ...spot })));
+    this.selectedFaceIds.set([...(state.selectedFaceIds ?? [])]);
     this.cropPreviewConfirmed.set(false);
   }
 
@@ -1124,7 +1239,43 @@ export class RetouchDialogComponent {
   private paramsWithMask(options: { includeCrop?: boolean } = {}): RetouchParams {
     const mask = this.buildMask();
     const includeCrop = options.includeCrop !== false;
-    return { ...this.params(), crop: includeCrop ? this.params().crop : null, inpaint_mask_base64: mask };
+    return {
+      ...this.params(),
+      crop: includeCrop ? this.params().crop : null,
+      selected_face_ids: this.selectedFaceIdsForRequest(),
+      inpaint_mask_base64: mask,
+    };
+  }
+
+  private selectedFaceIdsForRequest(): number[] | null {
+    const faces = this.photoFaces();
+    if (!faces.length) return null;
+    const selected = this.selectedFaceIds();
+    return selected.length === faces.length ? null : selected;
+  }
+
+  private async loadPhotoFaces(path: string): Promise<void> {
+    this.loadingFaces.set(true);
+    this.photoFaces.set([]);
+    this.selectedFaceIds.set([]);
+    try {
+      const res = await firstValueFrom(
+        this.api.get<{ faces: PhotoFace[] }>('/photo/faces', { path }),
+      );
+      if (this.activePath() !== path) return;
+      const faces = res.faces ?? [];
+      this.photoFaces.set(faces);
+      this.selectedFaceIds.set(faces.map(face => face.id));
+    } catch {
+      if (this.activePath() === path) {
+        this.photoFaces.set([]);
+        this.selectedFaceIds.set([]);
+      }
+    } finally {
+      if (this.activePath() === path) {
+        this.loadingFaces.set(false);
+      }
+    }
   }
 
   private retouchDownloadFilename(): string {
