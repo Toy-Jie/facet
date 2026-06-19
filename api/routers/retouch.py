@@ -69,7 +69,7 @@ class RetouchPreviewBody(BaseModel):
     photo_id: Optional[str] = None
     image_path: Optional[str] = None
     params: RetouchAdjustments = Field(default_factory=RetouchAdjustments)
-    max_size: int = Field(default=2560, ge=320, le=4096)
+    max_size: int = Field(default=0, ge=0, le=12000)
 
 
 class RetouchApplyBody(BaseModel):
@@ -126,6 +126,8 @@ def _load_image(path: str) -> Image.Image:
 
 
 def _downsample(img: Image.Image, max_size: int) -> Image.Image:
+    if max_size <= 0:
+        return img.copy()
     if max(img.size) <= max_size:
         return img.copy()
     preview = img.copy()
@@ -227,12 +229,13 @@ def _apply_portrait_effects(rgb: np.ndarray, params: RetouchAdjustments) -> np.n
     tone_amount = params.skin_tone / 100.0
     if (params.whiten_skin > 0 or abs(tone_amount) > 0.01) and skin.max() > 0.05:
         strength = params.whiten_skin / 100.0
+        source = result.astype(np.float32)
         hsv = cv2.cvtColor(result, cv2.COLOR_RGB2HSV).astype(np.float32)
         alpha = (skin * (0.18 + 0.50 * max(strength, abs(tone_amount))))[:, :, None]
-        hsv[:, :, 1:2] = hsv[:, :, 1:2] * (1 - alpha * 0.30)
-        hsv[:, :, 2:3] = hsv[:, :, 2:3] * (1 + alpha * (0.18 * strength + 0.10 * tone_amount))
-        whitened = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
-        result = whitened
+        hsv[:, :, 1:2] *= 1 - 0.30 * max(strength, abs(tone_amount))
+        hsv[:, :, 2:3] *= 1 + (0.18 * strength + 0.10 * tone_amount)
+        toned = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB).astype(np.float32)
+        result = np.clip(source * (1 - alpha) + toned * alpha, 0, 255).astype(np.uint8)
         if abs(tone_amount) > 0.01:
             adjusted = _apply_temperature(result, tone_amount * 45)
             alpha_rgb = (skin * min(0.45, abs(tone_amount) * 0.45))[:, :, None]
@@ -320,7 +323,7 @@ def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
     return out
 
 
-def _jpeg_base64(img: Image.Image, quality: int = 94) -> str:
+def _jpeg_base64(img: Image.Image, quality: int = 98) -> str:
     buf = BytesIO()
     img.save(buf, format="JPEG", quality=quality, optimize=True, subsampling=0)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")

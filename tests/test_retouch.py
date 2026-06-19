@@ -21,9 +21,9 @@ def retouch_client(tmp_path, monkeypatch):
     return TestClient(app), db_path
 
 
-def _make_photo(tmp_path, db_path):
-    img_path = tmp_path / "portrait.jpg"
-    img = Image.new("RGB", (96, 72), (180, 130, 105))
+def _make_photo(tmp_path, db_path, size=(96, 72), filename="portrait.jpg"):
+    img_path = tmp_path / filename
+    img = Image.new("RGB", size, (180, 130, 105))
     img.save(img_path, format="JPEG", quality=95)
     original_bytes = img_path.read_bytes()
 
@@ -33,7 +33,7 @@ def _make_photo(tmp_path, db_path):
         """INSERT INTO photos
            (path, filename, image_width, image_height, thumbnail, aggregate, aesthetic, is_burst_lead, is_duplicate_lead)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        [str(img_path), img_path.name, 96, 72, b"thumb", 7.0, 7.0, 1, 1],
+        [str(img_path), img_path.name, size[0], size[1], b"thumb", 7.0, 7.0, 1, 1],
     )
     conn.commit()
     conn.close()
@@ -55,6 +55,22 @@ def test_retouch_preview_returns_base64(retouch_client, tmp_path):
     assert body["image_base64"].startswith("data:image/jpeg;base64,")
     assert body["width"] == 96
     assert body["height"] == 72
+
+
+def test_retouch_preview_zero_max_size_keeps_original_dimensions(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, _ = _make_photo(tmp_path, db_path, size=(2048, 1024), filename="large_portrait.jpg")
+
+    resp = client.post("/api/retouch/preview", json={
+        "image_path": str(img_path),
+        "params": {"skin_tone": 20},
+        "max_size": 0,
+    })
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["width"] == 2048
+    assert body["height"] == 1024
 
 
 def test_retouch_apply_saves_copy_and_records_history(retouch_client, tmp_path):

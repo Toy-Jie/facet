@@ -800,7 +800,7 @@ export class RetouchDialogComponent {
       const res = await firstValueFrom(this.api.post<PreviewResponse>('/retouch/preview', {
         image_path: this.activePath(),
         params: this.paramsWithMask({ includeCrop: this.cropPreviewConfirmed() }),
-        max_size: 4096,
+        max_size: 0,
       }));
       this.previewSrc.set(res.image_base64);
       this.previewWidth.set(res.width);
