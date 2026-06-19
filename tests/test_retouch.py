@@ -3,6 +3,7 @@ import os
 import sqlite3
 from io import BytesIO
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -30,6 +31,38 @@ def _make_photo(tmp_path, db_path, size=(96, 72), filename="portrait.jpg"):
     original_bytes = img_path.read_bytes()
 
     thumb = Image.new("RGB", (32, 24), (180, 130, 105))
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """INSERT INTO photos
+           (path, filename, image_width, image_height, thumbnail, aggregate, aesthetic, is_burst_lead, is_duplicate_lead)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        [str(img_path), img_path.name, size[0], size[1], b"thumb", 7.0, 7.0, 1, 1],
+    )
+    conn.commit()
+    conn.close()
+    return img_path, original_bytes
+
+
+def _make_depth_photo(tmp_path, db_path, size=(160, 120), filename="depth_portrait.jpg"):
+    img_path = tmp_path / filename
+    img = Image.new("RGB", size, (70, 110, 155))
+    pixels = img.load()
+    for y in range(size[1]):
+        for x in range(size[0]):
+            stripe = 42 if (x // 5 + y // 7) % 2 else -28
+            pixels[x, y] = (
+                max(0, min(255, 72 + stripe + y // 6)),
+                max(0, min(255, 118 + stripe // 2)),
+                max(0, min(255, 168 - stripe // 2)),
+            )
+    cx, cy = size[0] // 2, int(size[1] * 0.48)
+    for y in range(size[1]):
+        for x in range(size[0]):
+            if ((x - cx) / 32) ** 2 + ((y - cy) / 42) ** 2 <= 1:
+                pixels[x, y] = (184, 132, 104)
+    img.save(img_path, format="JPEG", quality=95)
+    original_bytes = img_path.read_bytes()
+
     conn = sqlite3.connect(db_path)
     conn.execute(
         """INSERT INTO photos
@@ -226,3 +259,25 @@ def test_retouch_accepts_extended_portrait_controls(retouch_client, tmp_path):
     assert edit is not None
     assert '"face_blemish": 30.0' in edit[0]
     assert '"eye_enhance": 30.0' in edit[0]
+
+
+def test_retouch_depth_background_blur_saves_copy(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_depth_photo(tmp_path, db_path)
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {"background_blur": 78},
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    assert os.path.exists(output_path)
+    assert img_path.read_bytes() == original_bytes
+
+    with Image.open(img_path) as original, Image.open(output_path) as edited:
+        assert edited.size == original.size
+        original_bg = np.array(original.convert("RGB").crop((0, 0, 40, 40)), dtype=np.int16)
+        edited_bg = np.array(edited.convert("RGB").crop((0, 0, 40, 40)), dtype=np.int16)
+        diff = int(np.abs(original_bg - edited_bg).sum())
+    assert diff > 1500

@@ -219,6 +219,207 @@ def _portrait_like_mask(rgb: np.ndarray, skin: np.ndarray) -> np.ndarray:
     return np.clip(expanded, 0, 1)
 
 
+_OPTIONAL_SALIENCY_SCORER = None
+_OPTIONAL_SALIENCY_FAILED = False
+
+
+def _small_mask(mask: np.ndarray, max_side: int = 900) -> tuple[np.ndarray, float]:
+    h, w = mask.shape[:2]
+    longest = max(h, w)
+    if longest <= max_side:
+        return mask, 1.0
+    scale = max_side / float(longest)
+    resized = cv2.resize(mask, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+    return resized, scale
+
+
+def _remove_tiny_components(mask: np.ndarray, min_area_ratio: float = 0.003) -> np.ndarray:
+    binary = (mask > 0.2).astype(np.uint8)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    if count <= 1:
+        return mask
+    h, w = mask.shape
+    min_area = max(24, int(h * w * min_area_ratio))
+    keep = np.zeros_like(binary)
+    for label in range(1, count):
+        if stats[label, cv2.CC_STAT_AREA] >= min_area:
+            keep[labels == label] = 1
+    if keep.max() == 0:
+        return mask
+    return mask * keep.astype(np.float32)
+
+
+def _optional_birefnet_subject_mask(rgb: np.ndarray) -> Optional[np.ndarray]:
+    """Use BiRefNet only when explicitly enabled; preview sliders must stay responsive."""
+    global _OPTIONAL_SALIENCY_SCORER, _OPTIONAL_SALIENCY_FAILED
+    enabled = os.getenv("FACET_RETOUCH_USE_BIREFNET", "").lower() in {"1", "true", "yes", "on"}
+    if not enabled or _OPTIONAL_SALIENCY_FAILED:
+        return None
+    try:
+        if _OPTIONAL_SALIENCY_SCORER is None:
+            from models.saliency_scorer import SaliencyScorer
+
+            _OPTIONAL_SALIENCY_SCORER = SaliencyScorer(resolution=768, mask_threshold=0.35)
+        pil = Image.fromarray(rgb, mode="RGB")
+        mask = _OPTIONAL_SALIENCY_SCORER.get_saliency_mask(pil).astype(np.float32) / 255.0
+        if mask.shape != rgb.shape[:2]:
+            mask = cv2.resize(mask, (rgb.shape[1], rgb.shape[0]), interpolation=cv2.INTER_LINEAR)
+        if 0.01 < float(mask.mean()) < 0.85:
+            mask = cv2.GaussianBlur(mask, (0, 0), max(2, min(rgb.shape[:2]) / 180))
+            return np.clip(mask, 0, 1)
+    except Exception as exc:
+        _OPTIONAL_SALIENCY_FAILED = True
+        logger.warning("Optional BiRefNet subject mask unavailable; falling back to OpenCV depth blur: %s", exc)
+    return None
+
+
+def _central_subject_prior(rgb: np.ndarray) -> np.ndarray:
+    h, w = rgb.shape[:2]
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    nx = (x / max(1, w - 1) - 0.5) / 0.34
+    ny = (y / max(1, h - 1) - 0.52) / 0.48
+    ellipse = np.exp(-(nx * nx + ny * ny) * 1.8)
+
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    edges = np.abs(cv2.Laplacian(gray, cv2.CV_32F))
+    edges = cv2.GaussianBlur(edges, (0, 0), 2.0)
+    edge_norm = edges / (np.percentile(edges, 96) + 1e-6)
+    texture = np.clip(edge_norm, 0, 1)
+    return np.clip(ellipse * (0.35 + 0.65 * texture), 0, 1).astype(np.float32)
+
+
+def _grabcut_subject_mask(rgb: np.ndarray, seed: np.ndarray) -> np.ndarray:
+    small_rgb, scale = _small_mask(rgb, 820)
+    if scale != 1.0:
+        small_seed = cv2.resize(seed, (small_rgb.shape[1], small_rgb.shape[0]), interpolation=cv2.INTER_AREA)
+    else:
+        small_seed = seed.copy()
+
+    h, w = small_seed.shape
+    if h < 16 or w < 16:
+        return seed
+
+    grab_mask = np.full((h, w), cv2.GC_PR_BGD, dtype=np.uint8)
+    grab_mask[small_seed > 0.18] = cv2.GC_PR_FGD
+    grab_mask[small_seed > 0.62] = cv2.GC_FGD
+
+    border = max(2, int(min(h, w) * 0.035))
+    weak = small_seed < 0.28
+    grab_mask[:border, :][weak[:border, :]] = cv2.GC_BGD
+    grab_mask[-border:, :][weak[-border:, :]] = cv2.GC_BGD
+    grab_mask[:, :border][weak[:, :border]] = cv2.GC_BGD
+    grab_mask[:, -border:][weak[:, -border:]] = cv2.GC_BGD
+
+    if not np.any(grab_mask == cv2.GC_FGD):
+        yy0, yy1 = int(h * 0.20), int(h * 0.84)
+        xx0, xx1 = int(w * 0.22), int(w * 0.78)
+        grab_mask[yy0:yy1, xx0:xx1] = np.maximum(grab_mask[yy0:yy1, xx0:xx1], cv2.GC_PR_FGD)
+        strong_y0, strong_y1 = int(h * 0.36), int(h * 0.68)
+        strong_x0, strong_x1 = int(w * 0.36), int(w * 0.64)
+        grab_mask[strong_y0:strong_y1, strong_x0:strong_x1] = cv2.GC_FGD
+
+    if np.count_nonzero(grab_mask == cv2.GC_FGD) < 8 or np.count_nonzero(grab_mask == cv2.GC_BGD) < 8:
+        return seed
+
+    try:
+        bgr = cv2.cvtColor(small_rgb, cv2.COLOR_RGB2BGR)
+        bgd = np.zeros((1, 65), np.float64)
+        fgd = np.zeros((1, 65), np.float64)
+        cv2.grabCut(bgr, grab_mask, None, bgd, fgd, 3, cv2.GC_INIT_WITH_MASK)
+        refined = np.where((grab_mask == cv2.GC_FGD) | (grab_mask == cv2.GC_PR_FGD), 1.0, 0.0).astype(np.float32)
+        refined = cv2.morphologyEx(refined, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=1)
+        refined = cv2.morphologyEx(refined, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), iterations=1)
+        if scale != 1.0:
+            refined = cv2.resize(refined, (rgb.shape[1], rgb.shape[0]), interpolation=cv2.INTER_LINEAR)
+        area = float(refined.mean())
+        if 0.01 < area < 0.88:
+            return np.clip(refined, 0, 1)
+    except Exception as exc:
+        logger.debug("OpenCV GrabCut subject refinement failed: %s", exc)
+    return seed
+
+
+def _subject_mask_for_depth_blur(rgb: np.ndarray, skin: np.ndarray) -> np.ndarray:
+    saliency = _optional_birefnet_subject_mask(rgb)
+    if saliency is not None:
+        base = saliency
+    else:
+        portrait = _portrait_like_mask(rgb, skin)
+        prior = _central_subject_prior(rgb)
+        if portrait.max() > 0.05:
+            base = np.maximum(portrait, prior * 0.25)
+        else:
+            base = prior * 0.72
+        base = _grabcut_subject_mask(rgb, np.clip(base, 0, 1))
+
+    base = _remove_tiny_components(base)
+    binary = (base > 0.18).astype(np.uint8)
+    h, w = binary.shape
+    expand = max(3, int(min(h, w) * 0.018))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (expand | 1, expand | 1))
+    protected = cv2.dilate(binary, kernel, iterations=1).astype(np.float32)
+    sigma = max(2.5, min(h, w) / 160)
+    protected = cv2.GaussianBlur(protected, (0, 0), sigmaX=sigma, sigmaY=sigma)
+    protected = np.maximum(protected, base)
+    return np.clip(protected, 0, 1)
+
+
+def _perspective_depth_map(subject: np.ndarray) -> np.ndarray:
+    h, w = subject.shape
+    y = np.linspace(0, 1, h, dtype=np.float32)[:, None]
+    vertical_far = np.repeat(np.clip(1.12 - y * 0.88, 0.18, 1.0), w, axis=1)
+
+    background = (subject < 0.32).astype(np.uint8)
+    distance = cv2.distanceTransform(background, cv2.DIST_L2, 3).astype(np.float32)
+    distance = np.clip(distance / max(12.0, min(h, w) * 0.33), 0, 1)
+
+    depth = 0.58 * vertical_far + 0.42 * distance
+    coords = np.argwhere(subject > 0.45)
+    if coords.size:
+        top, left = coords.min(axis=0)
+        bottom, right = coords.max(axis=0)
+        above = np.clip((top - np.arange(h, dtype=np.float32))[:, None] / max(1.0, h * 0.35), 0, 1)
+        side_gap = np.zeros((h, w), dtype=np.float32)
+        if left > 0:
+            side_gap[:, :left] = np.linspace(1, 0, left, dtype=np.float32)[None, :]
+        if right + 1 < w:
+            side_gap[:, right + 1:] = np.linspace(0, 1, w - right - 1, dtype=np.float32)[None, :]
+        depth = np.maximum(depth, above * 0.95)
+        depth = np.maximum(depth, side_gap * 0.55)
+        lower_foreground = np.clip((np.arange(h, dtype=np.float32)[:, None] - bottom) / max(1.0, h * 0.30), 0, 1)
+        depth *= 1.0 - lower_foreground * 0.36
+
+    return np.clip(cv2.GaussianBlur(depth, (0, 0), max(2, min(h, w) / 220)), 0, 1)
+
+
+def _blurred_layer(rgb: np.ndarray, sigma: float) -> np.ndarray:
+    if sigma <= 0.1:
+        return rgb
+    kernel = max(3, int(round(sigma * 6)) | 1)
+    return cv2.GaussianBlur(rgb, (kernel, kernel), sigmaX=sigma, sigmaY=sigma)
+
+
+def _apply_depth_background_blur(rgb: np.ndarray, subject: np.ndarray, strength: float) -> np.ndarray:
+    if subject.max() <= 0.05:
+        return rgb
+    depth = _perspective_depth_map(subject)
+    matte = np.clip((1.0 - subject) * (0.24 + 0.76 * depth), 0, 1)
+    blur_amount = np.clip(matte * (0.35 + 0.65 * strength), 0, 1)
+
+    near = _blurred_layer(rgb, 1.6 + strength * 6.5)
+    mid = _blurred_layer(rgb, 3.2 + strength * 15.0)
+    far = _blurred_layer(rgb, 6.0 + strength * 30.0)
+
+    out = rgb.astype(np.float32)
+    alpha_near = np.clip(blur_amount / 0.32, 0, 1)[:, :, None] * 0.70
+    alpha_mid = np.clip((blur_amount - 0.24) / 0.42, 0, 1)[:, :, None] * 0.82
+    alpha_far = np.clip((blur_amount - 0.56) / 0.36, 0, 1)[:, :, None] * 0.95
+    out = out * (1 - alpha_near) + near.astype(np.float32) * alpha_near
+    out = out * (1 - alpha_mid) + mid.astype(np.float32) * alpha_mid
+    out = out * (1 - alpha_far) + far.astype(np.float32) * alpha_far
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
 def _apply_portrait_effects(rgb: np.ndarray, params: RetouchAdjustments) -> np.ndarray:
     result = rgb
     skin = _skin_mask(result)
@@ -270,15 +471,8 @@ def _apply_portrait_effects(rgb: np.ndarray, params: RetouchAdjustments) -> np.n
         result = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
 
     if params.background_blur > 0:
-        portrait = _portrait_like_mask(result, skin)
-        if portrait.max() > 0.05:
-            strength = params.background_blur / 100.0
-            k = int(9 + strength * 42)
-            if k % 2 == 0:
-                k += 1
-            blurred = cv2.GaussianBlur(result, (k, k), 0)
-            bg_alpha = (1.0 - portrait)[:, :, None] * (0.35 + 0.65 * strength)
-            result = np.clip(result.astype(np.float32) * (1 - bg_alpha) + blurred.astype(np.float32) * bg_alpha, 0, 255).astype(np.uint8)
+        subject = _subject_mask_for_depth_blur(result, skin)
+        result = _apply_depth_background_blur(result, subject, params.background_blur / 100.0)
 
     return result
 
@@ -443,7 +637,7 @@ def api_retouch_preview(
         "width": result.width,
         "height": result.height,
         "background_blur_available": True,
-        "mask_provider": "opencv_skin_fallback",
+        "mask_provider": "opencv_depth_perspective_birefnet_optional",
         "exif_strategy": "preview_applies_orientation",
     }
 
