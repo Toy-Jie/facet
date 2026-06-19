@@ -317,3 +317,37 @@ def test_retouch_background_blur_uses_face_box_as_subject_anchor(retouch_client,
         background_diff = np.abs(original_arr[0:42, 0:58] - edited_arr[0:42, 0:58]).mean()
 
     assert subject_diff < background_diff
+
+
+def test_retouch_accepts_depth_blur_advanced_controls(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, _ = _make_depth_photo(tmp_path, db_path, filename="depth_controls.jpg")
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {
+            "background_blur": 65,
+            "background_subject_protection": 120,
+            "background_subject_expand": 130,
+            "background_edge_feather": 80,
+            "background_depth_strength": 140,
+            "background_model_depth_weight": 35,
+            "background_foreground_protection": 160,
+            "background_near_blur": 45,
+            "background_mid_blur": 110,
+            "background_far_blur": 175,
+        },
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    conn = sqlite3.connect(db_path)
+    edit = conn.execute(
+        "SELECT params_json FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()
+    conn.close()
+
+    assert edit is not None
+    assert '"background_depth_strength": 140.0' in edit[0]
+    assert '"background_far_blur": 175.0' in edit[0]

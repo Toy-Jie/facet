@@ -64,6 +64,15 @@ class RetouchAdjustments(BaseModel):
     teeth: float = Field(default=0, ge=0, le=100)
     eye_enhance: float = Field(default=0, ge=0, le=100)
     background_blur: float = Field(default=0, ge=0, le=100)
+    background_subject_protection: float = Field(default=100, ge=0, le=150)
+    background_subject_expand: float = Field(default=100, ge=0, le=200)
+    background_edge_feather: float = Field(default=100, ge=0, le=200)
+    background_depth_strength: float = Field(default=100, ge=0, le=200)
+    background_model_depth_weight: float = Field(default=72, ge=0, le=100)
+    background_foreground_protection: float = Field(default=100, ge=0, le=200)
+    background_near_blur: float = Field(default=100, ge=0, le=200)
+    background_mid_blur: float = Field(default=100, ge=0, le=200)
+    background_far_blur: float = Field(default=100, ge=0, le=200)
     inpaint_mask_base64: Optional[str] = None
 
 
@@ -469,32 +478,34 @@ def _grabcut_subject_mask(rgb: np.ndarray, seed: np.ndarray) -> np.ndarray:
 def _subject_mask_for_depth_blur(
     rgb: np.ndarray,
     skin: np.ndarray,
+    params: RetouchAdjustments,
     face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
 ) -> np.ndarray:
     face_prior = _face_subject_prior(skin.shape, face_boxes)
+    protect_scale = params.background_subject_protection / 100.0
     saliency = _optional_birefnet_subject_mask(rgb)
     if saliency is not None:
-        base = np.maximum(saliency, face_prior * 0.85)
+        base = np.maximum(saliency * protect_scale, face_prior * 0.85 * protect_scale)
     else:
         portrait = _portrait_like_mask(rgb, skin)
         prior = _central_subject_prior(rgb)
         prior = np.maximum(prior * 0.78, face_prior)
         if portrait.max() > 0.05:
-            base = np.maximum(portrait, prior * 0.25)
+            base = np.maximum(portrait * protect_scale, prior * 0.25 * protect_scale)
         else:
-            base = prior * 0.72
+            base = prior * 0.72 * protect_scale
         base = _grabcut_subject_mask(rgb, np.clip(base, 0, 1))
 
     base = _remove_tiny_components(base)
     binary = (base > 0.18).astype(np.uint8)
     h, w = binary.shape
-    expand = max(3, int(min(h, w) * 0.018))
+    expand = max(1, int(min(h, w) * 0.018 * (params.background_subject_expand / 100.0)))
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (expand | 1, expand | 1))
     protected = cv2.dilate(binary, kernel, iterations=1).astype(np.float32)
-    sigma = max(2.5, min(h, w) / 160)
+    sigma = max(0.1, max(2.5, min(h, w) / 160) * (params.background_edge_feather / 100.0))
     protected = cv2.GaussianBlur(protected, (0, 0), sigmaX=sigma, sigmaY=sigma)
     protected = np.maximum(protected, base)
-    protected = np.maximum(protected, face_prior * 0.92)
+    protected = np.maximum(protected, face_prior * 0.92 * protect_scale)
     return np.clip(protected, 0, 1)
 
 
@@ -533,21 +544,37 @@ def _blurred_layer(rgb: np.ndarray, sigma: float) -> np.ndarray:
     return cv2.GaussianBlur(rgb, (kernel, kernel), sigmaX=sigma, sigmaY=sigma)
 
 
-def _apply_depth_background_blur(rgb: np.ndarray, subject: np.ndarray, strength: float) -> np.ndarray:
+def _apply_depth_background_blur(
+    rgb: np.ndarray,
+    subject: np.ndarray,
+    params: RetouchAdjustments,
+    strength: float,
+) -> np.ndarray:
     if subject.max() <= 0.05:
         return rgb
     depth = _optional_depth_map(rgb)
+    heuristic = _perspective_depth_map(subject)
     if depth is None:
-        depth = _perspective_depth_map(subject)
+        depth = heuristic
     else:
-        heuristic = _perspective_depth_map(subject)
-        depth = np.clip(depth * 0.72 + heuristic * 0.28, 0, 1)
+        model_weight = params.background_model_depth_weight / 100.0
+        depth = np.clip(depth * model_weight + heuristic * (1.0 - model_weight), 0, 1)
+    depth = np.clip(depth * (params.background_depth_strength / 100.0), 0, 1)
     matte = np.clip((1.0 - subject) * (0.24 + 0.76 * depth), 0, 1)
+    extra_foreground_protection = max(0.0, (params.background_foreground_protection - 100.0) / 100.0)
+    if extra_foreground_protection > 0:
+        h = matte.shape[0]
+        lower = np.linspace(0, 1, h, dtype=np.float32)[:, None]
+        protection = np.clip(lower * extra_foreground_protection * 0.36, 0, 0.72)
+        matte = matte * (1.0 - protection)
     blur_amount = np.clip(matte * (0.35 + 0.65 * strength), 0, 1)
 
-    near = _blurred_layer(rgb, 1.6 + strength * 6.5)
-    mid = _blurred_layer(rgb, 3.2 + strength * 15.0)
-    far = _blurred_layer(rgb, 6.0 + strength * 30.0)
+    near_scale = params.background_near_blur / 100.0
+    mid_scale = params.background_mid_blur / 100.0
+    far_scale = params.background_far_blur / 100.0
+    near = _blurred_layer(rgb, (1.6 + strength * 6.5) * near_scale)
+    mid = _blurred_layer(rgb, (3.2 + strength * 15.0) * mid_scale)
+    far = _blurred_layer(rgb, (6.0 + strength * 30.0) * far_scale)
 
     out = rgb.astype(np.float32)
     alpha_near = np.clip(blur_amount / 0.32, 0, 1)[:, :, None] * 0.70
@@ -614,8 +641,8 @@ def _apply_portrait_effects(
         result = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
 
     if params.background_blur > 0:
-        subject = _subject_mask_for_depth_blur(result, skin, face_boxes)
-        result = _apply_depth_background_blur(result, subject, params.background_blur / 100.0)
+        subject = _subject_mask_for_depth_blur(result, skin, params, face_boxes)
+        result = _apply_depth_background_blur(result, subject, params, params.background_blur / 100.0)
 
     return result
 

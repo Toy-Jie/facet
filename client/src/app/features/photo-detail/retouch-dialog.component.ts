@@ -53,6 +53,15 @@ interface RetouchParams {
   teeth: number;
   eye_enhance: number;
   background_blur: number;
+  background_subject_protection: number;
+  background_subject_expand: number;
+  background_edge_feather: number;
+  background_depth_strength: number;
+  background_model_depth_weight: number;
+  background_foreground_protection: number;
+  background_near_blur: number;
+  background_mid_blur: number;
+  background_far_blur: number;
   inpaint_mask_base64?: string | null;
 }
 
@@ -120,6 +129,15 @@ const DEFAULT_PARAMS: RetouchParams = {
   teeth: 0,
   eye_enhance: 0,
   background_blur: 0,
+  background_subject_protection: 100,
+  background_subject_expand: 100,
+  background_edge_feather: 100,
+  background_depth_strength: 100,
+  background_model_depth_weight: 72,
+  background_foreground_protection: 100,
+  background_near_blur: 100,
+  background_mid_blur: 100,
+  background_far_blur: 100,
   inpaint_mask_base64: null,
 };
 
@@ -391,6 +409,24 @@ const DEFAULT_PARAMS: RetouchParams = {
               </ng-template>
               <div class="p-4 space-y-5">
                 <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_blur', label: ('retouch.background_blur' | translate), min: 0, max: 100 }" />
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.background_subject_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_subject_protection', label: ('retouch.background_subject_protection' | translate), min: 0, max: 150 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_subject_expand', label: ('retouch.background_subject_expand' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_edge_feather', label: ('retouch.background_edge_feather' | translate), min: 0, max: 200 }" />
+                </div>
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.background_depth_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_depth_strength', label: ('retouch.background_depth_strength' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_model_depth_weight', label: ('retouch.background_model_depth_weight' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_foreground_protection', label: ('retouch.background_foreground_protection' | translate), min: 0, max: 200 }" />
+                </div>
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.background_blur_group' | translate }}</div>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_near_blur', label: ('retouch.background_near_blur' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_mid_blur', label: ('retouch.background_mid_blur' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'background_far_blur', label: ('retouch.background_far_blur' | translate), min: 0, max: 200 }" />
+                </div>
                 <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 text-xs text-[var(--mat-sys-on-surface-variant)]">
                   {{ 'retouch.background_note' | translate }}
                 </div>
@@ -1025,6 +1061,15 @@ export class RetouchDialogComponent {
       'teeth',
       'eye_enhance',
       'background_blur',
+      'background_subject_protection',
+      'background_subject_expand',
+      'background_edge_feather',
+      'background_depth_strength',
+      'background_model_depth_weight',
+      'background_foreground_protection',
+      'background_near_blur',
+      'background_mid_blur',
+      'background_far_blur',
     ];
     return this.spots().length > 0 || compareKeys.some(key => params[key] !== DEFAULT_PARAMS[key]);
   }
