@@ -78,6 +78,12 @@ interface RetouchParams {
   beauty_teeth_saturation: number;
   beauty_teeth_threshold: number;
   beauty_inpaint_radius: number;
+  hair_recolor: number;
+  hair_color: string;
+  hair_part_fill: number;
+  hair_smooth: number;
+  hair_mask_feather: number;
+  hair_texture_preserve: number;
   background_blur: number;
   background_subject_protection: number;
   background_subject_expand: number;
@@ -180,6 +186,12 @@ const DEFAULT_PARAMS: RetouchParams = {
   beauty_teeth_saturation: 100,
   beauty_teeth_threshold: 100,
   beauty_inpaint_radius: 100,
+  hair_recolor: 0,
+  hair_color: '#3b2418',
+  hair_part_fill: 0,
+  hair_smooth: 0,
+  hair_mask_feather: 100,
+  hair_texture_preserve: 100,
   background_blur: 0,
   background_subject_protection: 100,
   background_subject_expand: 100,
@@ -486,6 +498,24 @@ const DEFAULT_PARAMS: RetouchParams = {
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'beauty_inpaint_radius', label: ('retouch.beauty_inpaint_radius' | translate), min: 25, max: 300 }" />
                 </div>
 
+                <div class="space-y-4 border-t border-[var(--mat-sys-outline-variant)] pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.hair_group' | translate }}</div>
+                  <label class="flex items-center justify-between gap-3 text-sm">
+                    <span>{{ 'retouch.hair_color' | translate }}</span>
+                    <input
+                      type="color"
+                      class="h-9 w-14 rounded border border-[var(--mat-sys-outline-variant)] bg-transparent"
+                      [ngModel]="params().hair_color"
+                      (ngModelChange)="setParam('hair_color', $event)"
+                    />
+                  </label>
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'hair_recolor', label: ('retouch.hair_recolor' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'hair_part_fill', label: ('retouch.hair_part_fill' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'hair_smooth', label: ('retouch.hair_smooth' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'hair_mask_feather', label: ('retouch.hair_mask_feather' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'hair_texture_preserve', label: ('retouch.hair_texture_preserve' | translate), min: 0, max: 200 }" />
+                </div>
+
                 <div class="rounded border border-[var(--mat-sys-outline-variant)] p-3 text-xs text-[var(--mat-sys-on-surface-variant)]">
                   {{ 'retouch.skin_mask_note' | translate }}
                 </div>
@@ -769,7 +799,8 @@ export class RetouchDialogComponent {
 
   setParam(key: keyof RetouchParams, value: number | string): void {
     this.pushHistory();
-    this.params.update(p => ({ ...p, [key]: Number(value) }));
+    const nextValue = key === 'hair_color' ? String(value) : Number(value);
+    this.params.update(p => ({ ...p, [key]: nextValue }));
     this.clearComparePreview();
     this.schedulePreview();
   }
@@ -1184,6 +1215,12 @@ export class RetouchDialogComponent {
       'beauty_teeth_saturation',
       'beauty_teeth_threshold',
       'beauty_inpaint_radius',
+      'hair_recolor',
+      'hair_color',
+      'hair_part_fill',
+      'hair_smooth',
+      'hair_mask_feather',
+      'hair_texture_preserve',
       'background_blur',
       'background_subject_protection',
       'background_subject_expand',

@@ -80,8 +80,12 @@ iqa-extended = [
 watch = [
     "watchdog>=4.0",
 ]
+hair = [
+    # UniFace provides ONNX BiSeNet face parsing with a hair class.
+    "uniface>=3.7.1; python_version >= '3.11'",
+]
 all = [
-    "facet-photo[vlm,saliency,watch]",
+    "facet-photo[vlm,saliency,watch,hair]",
 ]
 
 [project.urls]

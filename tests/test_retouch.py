@@ -469,3 +469,39 @@ def test_retouch_accepts_targeted_wrinkle_controls_with_landmarks(retouch_client
     assert edit is not None
     assert '"wrinkle_nasolabial_fold": 70.0' in edit[0]
     assert '"wrinkle_detail_protection": 150.0' in edit[0]
+
+
+def test_retouch_accepts_hair_controls_without_model(retouch_client, tmp_path, monkeypatch):
+    import api.routers.retouch as retouch
+
+    monkeypatch.setattr(retouch, "_OPTIONAL_HAIR_FAILED", True)
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_depth_photo(tmp_path, db_path, size=(160, 120), filename="hair_controls.jpg")
+
+    resp = client.post("/api/retouch/apply", json={
+        "image_path": str(img_path),
+        "params": {
+            "hair_recolor": 55,
+            "hair_color": "#6b3f24",
+            "hair_part_fill": 35,
+            "hair_smooth": 45,
+            "hair_mask_feather": 120,
+            "hair_texture_preserve": 140,
+        },
+    })
+
+    assert resp.status_code == 200
+    output_path = resp.json()["output_path"]
+    assert os.path.exists(output_path)
+    assert img_path.read_bytes() == original_bytes
+
+    conn = sqlite3.connect(db_path)
+    edit = conn.execute(
+        "SELECT params_json FROM retouch_edits WHERE output_path = ?",
+        [output_path],
+    ).fetchone()
+    conn.close()
+
+    assert edit is not None
+    assert '"hair_recolor": 55.0' in edit[0]
+    assert '"hair_color": "#6b3f24"' in edit[0]

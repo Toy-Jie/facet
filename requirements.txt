@@ -24,6 +24,8 @@ rawpy>=0.18.0
 
 # Face Detection
 insightface>=0.7.0
+# Hair / face parsing (optional at runtime; used by retouch hair tools on Python 3.11+)
+uniface>=3.7.1; python_version >= "3.11"
 # ONNX Runtime — install.sh auto-detects nvidia-smi and installs the right
 # variant (onnxruntime-gpu for CUDA 11.8/12.x/13.x, plain onnxruntime on CPU).
 # If you bypass install.sh and pip install directly, pick ONE of:

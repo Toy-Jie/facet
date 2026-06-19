@@ -89,6 +89,12 @@ class RetouchAdjustments(BaseModel):
     beauty_teeth_saturation: float = Field(default=100, ge=0, le=200)
     beauty_teeth_threshold: float = Field(default=100, ge=0, le=200)
     beauty_inpaint_radius: float = Field(default=100, ge=25, le=300)
+    hair_recolor: float = Field(default=0, ge=0, le=100)
+    hair_color: str = Field(default="#3b2418", pattern=r"^#[0-9a-fA-F]{6}$")
+    hair_part_fill: float = Field(default=0, ge=0, le=100)
+    hair_smooth: float = Field(default=0, ge=0, le=100)
+    hair_mask_feather: float = Field(default=100, ge=0, le=200)
+    hair_texture_preserve: float = Field(default=100, ge=0, le=200)
     background_blur: float = Field(default=0, ge=0, le=100)
     background_subject_protection: float = Field(default=100, ge=0, le=150)
     background_subject_expand: float = Field(default=100, ge=0, le=200)
@@ -285,6 +291,95 @@ def _skin_mask(rgb: np.ndarray, strength: float = 100, feather: float = 100) -> 
     return np.clip((mask.astype(np.float32) / 255.0) * (strength / 100.0), 0, 1)
 
 
+def _hex_to_rgb(value: str) -> tuple[int, int, int]:
+    value = value.lstrip("#")
+    return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+
+
+def _fallback_hair_mask(rgb: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    h, w = rgb.shape[:2]
+    y = np.linspace(0, 1, h, dtype=np.float32)[:, None]
+    upper_prior = np.repeat(np.clip(1.1 - y * 1.45, 0, 1), w, axis=1)
+    dark_or_saturated = ((hsv[:, :, 2] < 120) | ((hsv[:, :, 1] > 55) & (hsv[:, :, 2] < 185))).astype(np.float32)
+    skin = _skin_mask(rgb)
+    mask = dark_or_saturated * upper_prior * (1.0 - np.clip(skin * 1.4, 0, 1))
+    mask = cv2.morphologyEx((mask > 0.20).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8), iterations=1)
+    mask = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), 4)
+    return np.clip(mask, 0, 1)
+
+
+def _hair_mask(rgb: np.ndarray, feather: float = 100) -> np.ndarray:
+    global _OPTIONAL_HAIR_PARSER, _OPTIONAL_HAIR_FAILED
+    cache_key = _image_cache_key(f"hair:{int(feather)}", rgb)
+    if cache_key in _HAIR_MASK_CACHE:
+        return _HAIR_MASK_CACHE[cache_key].copy()
+    mask: Optional[np.ndarray] = None
+    if not _OPTIONAL_HAIR_FAILED:
+        try:
+            if _OPTIONAL_HAIR_PARSER is None:
+                from uniface import BiSeNet
+                from uniface.constants import ParsingWeights
+
+                _OPTIONAL_HAIR_PARSER = BiSeNet(model_name=ParsingWeights.RESNET18)
+            parsed = _OPTIONAL_HAIR_PARSER.parse(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+            # CelebAMask-HQ face parsing label 17 is hair.
+            mask = (parsed == 17).astype(np.float32)
+        except Exception as exc:
+            _OPTIONAL_HAIR_FAILED = True
+            logger.warning("UniFace hair parsing unavailable; falling back to OpenCV hair estimate: %s", exc)
+    if mask is None or mask.max() <= 0.01:
+        mask = _fallback_hair_mask(rgb)
+    sigma = max(0.1, 4.0 * (feather / 100.0))
+    mask = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), sigma)
+    mask = np.clip(mask, 0, 1)
+    _cache_store(_HAIR_MASK_CACHE, cache_key, mask)
+    return mask
+
+
+def _apply_hair_effects(rgb: np.ndarray, params: RetouchAdjustments, skin: np.ndarray) -> np.ndarray:
+    if max(params.hair_recolor, params.hair_part_fill, params.hair_smooth) <= 0:
+        return rgb
+    hair = _hair_mask(rgb, params.hair_mask_feather)
+    if hair.max() <= 0.01:
+        return rgb
+    result = rgb
+
+    if params.hair_part_fill > 0:
+        hair_dilated = cv2.dilate((hair > 0.18).astype(np.uint8), np.ones((13, 13), np.uint8), iterations=1)
+        part = ((skin > 0.18) & (hair_dilated > 0)).astype(np.uint8) * 255
+        if part.max() > 0:
+            bgr = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+            repaired = cv2.inpaint(bgr, part, 4, cv2.INPAINT_TELEA)
+            repaired = cv2.cvtColor(repaired, cv2.COLOR_BGR2RGB)
+            alpha = cv2.GaussianBlur(part.astype(np.float32) / 255.0, (0, 0), 2)[:, :, None] * (params.hair_part_fill / 100.0)
+            result = np.clip(result.astype(np.float32) * (1 - alpha) + repaired.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
+
+    if params.hair_smooth > 0:
+        try:
+            smooth = cv2.edgePreservingFilter(result, flags=1, sigma_s=38, sigma_r=0.18)
+        except Exception:
+            smooth = cv2.bilateralFilter(result, d=0, sigmaColor=45, sigmaSpace=22)
+        detail = _detail_protection_mask(result)
+        preserve = 1.0 - (1.0 - detail) * (params.hair_texture_preserve / 100.0)
+        alpha = (hair * preserve * 0.45 * (params.hair_smooth / 100.0))[:, :, None]
+        result = np.clip(result.astype(np.float32) * (1 - alpha) + smooth.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
+
+    if params.hair_recolor > 0:
+        target_rgb = np.uint8([[_hex_to_rgb(params.hair_color)]])
+        target_hsv = cv2.cvtColor(target_rgb, cv2.COLOR_RGB2HSV).astype(np.float32)[0, 0]
+        hsv = cv2.cvtColor(result, cv2.COLOR_RGB2HSV).astype(np.float32)
+        recolored = hsv.copy()
+        recolored[:, :, 0] = target_hsv[0]
+        recolored[:, :, 1] = np.clip(0.55 * hsv[:, :, 1] + 0.45 * target_hsv[1], 0, 255)
+        recolored[:, :, 2] = np.clip(hsv[:, :, 2] * 0.92 + target_hsv[2] * 0.08, 0, 255)
+        recolored_rgb = cv2.cvtColor(np.clip(recolored, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
+        alpha = (hair * (params.hair_recolor / 100.0))[:, :, None]
+        result = np.clip(result.astype(np.float32) * (1 - alpha) + recolored_rgb.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
+
+    return result
+
+
 def _detail_protection_mask(rgb: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     edges = cv2.Laplacian(gray, cv2.CV_32F)
@@ -309,8 +404,11 @@ _OPTIONAL_SALIENCY_SCORER = None
 _OPTIONAL_SALIENCY_FAILED = False
 _OPTIONAL_DEPTH_ESTIMATOR = None
 _OPTIONAL_DEPTH_FAILED = False
+_OPTIONAL_HAIR_PARSER = None
+_OPTIONAL_HAIR_FAILED = False
 _SALIENCY_MASK_CACHE: dict[str, np.ndarray] = {}
 _DEPTH_MAP_CACHE: dict[str, np.ndarray] = {}
+_HAIR_MASK_CACHE: dict[str, np.ndarray] = {}
 
 
 def _retouch_model_mode() -> str:
@@ -834,6 +932,8 @@ def _apply_portrait_effects(
         hsv[:, :, 1:2] *= (1 - alpha * 0.35 * (params.beauty_teeth_saturation / 100.0))
         hsv[:, :, 2:3] *= (1 + alpha * (params.beauty_teeth_brightness / 100.0))
         result = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
+
+    result = _apply_hair_effects(result, params, skin)
 
     if params.background_blur > 0:
         subject = _subject_mask_for_depth_blur(result, skin, params, face_boxes)
