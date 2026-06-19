@@ -147,18 +147,33 @@ const DEFAULT_PARAMS: RetouchParams = {
     <div [class]="embedded() ? 'retouch-panel' : 'retouch-dialog'">
       <div [class]="embedded() ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] lg:grid-rows-[minmax(0,1fr)_auto] min-h-0 h-full overflow-hidden' : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]'">
         <div [class]="embedded() ? 'flex flex-col min-h-0 lg:col-start-1 lg:row-start-1' : 'flex flex-col'">
-          <div [class]="embedded() ? 'relative flex flex-1 items-center justify-center bg-black overflow-hidden min-h-[42vh] lg:min-h-0' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]'">
+          <div
+            #previewViewport
+            [class]="embedded() ? 'relative flex flex-1 items-center justify-center bg-black overflow-hidden min-h-[42vh] lg:min-h-0 touch-none' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh] touch-none'"
+            [class.cursor-grab]="!inpaintMode() && zoomScale() > 1"
+            [class.cursor-grabbing]="isPanning()"
+            (wheel)="onPreviewWheel($event)"
+            (dblclick)="resetPreviewZoom()"
+            (pointerdown)="startPreviewPan($event)"
+            (pointermove)="movePreviewPan($event)"
+            (pointerup)="endPreviewPan($event)"
+            (pointercancel)="endPreviewPan($event)"
+          >
             @if (loadingPreview()) {
               <div class="absolute inset-0 z-20 grid place-items-center bg-black/35">
                 <mat-spinner diameter="36" />
               </div>
             }
-            <div [class]="embedded() ? 'relative max-w-full max-h-full h-full flex items-center justify-center' : 'relative max-w-full max-h-full'" (click)="onPreviewClick($event)">
+            <div
+              [class]="embedded() ? 'relative max-w-full max-h-full h-full flex items-center justify-center origin-center' : 'relative max-w-full max-h-full origin-center'"
+              [style.transform]="previewTransform()"
+              (click)="onPreviewClick($event)"
+            >
               <img
                 #previewImage
                 [src]="previewSrc()"
                 [alt]="activeFilename()"
-                [class]="embedded() ? 'block max-w-full max-h-full object-contain select-none' : 'block max-w-full max-h-[72vh] object-contain select-none'"
+                [class]="embedded() ? 'block max-w-full max-h-full object-contain select-none pointer-events-none' : 'block max-w-full max-h-[72vh] object-contain select-none pointer-events-none'"
                 draggable="false"
                 [class.cursor-crosshair]="inpaintMode()"
               />
@@ -484,6 +499,7 @@ export class RetouchDialogComponent {
   readonly activePath = computed(() => this.imagePath() || this.dialogData?.path || '');
   readonly activeFilename = computed(() => this.filename() || this.dialogData?.filename || '');
 
+  readonly previewViewport = viewChild<ElementRef<HTMLDivElement>>('previewViewport');
   readonly previewImage = viewChild<ElementRef<HTMLImageElement>>('previewImage');
   readonly params = signal<RetouchParams>({ ...DEFAULT_PARAMS });
   readonly previewSrc = signal('');
@@ -495,6 +511,18 @@ export class RetouchDialogComponent {
   readonly previewHeight = signal(0);
   readonly statusText = signal('');
   readonly cropPreviewConfirmed = signal(false);
+  readonly zoomScale = signal(1);
+  readonly panX = signal(0);
+  readonly panY = signal(0);
+  readonly isPanning = signal(false);
+  readonly previewTransform = computed(() => {
+    const scale = this.zoomScale();
+    const x = this.panX();
+    const y = this.panY();
+    return scale === 1 && x === 0 && y === 0
+      ? ''
+      : `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+  });
   private readonly historyVersion = signal(0);
 
   private undoStack: RetouchHistoryState[] = [];
@@ -502,6 +530,11 @@ export class RetouchDialogComponent {
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
   private cropDrag: CropDragState | null = null;
   private currentPath = '';
+  private panPointerId: number | null = null;
+  private panStartX = 0;
+  private panStartY = 0;
+  private panOriginX = 0;
+  private panOriginY = 0;
 
   readonly canUndo = computed(() => (this.historyVersion(), this.undoStack.length > 0));
   readonly canRedo = computed(() => (this.historyVersion(), this.redoStack.length > 0));
@@ -523,6 +556,7 @@ export class RetouchDialogComponent {
       this.previewHeight.set(0);
       this.previewSrc.set(this.api.thumbnailUrl(path, 1920));
       this.statusText.set(this.i18n.t('retouch.preview_original'));
+      this.resetPreviewZoom();
     });
   }
 
@@ -603,6 +637,7 @@ export class RetouchDialogComponent {
 
   onPreviewClick(event: MouseEvent): void {
     if (!this.inpaintMode()) return;
+    if (this.isPanning()) return;
     const img = this.previewImage()?.nativeElement;
     if (!img) return;
     const rect = img.getBoundingClientRect();
@@ -643,8 +678,67 @@ export class RetouchDialogComponent {
     this.params.set({ ...DEFAULT_PARAMS });
     this.spots.set([]);
     this.cropPreviewConfirmed.set(false);
+    this.resetPreviewZoom();
     this.previewSrc.set(this.api.thumbnailUrl(this.activePath(), 1920));
     this.statusText.set(this.i18n.t('retouch.preview_original'));
+  }
+
+  onPreviewWheel(event: WheelEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const viewport = this.previewViewport()?.nativeElement;
+    if (!viewport) return;
+    const oldScale = this.zoomScale();
+    const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaY * 16 : event.deltaY;
+    const nextScale = this.clamp(oldScale * Math.exp(-delta * 0.0022), 1, 8);
+    if (Math.abs(nextScale - oldScale) < 0.001) return;
+
+    const rect = viewport.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left - rect.width / 2;
+    const pointerY = event.clientY - rect.top - rect.height / 2;
+    const ratio = nextScale / oldScale;
+    const nextX = this.panX() * ratio + pointerX * (1 - ratio);
+    const nextY = this.panY() * ratio + pointerY * (1 - ratio);
+    this.zoomScale.set(nextScale);
+    this.setPan(nextX, nextY, nextScale);
+  }
+
+  startPreviewPan(event: PointerEvent): void {
+    if (this.inpaintMode() || this.zoomScale() <= 1 || this.cropDrag) return;
+    if (event.button !== 0 && event.pointerType === 'mouse') return;
+    event.preventDefault();
+    this.isPanning.set(true);
+    this.panPointerId = event.pointerId;
+    this.panStartX = event.clientX;
+    this.panStartY = event.clientY;
+    this.panOriginX = this.panX();
+    this.panOriginY = this.panY();
+    (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
+  }
+
+  movePreviewPan(event: PointerEvent): void {
+    if (!this.isPanning() || this.panPointerId !== event.pointerId) return;
+    event.preventDefault();
+    this.setPan(
+      this.panOriginX + event.clientX - this.panStartX,
+      this.panOriginY + event.clientY - this.panStartY,
+      this.zoomScale(),
+    );
+  }
+
+  endPreviewPan(event: PointerEvent): void {
+    if (this.panPointerId !== event.pointerId) return;
+    this.isPanning.set(false);
+    this.panPointerId = null;
+    (event.currentTarget as HTMLElement | null)?.releasePointerCapture?.(event.pointerId);
+  }
+
+  resetPreviewZoom(): void {
+    this.zoomScale.set(1);
+    this.panX.set(0);
+    this.panY.set(0);
+    this.isPanning.set(false);
+    this.panPointerId = null;
   }
 
   async saveCopy(): Promise<void> {
@@ -777,6 +871,21 @@ export class RetouchDialogComponent {
 
   private clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
+  }
+
+  private setPan(x: number, y: number, scale = this.zoomScale()): void {
+    if (scale <= 1) {
+      this.panX.set(0);
+      this.panY.set(0);
+      return;
+    }
+    const viewport = this.previewViewport()?.nativeElement;
+    const width = viewport?.clientWidth || 1000;
+    const height = viewport?.clientHeight || 700;
+    const maxX = Math.max(0, (width * (scale - 1)) / 2);
+    const maxY = Math.max(0, (height * (scale - 1)) / 2);
+    this.panX.set(this.clamp(x, -maxX, maxX));
+    this.panY.set(this.clamp(y, -maxY, maxY));
   }
 
   private buildMask(): string | null {
