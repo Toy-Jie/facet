@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -125,6 +126,26 @@ def _resolve_visible_path(conn: sqlite3.Connection, db_path: str, user: CurrentU
     return row, resolve_photo_disk_path(db_path)
 
 
+def _face_boxes_for_photo(conn: sqlite3.Connection, db_path: str) -> list[tuple[int, int, int, int]]:
+    try:
+        rows = conn.execute(
+            """SELECT bbox_x1, bbox_y1, bbox_x2, bbox_y2
+               FROM faces
+               WHERE photo_path = ?
+                 AND bbox_x1 IS NOT NULL AND bbox_y1 IS NOT NULL
+                 AND bbox_x2 IS NOT NULL AND bbox_y2 IS NOT NULL""",
+            [db_path],
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    boxes: list[tuple[int, int, int, int]] = []
+    for row in rows:
+        x1, y1, x2, y2 = [int(v) for v in row]
+        if x2 > x1 and y2 > y1:
+            boxes.append((x1, y1, x2, y2))
+    return boxes
+
+
 def _load_image(path: str) -> Image.Image:
     try:
         with Image.open(path) as img:
@@ -221,6 +242,35 @@ def _portrait_like_mask(rgb: np.ndarray, skin: np.ndarray) -> np.ndarray:
 
 _OPTIONAL_SALIENCY_SCORER = None
 _OPTIONAL_SALIENCY_FAILED = False
+_OPTIONAL_DEPTH_ESTIMATOR = None
+_OPTIONAL_DEPTH_FAILED = False
+_SALIENCY_MASK_CACHE: dict[str, np.ndarray] = {}
+_DEPTH_MAP_CACHE: dict[str, np.ndarray] = {}
+
+
+def _retouch_model_mode() -> str:
+    return os.getenv("FACET_RETOUCH_MODEL_MODE", "auto").strip().lower()
+
+
+def _retouch_models_enabled() -> bool:
+    return _retouch_model_mode() not in {"0", "false", "off", "opencv"}
+
+
+def _image_cache_key(prefix: str, rgb: np.ndarray, max_side: int = 96) -> str:
+    h, w = rgb.shape[:2]
+    scale = min(1.0, max_side / float(max(1, max(h, w))))
+    if scale < 1.0:
+        sample = cv2.resize(rgb, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+    else:
+        sample = rgb
+    digest = hashlib.sha1(np.ascontiguousarray(sample).tobytes()).hexdigest()
+    return f"{prefix}:{w}x{h}:{digest}"
+
+
+def _cache_store(cache: dict[str, np.ndarray], key: str, value: np.ndarray, max_items: int = 12):
+    if len(cache) >= max_items:
+        cache.pop(next(iter(cache)))
+    cache[key] = value.copy()
 
 
 def _small_mask(mask: np.ndarray, max_side: int = 900) -> tuple[np.ndarray, float]:
@@ -250,11 +300,13 @@ def _remove_tiny_components(mask: np.ndarray, min_area_ratio: float = 0.003) -> 
 
 
 def _optional_birefnet_subject_mask(rgb: np.ndarray) -> Optional[np.ndarray]:
-    """Use BiRefNet only when explicitly enabled; preview sliders must stay responsive."""
+    """Use BiRefNet in auto/high-quality mode, with an in-process preview cache."""
     global _OPTIONAL_SALIENCY_SCORER, _OPTIONAL_SALIENCY_FAILED
-    enabled = os.getenv("FACET_RETOUCH_USE_BIREFNET", "").lower() in {"1", "true", "yes", "on"}
-    if not enabled or _OPTIONAL_SALIENCY_FAILED:
+    if not _retouch_models_enabled() or _OPTIONAL_SALIENCY_FAILED:
         return None
+    cache_key = _image_cache_key("birefnet", rgb)
+    if cache_key in _SALIENCY_MASK_CACHE:
+        return _SALIENCY_MASK_CACHE[cache_key].copy()
     try:
         if _OPTIONAL_SALIENCY_SCORER is None:
             from models.saliency_scorer import SaliencyScorer
@@ -266,10 +318,59 @@ def _optional_birefnet_subject_mask(rgb: np.ndarray) -> Optional[np.ndarray]:
             mask = cv2.resize(mask, (rgb.shape[1], rgb.shape[0]), interpolation=cv2.INTER_LINEAR)
         if 0.01 < float(mask.mean()) < 0.85:
             mask = cv2.GaussianBlur(mask, (0, 0), max(2, min(rgb.shape[:2]) / 180))
-            return np.clip(mask, 0, 1)
+            mask = np.clip(mask, 0, 1)
+            _cache_store(_SALIENCY_MASK_CACHE, cache_key, mask)
+            return mask
     except Exception as exc:
         _OPTIONAL_SALIENCY_FAILED = True
         logger.warning("Optional BiRefNet subject mask unavailable; falling back to OpenCV depth blur: %s", exc)
+    return None
+
+
+def _optional_depth_map(rgb: np.ndarray) -> Optional[np.ndarray]:
+    """Estimate relative scene depth when transformers depth models are available."""
+    global _OPTIONAL_DEPTH_ESTIMATOR, _OPTIONAL_DEPTH_FAILED
+    if not _retouch_models_enabled() or _OPTIONAL_DEPTH_FAILED:
+        return None
+    cache_key = _image_cache_key("depth", rgb)
+    if cache_key in _DEPTH_MAP_CACHE:
+        return _DEPTH_MAP_CACHE[cache_key].copy()
+    try:
+        if _OPTIONAL_DEPTH_ESTIMATOR is None:
+            from transformers import pipeline
+
+            model_name = os.getenv("FACET_RETOUCH_DEPTH_MODEL", "depth-anything/Depth-Anything-V2-Small-hf")
+            device = -1
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    device = 0
+            except Exception:
+                device = -1
+            _OPTIONAL_DEPTH_ESTIMATOR = pipeline("depth-estimation", model=model_name, device=device)
+        pil = Image.fromarray(rgb, mode="RGB")
+        output = _OPTIONAL_DEPTH_ESTIMATOR(pil)
+        depth_img = output.get("depth")
+        if depth_img is None:
+            return None
+        depth = np.array(depth_img.convert("L").resize((rgb.shape[1], rgb.shape[0]), Image.Resampling.BILINEAR), dtype=np.float32)
+        p2, p98 = np.percentile(depth, [2, 98])
+        if p98 - p2 < 1e-3:
+            return None
+        depth = np.clip((depth - p2) / (p98 - p2), 0, 1)
+        # HF depth pipelines differ in polarity. Invert when the lower foreground is brighter.
+        top_mean = float(depth[: max(1, rgb.shape[0] // 4), :].mean())
+        bottom_mean = float(depth[-max(1, rgb.shape[0] // 4):, :].mean())
+        if bottom_mean > top_mean:
+            depth = 1.0 - depth
+        depth = cv2.GaussianBlur(depth.astype(np.float32), (0, 0), max(2, min(rgb.shape[:2]) / 220))
+        depth = np.clip(depth, 0, 1)
+        _cache_store(_DEPTH_MAP_CACHE, cache_key, depth)
+        return depth
+    except Exception as exc:
+        _OPTIONAL_DEPTH_FAILED = True
+        logger.warning("Optional depth-estimation model unavailable; falling back to perspective heuristic: %s", exc)
     return None
 
 
@@ -286,6 +387,32 @@ def _central_subject_prior(rgb: np.ndarray) -> np.ndarray:
     edge_norm = edges / (np.percentile(edges, 96) + 1e-6)
     texture = np.clip(edge_norm, 0, 1)
     return np.clip(ellipse * (0.35 + 0.65 * texture), 0, 1).astype(np.float32)
+
+
+def _face_subject_prior(shape: tuple[int, int], face_boxes: Optional[list[tuple[int, int, int, int]]]) -> np.ndarray:
+    h, w = shape
+    prior = np.zeros((h, w), dtype=np.float32)
+    if not face_boxes:
+        return prior
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    for x1, y1, x2, y2 in face_boxes:
+        x1 = max(0, min(w - 1, int(x1)))
+        y1 = max(0, min(h - 1, int(y1)))
+        x2 = max(x1 + 1, min(w, int(x2)))
+        y2 = max(y1 + 1, min(h, int(y2)))
+        face_w = max(1, x2 - x1)
+        face_h = max(1, y2 - y1)
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+
+        head = np.exp(-(((x - cx) / (face_w * 0.92)) ** 2 + ((y - cy) / (face_h * 1.05)) ** 2) * 1.6)
+        torso_cy = min(h * 0.98, cy + face_h * 2.15)
+        torso = np.exp(-(((x - cx) / (face_w * 2.4)) ** 2 + ((y - torso_cy) / (face_h * 3.2)) ** 2) * 1.35)
+        shoulders_cy = min(h * 0.95, cy + face_h * 1.35)
+        shoulders = np.exp(-(((x - cx) / (face_w * 3.0)) ** 2 + ((y - shoulders_cy) / (face_h * 1.5)) ** 2) * 1.5)
+        prior = np.maximum(prior, np.maximum(head, np.maximum(torso * 0.72, shoulders * 0.52)))
+
+    return np.clip(prior, 0, 1)
 
 
 def _grabcut_subject_mask(rgb: np.ndarray, seed: np.ndarray) -> np.ndarray:
@@ -339,13 +466,19 @@ def _grabcut_subject_mask(rgb: np.ndarray, seed: np.ndarray) -> np.ndarray:
     return seed
 
 
-def _subject_mask_for_depth_blur(rgb: np.ndarray, skin: np.ndarray) -> np.ndarray:
+def _subject_mask_for_depth_blur(
+    rgb: np.ndarray,
+    skin: np.ndarray,
+    face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
+) -> np.ndarray:
+    face_prior = _face_subject_prior(skin.shape, face_boxes)
     saliency = _optional_birefnet_subject_mask(rgb)
     if saliency is not None:
-        base = saliency
+        base = np.maximum(saliency, face_prior * 0.85)
     else:
         portrait = _portrait_like_mask(rgb, skin)
         prior = _central_subject_prior(rgb)
+        prior = np.maximum(prior * 0.78, face_prior)
         if portrait.max() > 0.05:
             base = np.maximum(portrait, prior * 0.25)
         else:
@@ -361,6 +494,7 @@ def _subject_mask_for_depth_blur(rgb: np.ndarray, skin: np.ndarray) -> np.ndarra
     sigma = max(2.5, min(h, w) / 160)
     protected = cv2.GaussianBlur(protected, (0, 0), sigmaX=sigma, sigmaY=sigma)
     protected = np.maximum(protected, base)
+    protected = np.maximum(protected, face_prior * 0.92)
     return np.clip(protected, 0, 1)
 
 
@@ -402,7 +536,12 @@ def _blurred_layer(rgb: np.ndarray, sigma: float) -> np.ndarray:
 def _apply_depth_background_blur(rgb: np.ndarray, subject: np.ndarray, strength: float) -> np.ndarray:
     if subject.max() <= 0.05:
         return rgb
-    depth = _perspective_depth_map(subject)
+    depth = _optional_depth_map(rgb)
+    if depth is None:
+        depth = _perspective_depth_map(subject)
+    else:
+        heuristic = _perspective_depth_map(subject)
+        depth = np.clip(depth * 0.72 + heuristic * 0.28, 0, 1)
     matte = np.clip((1.0 - subject) * (0.24 + 0.76 * depth), 0, 1)
     blur_amount = np.clip(matte * (0.35 + 0.65 * strength), 0, 1)
 
@@ -420,7 +559,11 @@ def _apply_depth_background_blur(rgb: np.ndarray, subject: np.ndarray, strength:
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def _apply_portrait_effects(rgb: np.ndarray, params: RetouchAdjustments) -> np.ndarray:
+def _apply_portrait_effects(
+    rgb: np.ndarray,
+    params: RetouchAdjustments,
+    face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
+) -> np.ndarray:
     result = rgb
     skin = _skin_mask(result)
     blemish_strength = max(params.face_blemish, params.body_blemish) / 100.0
@@ -471,7 +614,7 @@ def _apply_portrait_effects(rgb: np.ndarray, params: RetouchAdjustments) -> np.n
         result = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
 
     if params.background_blur > 0:
-        subject = _subject_mask_for_depth_blur(result, skin)
+        subject = _subject_mask_for_depth_blur(result, skin, face_boxes)
         result = _apply_depth_background_blur(result, subject, params.background_blur / 100.0)
 
     return result
@@ -511,8 +654,73 @@ def _process_geometry(img: Image.Image, params: RetouchAdjustments) -> Image.Ima
     return out
 
 
-def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
+def _scale_face_boxes(
+    face_boxes: Optional[list[tuple[int, int, int, int]]],
+    source_size: tuple[int, int],
+    target_size: tuple[int, int],
+) -> list[tuple[int, int, int, int]]:
+    if not face_boxes:
+        return []
+    source_w, source_h = source_size
+    target_w, target_h = target_size
+    if source_w <= 0 or source_h <= 0:
+        return list(face_boxes)
+    sx = target_w / float(source_w)
+    sy = target_h / float(source_h)
+    return [
+        (int(round(x1 * sx)), int(round(y1 * sy)), int(round(x2 * sx)), int(round(y2 * sy)))
+        for x1, y1, x2, y2 in face_boxes
+    ]
+
+
+def _transform_face_boxes(
+    face_boxes: Optional[list[tuple[int, int, int, int]]],
+    source_size: tuple[int, int],
+    output_size: tuple[int, int],
+    params: RetouchAdjustments,
+) -> list[tuple[int, int, int, int]]:
+    if not face_boxes:
+        return []
+    source_w, source_h = source_size
+    rotate = params.rotate % 360
+    boxes = []
+    for x1, y1, x2, y2 in face_boxes:
+        corners = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.float32)
+        if rotate == 90:
+            corners = np.column_stack([source_h - corners[:, 1], corners[:, 0]])
+        elif rotate == 180:
+            corners = np.column_stack([source_w - corners[:, 0], source_h - corners[:, 1]])
+        elif rotate == 270:
+            corners = np.column_stack([corners[:, 1], source_w - corners[:, 0]])
+        elif rotate:
+            return []
+
+        out_w, out_h = output_size
+        if params.flip_horizontal:
+            corners[:, 0] = out_w - corners[:, 0]
+        if params.flip_vertical:
+            corners[:, 1] = out_h - corners[:, 1]
+        min_xy = np.floor(corners.min(axis=0)).astype(int)
+        max_xy = np.ceil(corners.max(axis=0)).astype(int)
+        boxes.append((
+            max(0, min(out_w - 1, int(min_xy[0]))),
+            max(0, min(out_h - 1, int(min_xy[1]))),
+            max(1, min(out_w, int(max_xy[0]))),
+            max(1, min(out_h, int(max_xy[1]))),
+        ))
+    return [box for box in boxes if box[2] > box[0] and box[3] > box[1]]
+
+
+def _process_image(
+    img: Image.Image,
+    params: RetouchAdjustments,
+    face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
+    face_source_size: Optional[tuple[int, int]] = None,
+) -> Image.Image:
+    original_size = img.size
+    scaled_faces = _scale_face_boxes(face_boxes, face_source_size or original_size, original_size)
     out = _process_geometry(img, params)
+    transformed_faces = _transform_face_boxes(scaled_faces, original_size, out.size, params)
     if params.brightness:
         out = ImageEnhance.Brightness(out).enhance(_factor(params.brightness, 0.75))
     if params.contrast:
@@ -522,7 +730,7 @@ def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
 
     rgb = np.array(out.convert("RGB"))
     rgb = _apply_temperature(rgb, params.temperature)
-    rgb = _apply_portrait_effects(rgb, params)
+    rgb = _apply_portrait_effects(rgb, params, transformed_faces)
     rgb = _apply_inpaint(rgb, params.inpaint_mask_base64)
     out = Image.fromarray(rgb, mode="RGB")
     if params.crop:
@@ -627,9 +835,14 @@ def api_retouch_preview(
 ):
     db_path = _photo_path(body)
     with get_db() as conn:
-        _, disk_path = _resolve_visible_path(conn, db_path, user)
+        row, disk_path = _resolve_visible_path(conn, db_path, user)
+        face_boxes = _face_boxes_for_photo(conn, db_path)
+    source_size = (row["image_width"], row["image_height"]) if row["image_width"] and row["image_height"] else None
     img = _downsample(_load_image(disk_path), body.max_size)
-    result = _process_geometry(img, body.params) if body.compare else _process_image(img, body.params)
+    if body.compare:
+        result = _process_geometry(img, body.params)
+    else:
+        result = _process_image(img, body.params, face_boxes, source_size)
     if body.compare and body.params.crop:
         result = _apply_crop(result, body.params.crop)
     return {
@@ -650,8 +863,10 @@ def api_retouch_apply(
     db_path = _photo_path(body)
     with get_db() as conn:
         source_row, disk_path = _resolve_visible_path(conn, db_path, user)
+        face_boxes = _face_boxes_for_photo(conn, db_path)
+        source_size = (source_row["image_width"], source_row["image_height"]) if source_row["image_width"] and source_row["image_height"] else None
         img = _load_image(disk_path)
-        result = _process_image(img, body.params)
+        result = _process_image(img, body.params, face_boxes, source_size)
         output_disk, output_db_path = _next_output_paths(disk_path, db_path, body.output_suffix)
         try:
             result.save(output_disk, format="JPEG", quality=95, subsampling=0)
@@ -679,10 +894,12 @@ def api_retouch_download(
 ):
     db_path = _photo_path(body)
     with get_db() as conn:
-        _, disk_path = _resolve_visible_path(conn, db_path, user)
+        row, disk_path = _resolve_visible_path(conn, db_path, user)
+        face_boxes = _face_boxes_for_photo(conn, db_path)
+        source_size = (row["image_width"], row["image_height"]) if row["image_width"] and row["image_height"] else None
 
     img = _load_image(disk_path)
-    result = _process_image(img, body.params)
+    result = _process_image(img, body.params, face_boxes, source_size)
     buf = BytesIO()
     result.save(buf, format="JPEG", quality=95, subsampling=0)
     buf.seek(0)

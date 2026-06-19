@@ -19,6 +19,7 @@ def retouch_client(tmp_path, monkeypatch):
     monkeypatch.setattr("api.database.DEFAULT_DB_PATH", str(db_path))
     monkeypatch.setattr("api.routers.retouch.get_visibility_clause", lambda user_id: ("1=1", []))
     monkeypatch.setattr("api.routers.retouch.resolve_photo_disk_path", lambda path: path)
+    monkeypatch.setenv("FACET_RETOUCH_MODEL_MODE", "opencv")
 
     app = create_app()
     return TestClient(app), db_path
@@ -73,6 +74,18 @@ def _make_depth_photo(tmp_path, db_path, size=(160, 120), filename="depth_portra
     conn.commit()
     conn.close()
     return img_path, original_bytes
+
+
+def _insert_face_box(db_path, photo_path, box):
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """INSERT INTO faces
+           (photo_path, face_index, embedding, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        [str(photo_path), 0, b"0" * (512 * 4), *box],
+    )
+    conn.commit()
+    conn.close()
 
 
 def test_retouch_preview_returns_base64(retouch_client, tmp_path):
@@ -281,3 +294,26 @@ def test_retouch_depth_background_blur_saves_copy(retouch_client, tmp_path):
         edited_bg = np.array(edited.convert("RGB").crop((0, 0, 40, 40)), dtype=np.int16)
         diff = int(np.abs(original_bg - edited_bg).sum())
     assert diff > 1500
+
+
+def test_retouch_background_blur_uses_face_box_as_subject_anchor(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, _ = _make_depth_photo(tmp_path, db_path, size=(180, 120), filename="off_center_portrait.jpg")
+    _insert_face_box(db_path, img_path, (118, 35, 142, 63))
+
+    resp = client.post("/api/retouch/preview", json={
+        "image_path": str(img_path),
+        "params": {"background_blur": 85},
+        "max_size": 180,
+    })
+
+    assert resp.status_code == 200
+    body = resp.json()
+    payload = body["image_base64"].split(",", 1)[1]
+    with Image.open(BytesIO(base64.b64decode(payload))) as edited, Image.open(img_path) as original:
+        original_arr = np.array(original.convert("RGB"), dtype=np.int16)
+        edited_arr = np.array(edited.convert("RGB"), dtype=np.int16)
+        subject_diff = np.abs(original_arr[40:76, 110:152] - edited_arr[40:76, 110:152]).mean()
+        background_diff = np.abs(original_arr[0:42, 0:58] - edited_arr[0:42, 0:58]).mean()
+
+    assert subject_diff < background_diff
