@@ -468,8 +468,8 @@ import { createLeafletMap } from '../../shared/leaflet';
         </div>
         }
         @if (filmstripPhotos().length) {
-          <div class="shrink-0 border-t border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] px-3 py-2">
-            <div #filmstrip class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 lg:w-[calc(100%_-_420px)]">
+          <div class="shrink-0 border-t border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] px-3 py-2 lg:w-[calc(100%_-_420px)]">
+            <div #filmstrip class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1">
               @for (thumb of filmstripPhotos(); track thumb.path) {
                 <button
                   type="button"
