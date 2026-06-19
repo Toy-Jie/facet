@@ -111,19 +111,19 @@ const DEFAULT_PARAMS: RetouchParams = {
     }
 
     <div [class]="embedded() ? 'retouch-panel' : 'retouch-dialog'">
-      <div [class]="embedded() ? 'grid grid-cols-1 min-h-0' : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]'">
-        <div [class]="embedded() ? 'relative flex items-center justify-center bg-black overflow-hidden min-h-56 max-h-80' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]'">
+      <div [class]="embedded() ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] min-h-0 h-full overflow-hidden' : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]'">
+        <div [class]="embedded() ? 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh] lg:min-h-0 h-full' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]'">
           @if (loadingPreview()) {
             <div class="absolute inset-0 z-20 grid place-items-center bg-black/35">
               <mat-spinner diameter="36" />
             </div>
           }
-          <div class="relative max-w-full max-h-full" (click)="onPreviewClick($event)">
+          <div [class]="embedded() ? 'relative max-w-full max-h-full h-full flex items-center justify-center' : 'relative max-w-full max-h-full'" (click)="onPreviewClick($event)">
             <img
               #previewImage
               [src]="previewSrc()"
               [alt]="activeFilename()"
-              [class]="embedded() ? 'block max-w-full max-h-80 object-contain select-none' : 'block max-w-full max-h-[72vh] object-contain select-none'"
+              [class]="embedded() ? 'block max-w-full max-h-full object-contain select-none' : 'block max-w-full max-h-[72vh] object-contain select-none'"
               draggable="false"
               [class.cursor-crosshair]="inpaintMode()"
             />
@@ -166,8 +166,14 @@ const DEFAULT_PARAMS: RetouchParams = {
           </div>
         </div>
 
-        <div [class]="embedded() ? 'overflow-y-auto bg-[var(--mat-sys-surface)]' : 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]'">
+        <div [class]="embedded() ? 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]' : 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]'">
           <div class="p-4 flex items-center gap-2 border-b border-[var(--mat-sys-outline-variant)]">
+            @if (embedded()) {
+              <button mat-button (click)="cancelled.emit()">
+                <mat-icon>info</mat-icon>
+                {{ 'photo_detail.details_panel' | translate }}
+              </button>
+            }
             <button mat-icon-button (click)="undo()" [disabled]="!canUndo()" [matTooltip]="'retouch.undo' | translate">
               <mat-icon>undo</mat-icon>
             </button>
@@ -297,6 +303,8 @@ const DEFAULT_PARAMS: RetouchParams = {
     .retouch-panel {
       display: block;
       min-height: 0;
+      height: 100%;
+      overflow: hidden;
     }
     .retouch-dialog {
       display: block;

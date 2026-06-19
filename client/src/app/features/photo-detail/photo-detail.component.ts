@@ -24,7 +24,7 @@ import { DownloadIconPipe } from '../../shared/pipes/download-icon.pipe';
 import { HistogramComponent } from '../../shared/components/histogram/histogram.component';
 import { DownloadOption } from '../../shared/models/download.model';
 import { downloadAll } from '../../shared/utils/download';
-import { GalleryStore } from '../gallery/gallery.store';
+import { GalleryStore, PhotosResponse } from '../gallery/gallery.store';
 import { ApplyResponse, RetouchDialogComponent } from './retouch-dialog.component';
 import * as L from 'leaflet';
 import { createLeafletMap } from '../../shared/leaflet';
@@ -123,37 +123,50 @@ import { createLeafletMap } from '../../shared/leaflet';
         }
       </div>
 
-      <!-- Main content: image + info -->
-      <div class="flex flex-col lg:flex-row lg:h-[calc(100%-49px)] lg:overflow-hidden">
-        <!-- Image panel -->
-        <div #imagePanel class="shrink-0 lg:h-auto lg:flex-1 flex items-center justify-center bg-black lg:min-h-0 relative overflow-hidden cursor-grab"
-          [class.cursor-grabbing]="isPanning()"
-          (dblclick)="resetZoom()"
-          (pointerdown)="onPanStart($event)"
-          (pointermove)="onPanMove($event)"
-          (pointerup)="onPanEnd($event)"
-          (pointercancel)="onPanEnd($event)"
-          (touchstart)="onTouchStart($event)"
-          (touchend)="onTouchEnd()">
-          <img
-            [src]="p.path | thumbnailUrl:640"
-            [alt]="p.filename"
-            class="w-full lg:max-w-full lg:max-h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-            [class.opacity-0]="fullImageLoaded()"
-            [style.transform]="zoomTransform()"
-          />
-          <img
-            [src]="fullImageUrl()"
-            [alt]="p.filename"
-            class="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-            [class.opacity-0]="!fullImageLoaded()"
-            (load)="onFullImageLoad()"
-            [style.transform]="zoomTransform()"
-          />
-        </div>
+      <div class="flex flex-col lg:h-[calc(100vh-105px)] lg:overflow-hidden">
+        @if (sidePanelMode() === 'retouch' && auth.isEdition()) {
+          <div class="flex-1 min-h-0 overflow-hidden">
+            <app-retouch-dialog
+              class="block h-full min-h-0"
+              [embedded]="true"
+              [imagePath]="p.path"
+              [filename]="p.filename"
+              (saved)="onRetouchSaved($event)"
+              (cancelled)="sidePanelMode.set('details')"
+            />
+          </div>
+        } @else {
+        <!-- Main content: image + info -->
+        <div class="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+          <!-- Image panel -->
+          <div #imagePanel class="shrink-0 lg:h-auto lg:flex-1 flex items-center justify-center bg-black lg:min-h-0 relative overflow-hidden cursor-grab"
+            [class.cursor-grabbing]="isPanning()"
+            (dblclick)="resetZoom()"
+            (pointerdown)="onPanStart($event)"
+            (pointermove)="onPanMove($event)"
+            (pointerup)="onPanEnd($event)"
+            (pointercancel)="onPanEnd($event)"
+            (touchstart)="onTouchStart($event)"
+            (touchend)="onTouchEnd()">
+            <img
+              [src]="p.path | thumbnailUrl:640"
+              [alt]="p.filename"
+              class="w-full lg:max-w-full lg:max-h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
+              [class.opacity-0]="fullImageLoaded()"
+              [style.transform]="zoomTransform()"
+            />
+            <img
+              [src]="fullImageUrl()"
+              [alt]="p.filename"
+              class="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
+              [class.opacity-0]="!fullImageLoaded()"
+              (load)="onFullImageLoad()"
+              [style.transform]="zoomTransform()"
+            />
+          </div>
 
-        <!-- Side panel -->
-        <div class="lg:w-[420px] lg:shrink-0 lg:overflow-y-auto text-sm text-[var(--mat-sys-on-surface)] border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
+          <!-- Side panel -->
+          <div class="lg:w-[420px] lg:shrink-0 lg:overflow-y-auto text-sm text-[var(--mat-sys-on-surface)] border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
           <div class="sticky top-0 z-10 bg-[var(--mat-sys-surface)] border-b border-[var(--mat-sys-outline-variant)] p-3">
             <div class="grid grid-cols-2 gap-1 rounded-lg bg-[var(--mat-sys-surface-container)] p-1">
               <button
@@ -181,14 +194,6 @@ import { createLeafletMap } from '../../shared/leaflet';
             </div>
           </div>
 
-          @if (sidePanelMode() === 'retouch' && auth.isEdition()) {
-            <app-retouch-dialog
-              [embedded]="true"
-              [imagePath]="p.path"
-              [filename]="p.filename"
-              (saved)="onRetouchSaved($event)"
-            />
-          } @else {
           <div class="p-4 space-y-4">
           <!-- Filename + Date + Category + Aggregate -->
           <div>
@@ -466,8 +471,30 @@ import { createLeafletMap } from '../../shared/leaflet';
             </div>
           }
           </div>
-          }
+          </div>
         </div>
+        }
+        @if (filmstripPhotos().length) {
+          <div class="shrink-0 border-t border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface-container)] px-3 py-2">
+            <div #filmstrip class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1">
+              @for (thumb of filmstripPhotos(); track thumb.path) {
+                <button
+                  type="button"
+                  class="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border transition-colors bg-black"
+                  [attr.data-photo-path]="thumb.path"
+                  [class.border-[var(--mat-sys-primary)]]="thumb.path === p.path"
+                  [class.border-transparent]="thumb.path !== p.path"
+                  [class.ring-2]="thumb.path === p.path"
+                  [class.ring-[var(--mat-sys-primary)]]="thumb.path === p.path"
+                  (click)="selectFilmstripPhoto(thumb)"
+                  [matTooltip]="thumb.filename"
+                >
+                  <img [src]="thumb.path | thumbnailUrl:240" [alt]="thumb.filename" class="w-full h-full object-cover" />
+                </button>
+              }
+            </div>
+          </div>
+        }
       </div>
     } @else {
       <div class="flex items-center justify-center h-full">
@@ -489,14 +516,17 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
   private readonly photoActions = inject(PhotoActionsService);
 
   readonly photo = signal<Photo | null>(null);
+  private readonly localFilmstripPhotos = signal<Photo[]>([]);
   protected readonly downloading = signal(false);
   protected readonly downloadOptions = signal<DownloadOption[]>([]);
   protected readonly generatingCaption = signal(false);
   protected readonly sidePanelMode = signal<'details' | 'retouch'>('details');
+  protected readonly filmstripPhotos = computed(() => this.store.photos().length ? this.store.photos() : this.localFilmstripPhotos());
   protected readonly stars: readonly number[] = [1, 2, 3, 4, 5];
 
   // Zoom & pan state
   private readonly imagePanel = viewChild<ElementRef<HTMLDivElement>>('imagePanel');
+  private readonly filmstrip = viewChild<ElementRef<HTMLDivElement>>('filmstrip');
   protected readonly zoomScale = signal(1);
   protected readonly panX = signal(0);
   protected readonly panY = signal(0);
@@ -575,6 +605,13 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     }, 0);
   });
 
+  private filmstripScrollEffect = effect(() => {
+    const current = this.photo()?.path;
+    this.filmstripPhotos();
+    if (!current) return;
+    setTimeout(() => this.scrollFilmstripToCurrent(), 0);
+  });
+
   constructor() {
     super();
     this.destroyRef.onDestroy(() => {
@@ -591,6 +628,9 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    if (this.store.photos().length === 0) {
+      void this.loadFilmstripFallback();
+    }
     // Try router state (passed from gallery via navigate(..., { state }))
     const statePhoto = history.state?.['photo'] as Photo | undefined;
 
@@ -639,6 +679,16 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     this.photo.set(next);
     this.fullImageLoaded.set(false);
     this.sidePanelMode.set('details');
+  }
+
+  protected selectFilmstripPhoto(photo: Photo): void {
+    this.router.navigate(['/photo'], {
+      queryParams: { path: photo.path },
+      state: { photo },
+    });
+    this.photo.set(photo);
+    this.fullImageLoaded.set(false);
+    this.resetZoom();
   }
 
   protected async download(path: string, type = 'original', profile?: string): Promise<void> {
@@ -754,6 +804,24 @@ export class PhotoDetailComponent extends PhotoDetailBase implements OnInit {
     } catch {
       this.router.navigate(['/']);
     }
+  }
+
+  private async loadFilmstripFallback(): Promise<void> {
+    try {
+      const res = await firstValueFrom(this.api.get<PhotosResponse>('/photos', { page: 1, per_page: 120 }));
+      this.localFilmstripPhotos.set(res.photos || []);
+    } catch {
+      this.localFilmstripPhotos.set([]);
+    }
+  }
+
+  private scrollFilmstripToCurrent(): void {
+    const current = this.photo()?.path;
+    const container = this.filmstrip()?.nativeElement;
+    if (!current || !container) return;
+    const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(current) : current.replace(/"/g, '\\"');
+    const el = container.querySelector<HTMLElement>(`[data-photo-path="${escaped}"]`);
+    el?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   }
 
   protected editGps(p: Photo): void {
