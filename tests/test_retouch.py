@@ -449,7 +449,11 @@ def test_retouch_accepts_targeted_wrinkle_controls_with_landmarks(retouch_client
         "image_path": str(img_path),
         "params": {
             "face_wrinkle": 15,
-            "wrinkle_nasolabial_fold": 70,
+            "nasolabial_repair": 70,
+            "nasolabial_width": 140,
+            "nasolabial_shadow_lift": 125,
+            "nasolabial_texture_protection": 165,
+            "nasolabial_feather": 115,
             "wrinkle_under_eye": 45,
             "wrinkle_forehead": 35,
             "wrinkle_glabella": 55,
@@ -473,7 +477,8 @@ def test_retouch_accepts_targeted_wrinkle_controls_with_landmarks(retouch_client
     conn.close()
 
     assert edit is not None
-    assert '"wrinkle_nasolabial_fold": 70.0' in edit[0]
+    assert '"nasolabial_repair": 70.0' in edit[0]
+    assert '"nasolabial_texture_protection": 165.0' in edit[0]
     assert '"wrinkle_detail_protection": 150.0' in edit[0]
 
 

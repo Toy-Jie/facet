@@ -40,7 +40,11 @@ interface RetouchParams {
   whiten_skin: number;
   face_blemish: number;
   face_wrinkle: number;
-  wrinkle_nasolabial_fold: number;
+  nasolabial_repair: number;
+  nasolabial_width: number;
+  nasolabial_shadow_lift: number;
+  nasolabial_texture_protection: number;
+  nasolabial_feather: number;
   wrinkle_under_eye: number;
   wrinkle_forehead: number;
   wrinkle_glabella: number;
@@ -161,7 +165,11 @@ const DEFAULT_PARAMS: RetouchParams = {
   whiten_skin: 0,
   face_blemish: 0,
   face_wrinkle: 0,
-  wrinkle_nasolabial_fold: 0,
+  nasolabial_repair: 0,
+  nasolabial_width: 100,
+  nasolabial_shadow_lift: 100,
+  nasolabial_texture_protection: 130,
+  nasolabial_feather: 100,
   wrinkle_under_eye: 0,
   wrinkle_forehead: 0,
   wrinkle_glabella: 0,
@@ -488,7 +496,11 @@ const DEFAULT_PARAMS: RetouchParams = {
                   <div class="text-xs font-semibold uppercase tracking-wider text-[var(--mat-sys-on-surface-variant)]">{{ 'retouch.blemish_group' | translate }}</div>
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_blemish', label: ('retouch.face_blemish' | translate), min: 0, max: 100 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'face_wrinkle', label: ('retouch.face_wrinkle' | translate), min: 0, max: 100 }" />
-                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_nasolabial_fold', label: ('retouch.wrinkle_nasolabial_fold' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'nasolabial_repair', label: ('retouch.nasolabial_repair' | translate), min: 0, max: 100 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'nasolabial_width', label: ('retouch.nasolabial_width' | translate), min: 40, max: 220 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'nasolabial_shadow_lift', label: ('retouch.nasolabial_shadow_lift' | translate), min: 0, max: 200 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'nasolabial_texture_protection', label: ('retouch.nasolabial_texture_protection' | translate), min: 0, max: 220 }" />
+                  <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'nasolabial_feather', label: ('retouch.nasolabial_feather' | translate), min: 0, max: 200 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_under_eye', label: ('retouch.wrinkle_under_eye' | translate), min: 0, max: 100 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_forehead', label: ('retouch.wrinkle_forehead' | translate), min: 0, max: 100 }" />
                   <ng-container *ngTemplateOutlet="sliderTpl; context: { key: 'wrinkle_glabella', label: ('retouch.wrinkle_glabella' | translate), min: 0, max: 100 }" />
@@ -1328,7 +1340,11 @@ export class RetouchDialogComponent {
       'whiten_skin',
       'face_blemish',
       'face_wrinkle',
-      'wrinkle_nasolabial_fold',
+      'nasolabial_repair',
+      'nasolabial_width',
+      'nasolabial_shadow_lift',
+      'nasolabial_texture_protection',
+      'nasolabial_feather',
       'wrinkle_under_eye',
       'wrinkle_forehead',
       'wrinkle_glabella',

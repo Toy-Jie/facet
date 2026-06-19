@@ -51,7 +51,11 @@ class RetouchAdjustments(BaseModel):
     whiten_skin: float = Field(default=0, ge=0, le=100)
     face_blemish: float = Field(default=0, ge=0, le=100)
     face_wrinkle: float = Field(default=0, ge=0, le=100)
-    wrinkle_nasolabial_fold: float = Field(default=0, ge=0, le=100)
+    nasolabial_repair: float = Field(default=0, ge=0, le=100)
+    nasolabial_width: float = Field(default=100, ge=40, le=220)
+    nasolabial_shadow_lift: float = Field(default=100, ge=0, le=200)
+    nasolabial_texture_protection: float = Field(default=130, ge=0, le=220)
+    nasolabial_feather: float = Field(default=100, ge=0, le=200)
     wrinkle_under_eye: float = Field(default=0, ge=0, le=100)
     wrinkle_forehead: float = Field(default=0, ge=0, le=100)
     wrinkle_glabella: float = Field(default=0, ge=0, le=100)
@@ -672,7 +676,6 @@ def _wrinkle_zone_mask(
     h, w = shape
     mask = np.zeros((h, w), dtype=np.float32)
     strengths = {
-        "nasolabial": params.wrinkle_nasolabial_fold / 100.0,
         "under_eye": params.wrinkle_under_eye / 100.0,
         "forehead": params.wrinkle_forehead / 100.0,
         "glabella": params.wrinkle_glabella / 100.0,
@@ -721,11 +724,6 @@ def _wrinkle_zone_mask(
             mouth_right = np.array([x1 + fw * 0.64, y1 + fh * 0.74], dtype=np.float32)
             eye_span = fw * 0.32
 
-        nose_left = np.array([cx - fw * 0.10, eye_c[1] + (mouth_c[1] - eye_c[1]) * 0.45], dtype=np.float32)
-        nose_right = np.array([cx + fw * 0.10, eye_c[1] + (mouth_c[1] - eye_c[1]) * 0.45], dtype=np.float32)
-        _add_soft_line(mask, nose_left, mouth_left, fw * 0.045, strengths["nasolabial"])
-        _add_soft_line(mask, nose_right, mouth_right, fw * 0.045, strengths["nasolabial"])
-
         _add_soft_ellipse(mask, (left_eye_c[0], left_eye_c[1] + fh * 0.10), (eye_span * 0.30, fh * 0.055), strengths["under_eye"], -8)
         _add_soft_ellipse(mask, (right_eye_c[0], right_eye_c[1] + fh * 0.10), (eye_span * 0.30, fh * 0.055), strengths["under_eye"], 8)
         _add_soft_ellipse(mask, (cx, y1 + fh * 0.18), (fw * 0.34, fh * 0.085), strengths["forehead"])
@@ -754,6 +752,103 @@ def _apply_targeted_wrinkle_smoothing(
     protect = 1.0 - (1.0 - protect) * (params.wrinkle_detail_protection / 100.0)
     alpha = (wrinkle_mask * protect * 0.55 * (params.wrinkle_blend / 100.0))[:, :, None]
     return np.clip(rgb.astype(np.float32) * (1 - alpha) + smoothed.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
+
+
+def _nasolabial_fold_mask(
+    shape: tuple[int, int],
+    params: RetouchAdjustments,
+    face_boxes: Optional[list[tuple[int, int, int, int]]] = None,
+    face_landmarks: Optional[list[Optional[np.ndarray]]] = None,
+) -> np.ndarray:
+    h, w = shape
+    mask = np.zeros((h, w), dtype=np.float32)
+    strength = params.nasolabial_repair / 100.0
+    if strength <= 0:
+        return mask
+
+    boxes = face_boxes or []
+    landmarks = face_landmarks or []
+    count = max(len(boxes), len(landmarks))
+    width_scale = params.nasolabial_width / 100.0
+    for idx in range(count):
+        lm = landmarks[idx] if idx < len(landmarks) else None
+        if idx < len(boxes):
+            x1, y1, x2, y2 = boxes[idx]
+        elif lm is not None:
+            valid = lm[np.any(lm > 0, axis=1)]
+            if valid.size == 0:
+                continue
+            x1, y1 = valid.min(axis=0)
+            x2, y2 = valid.max(axis=0)
+        else:
+            continue
+        x1, y1, x2, y2 = float(x1), float(y1), float(x2), float(y2)
+        fw = max(1.0, x2 - x1)
+        fh = max(1.0, y2 - y1)
+        cx = (x1 + x2) / 2.0
+
+        if lm is not None and lm.shape[0] >= 72:
+            mouth = lm[52:72]
+            mouth_left = mouth[np.argmin(mouth[:, 0])] if mouth.size else np.array([x1 + fw * 0.36, y1 + fh * 0.74], dtype=np.float32)
+            mouth_right = mouth[np.argmax(mouth[:, 0])] if mouth.size else np.array([x1 + fw * 0.64, y1 + fh * 0.74], dtype=np.float32)
+            eye_points = lm[[35, 39, 89, 93]] if lm.shape[0] >= 94 else np.empty((0, 2), dtype=np.float32)
+            eye_y = float(eye_points[:, 1].mean()) if eye_points.size else y1 + fh * 0.38
+            mouth_y = float(mouth[:, 1].mean()) if mouth.size else y1 + fh * 0.74
+        else:
+            mouth_left = np.array([x1 + fw * 0.36, y1 + fh * 0.74], dtype=np.float32)
+            mouth_right = np.array([x1 + fw * 0.64, y1 + fh * 0.74], dtype=np.float32)
+            eye_y = y1 + fh * 0.38
+            mouth_y = y1 + fh * 0.74
+
+        fold_y = eye_y + (mouth_y - eye_y) * 0.45
+        nose_left = np.array([cx - fw * 0.11, fold_y], dtype=np.float32)
+        nose_right = np.array([cx + fw * 0.11, fold_y], dtype=np.float32)
+        line_width = max(2.0, fw * 0.060 * width_scale)
+        _add_soft_line(mask, nose_left, mouth_left, line_width, strength)
+        _add_soft_line(mask, nose_right, mouth_right, line_width, strength)
+
+        side_width = max(2.0, fw * 0.085 * width_scale)
+        cheek_left = (nose_left * 0.64 + mouth_left * 0.36) + np.array([-fw * 0.030, fh * 0.015], dtype=np.float32)
+        cheek_right = (nose_right * 0.64 + mouth_right * 0.36) + np.array([fw * 0.030, fh * 0.015], dtype=np.float32)
+        _add_soft_line(mask, cheek_left, mouth_left, side_width, strength * 0.44)
+        _add_soft_line(mask, cheek_right, mouth_right, side_width, strength * 0.44)
+
+    feather = max(0.2, 2.4 * (params.nasolabial_feather / 100.0))
+    mask = cv2.GaussianBlur(mask, (0, 0), feather)
+    return np.clip(mask, 0, 1)
+
+
+def _apply_nasolabial_repair(
+    rgb: np.ndarray,
+    nasolabial_mask: np.ndarray,
+    params: RetouchAdjustments,
+) -> np.ndarray:
+    if nasolabial_mask.max() <= 0.01:
+        return rgb
+
+    strength = params.nasolabial_repair / 100.0
+    shadow_lift = params.nasolabial_shadow_lift / 100.0
+    texture_protection = params.nasolabial_texture_protection / 100.0
+    source = rgb.astype(np.float32)
+
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB).astype(np.float32)
+    l_chan = lab[:, :, 0]
+    local_sigma = max(2.0, min(rgb.shape[:2]) / 95.0 * (params.nasolabial_width / 100.0))
+    local_light = cv2.GaussianBlur(l_chan, (0, 0), local_sigma)
+    shadow = np.clip(local_light - l_chan, 0, 34)
+    lab[:, :, 0] = np.clip(l_chan + shadow * (0.34 + 0.46 * shadow_lift) * strength, 0, 255)
+    lifted = cv2.cvtColor(np.clip(lab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2RGB).astype(np.float32)
+
+    smooth_sigma = max(0.8, min(rgb.shape[:2]) / 180.0 * (params.nasolabial_width / 100.0))
+    low = cv2.GaussianBlur(lifted, (0, 0), smooth_sigma)
+    detail = source - cv2.GaussianBlur(source, (0, 0), max(0.6, smooth_sigma * 0.55))
+    detail_keep = np.clip(0.42 + 0.42 * texture_protection, 0.35, 1.18)
+    repaired = np.clip(low + detail * detail_keep, 0, 255)
+
+    protect = _detail_protection_mask(rgb)
+    protect = 1.0 - (1.0 - protect) * min(1.4, texture_protection)
+    alpha = (nasolabial_mask * protect * (0.48 + 0.36 * strength))[:, :, None]
+    return np.clip(source * (1 - alpha) + repaired * alpha, 0, 255).astype(np.uint8)
 
 
 def _grabcut_subject_mask(rgb: np.ndarray, seed: np.ndarray) -> np.ndarray:
@@ -950,6 +1045,8 @@ def _apply_portrait_effects(
 
     wrinkle_mask = _wrinkle_zone_mask(result.shape[:2], params, face_boxes, face_landmarks)
     result = _apply_targeted_wrinkle_smoothing(result, wrinkle_mask, params)
+    nasolabial_mask = _nasolabial_fold_mask(result.shape[:2], params, face_boxes, face_landmarks)
+    result = _apply_nasolabial_repair(result, nasolabial_mask, params)
 
     tone_amount = params.skin_tone / 100.0
     if (params.whiten_skin > 0 or abs(tone_amount) > 0.01) and skin.max() > 0.05:
