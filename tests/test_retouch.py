@@ -131,6 +131,29 @@ def test_retouch_apply_saves_copy_and_records_history(retouch_client, tmp_path):
     assert "whiten_skin" in edit[2]
 
 
+def test_retouch_download_returns_processed_jpeg_without_saving_photo(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, original_bytes = _make_photo(tmp_path, db_path, size=(96, 72), filename="download_portrait.jpg")
+
+    resp = client.post("/api/retouch/download", json={
+        "image_path": str(img_path),
+        "params": {"brightness": 20, "saturation": 10},
+    })
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("image/jpeg")
+    assert 'filename="download_portrait.retouch.jpg"' in resp.headers["content-disposition"]
+    assert resp.content.startswith(b"\xff\xd8")
+    assert img_path.read_bytes() == original_bytes
+
+    conn = sqlite3.connect(db_path)
+    retouch_rows = conn.execute("SELECT COUNT(*) FROM photos WHERE filename LIKE ?", ["%.retouch.jpg"]).fetchone()[0]
+    edit_rows = conn.execute("SELECT COUNT(*) FROM retouch_edits").fetchone()[0]
+    conn.close()
+    assert retouch_rows == 0
+    assert edit_rows == 0
+
+
 def test_retouch_apply_rotates_flips_and_crops_copy(retouch_client, tmp_path):
     client, db_path = retouch_client
     img_path, original_bytes = _make_photo(tmp_path, db_path)

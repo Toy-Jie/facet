@@ -15,6 +15,7 @@ from typing import Any, Optional
 import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from PIL import Image, ImageEnhance, ImageOps
 from pydantic import BaseModel, Field
 
@@ -78,6 +79,12 @@ class RetouchApplyBody(BaseModel):
     image_path: Optional[str] = None
     params: RetouchAdjustments = Field(default_factory=RetouchAdjustments)
     output_suffix: str = Field(default=".retouch")
+
+
+class RetouchDownloadBody(BaseModel):
+    photo_id: Optional[str] = None
+    image_path: Optional[str] = None
+    params: RetouchAdjustments = Field(default_factory=RetouchAdjustments)
 
 
 class RetouchMaskBody(BaseModel):
@@ -469,6 +476,29 @@ def api_retouch_apply(
         "thumbnail_url": f"/thumbnail?path={output_db_path}&size=640",
         "exif_strategy": "orientation_applied_metadata_not_preserved",
     }
+
+
+@router.post("/api/retouch/download")
+def api_retouch_download(
+    body: RetouchDownloadBody,
+    user: CurrentUser = Depends(require_edition),
+):
+    db_path = _photo_path(body)
+    with get_db() as conn:
+        _, disk_path = _resolve_visible_path(conn, db_path, user)
+
+    img = _load_image(disk_path)
+    result = _process_image(img, body.params)
+    buf = BytesIO()
+    result.save(buf, format="JPEG", quality=95, subsampling=0)
+    buf.seek(0)
+    stem = Path(db_path).stem
+    download_name = f"{stem}.retouch.jpg"
+    return StreamingResponse(
+        buf,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
 
 
 @router.post("/api/retouch/mask/face")

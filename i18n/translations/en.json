@@ -1922,7 +1922,9 @@
     "compare_hold": "Hold to compare",
     "compare_hold_hint": "Hold to show the before preview; release to restore the edited preview",
     "preview_resolution": "Editing preview resolution",
-    "preview_resolution_note": "Only affects editing preview speed and clarity. Saved copies and downloads still use original resolution."
+    "preview_resolution_note": "Only affects editing preview speed and clarity. Saved copies and downloads still use original resolution.",
+    "download": "Download",
+    "download_error": "Failed to download retouched file"
   },
   "download": {
     "type_original": "Original",

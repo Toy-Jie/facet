@@ -428,6 +428,10 @@ const DEFAULT_PARAMS: RetouchParams = {
                   @if (saving()) { <mat-spinner diameter="18" class="!inline-block !mr-2" /> } @else { <mat-icon>save_as</mat-icon> }
                   {{ 'retouch.save_copy' | translate }}
                 </button>
+                <button mat-stroked-button class="w-full" (click)="downloadRetouched()" [disabled]="downloading() || saving()">
+                  @if (downloading()) { <mat-spinner diameter="18" class="!inline-block !mr-2" /> } @else { <mat-icon>download</mat-icon> }
+                  {{ 'retouch.download' | translate }}
+                </button>
               </div>
             </mat-tab>
             </mat-tab-group>
@@ -562,6 +566,7 @@ export class RetouchDialogComponent {
   readonly compareLoading = signal(false);
   readonly compareHeld = signal(false);
   readonly saving = signal(false);
+  readonly downloading = signal(false);
   readonly inpaintMode = signal(false);
   readonly spots = signal<Spot[]>([]);
   readonly previewWidth = signal(0);
@@ -878,6 +883,23 @@ export class RetouchDialogComponent {
     }
   }
 
+  async downloadRetouched(): Promise<void> {
+    const path = this.activePath();
+    if (!path) return;
+    this.downloading.set(true);
+    try {
+      const blob = await firstValueFrom(this.api.postRaw('/retouch/download', {
+        image_path: path,
+        params: this.paramsWithMask(),
+      }));
+      this.triggerDownload(blob, this.retouchDownloadFilename());
+    } catch {
+      this.snackBar.open(this.i18n.t('retouch.download_error'), '', { duration: 3500 });
+    } finally {
+      this.downloading.set(false);
+    }
+  }
+
   private pushHistory(): void {
     this.undoStack.push(this.currentHistoryState());
     if (this.undoStack.length > 30) this.undoStack.shift();
@@ -938,6 +960,24 @@ export class RetouchDialogComponent {
     const mask = this.buildMask();
     const includeCrop = options.includeCrop !== false;
     return { ...this.params(), crop: includeCrop ? this.params().crop : null, inpaint_mask_base64: mask };
+  }
+
+  private retouchDownloadFilename(): string {
+    const filename = this.activeFilename() || this.activePath().split(/[\\/]/).pop() || 'retouch.jpg';
+    const dot = filename.lastIndexOf('.');
+    const stem = dot > 0 ? filename.slice(0, dot) : filename;
+    return `${stem}.retouch.jpg`;
+  }
+
+  private triggerDownload(blob: Blob, filename: string): void {
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
   }
 
   private setOriginalPreview(path = this.activePath()): void {

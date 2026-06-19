@@ -1656,7 +1656,9 @@
     "compare_hold": "按住对比",
     "compare_hold_hint": "按住查看修改前效果，松开恢复当前修图预览",
     "preview_resolution": "编辑预览清晰度",
-    "preview_resolution_note": "仅影响编辑时的预览速度和清晰度，保存副本和下载仍使用原图清晰度。"
+    "preview_resolution_note": "仅影响编辑时的预览速度和清晰度，保存副本和下载仍使用原图清晰度。",
+    "download": "下载",
+    "download_error": "下载修图文件失败"
   },
   "download": {
     "type_original": "原图",
