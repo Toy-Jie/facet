@@ -157,39 +157,39 @@ import { createLeafletMap } from '../../shared/leaflet';
           </div>
         } @else {
         <!-- Main content: image + info -->
-        <div class="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] lg:grid-rows-[minmax(0,1fr)_auto] lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           <!-- Image panel -->
-          <div class="flex flex-col lg:flex-1 lg:min-h-0">
-            <div #imagePanel class="shrink-0 lg:h-auto lg:flex-1 flex items-center justify-center bg-black lg:min-h-0 relative overflow-hidden cursor-grab"
-              [class.cursor-grabbing]="isPanning()"
-              (dblclick)="resetZoom()"
-              (pointerdown)="onPanStart($event)"
-              (pointermove)="onPanMove($event)"
-              (pointerup)="onPanEnd($event)"
-              (pointercancel)="onPanEnd($event)"
-              (touchstart)="onTouchStart($event)"
-              (touchend)="onTouchEnd()">
-              <img
-                [src]="p.path | thumbnailUrl:640"
-                [alt]="p.filename"
-                class="w-full lg:max-w-full lg:max-h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-                [class.opacity-0]="fullImageLoaded()"
-                [style.transform]="zoomTransform()"
-              />
-              <img
-                [src]="fullImageUrl()"
-                [alt]="p.filename"
-                class="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
-                [class.opacity-0]="!fullImageLoaded()"
-                (load)="onFullImageLoad()"
-                [style.transform]="zoomTransform()"
-              />
-            </div>
+          <div #imagePanel class="min-h-[42vh] lg:min-h-0 lg:col-start-1 lg:row-start-1 flex items-center justify-center bg-black relative overflow-hidden cursor-grab"
+            [class.cursor-grabbing]="isPanning()"
+            (dblclick)="resetZoom()"
+            (pointerdown)="onPanStart($event)"
+            (pointermove)="onPanMove($event)"
+            (pointerup)="onPanEnd($event)"
+            (pointercancel)="onPanEnd($event)"
+            (touchstart)="onTouchStart($event)"
+            (touchend)="onTouchEnd()">
+            <img
+              [src]="p.path | thumbnailUrl:640"
+              [alt]="p.filename"
+              class="w-full lg:max-w-full lg:max-h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
+              [class.opacity-0]="fullImageLoaded()"
+              [style.transform]="zoomTransform()"
+            />
+            <img
+              [src]="fullImageUrl()"
+              [alt]="p.filename"
+              class="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 pointer-events-none select-none"
+              [class.opacity-0]="!fullImageLoaded()"
+              (load)="onFullImageLoad()"
+              [style.transform]="zoomTransform()"
+            />
+          </div>
+          <div class="lg:col-start-1 lg:row-start-2 min-w-0">
             <ng-container [ngTemplateOutlet]="filmstripTpl" />
           </div>
 
           <!-- Side panel -->
-          <div class="lg:w-[420px] lg:shrink-0 lg:overflow-y-auto text-sm text-[var(--mat-sys-on-surface)] border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
+          <div class="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:overflow-y-auto text-sm text-[var(--mat-sys-on-surface)] border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]">
           <div class="sticky top-0 z-10 bg-[var(--mat-sys-surface)] border-b border-[var(--mat-sys-outline-variant)] p-3">
             <div class="grid grid-cols-2 gap-1 rounded-lg bg-[var(--mat-sys-surface-container)] p-1">
               <button

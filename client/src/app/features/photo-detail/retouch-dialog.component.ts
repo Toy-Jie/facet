@@ -111,8 +111,8 @@ const DEFAULT_PARAMS: RetouchParams = {
     }
 
     <div [class]="embedded() ? 'retouch-panel' : 'retouch-dialog'">
-      <div [class]="embedded() ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] min-h-0 h-full overflow-hidden' : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]'">
-        <div [class]="embedded() ? 'flex flex-col min-h-0 h-full' : 'flex flex-col'">
+      <div [class]="embedded() ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] lg:grid-rows-[minmax(0,1fr)_auto] min-h-0 h-full overflow-hidden' : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] min-h-[68vh] max-h-[78vh]'">
+        <div [class]="embedded() ? 'flex flex-col min-h-0 lg:col-start-1 lg:row-start-1' : 'flex flex-col'">
           <div [class]="embedded() ? 'relative flex flex-1 items-center justify-center bg-black overflow-hidden min-h-[42vh] lg:min-h-0' : 'relative flex items-center justify-center bg-black overflow-hidden min-h-[42vh]'">
             @if (loadingPreview()) {
               <div class="absolute inset-0 z-20 grid place-items-center bg-black/35">
@@ -166,12 +166,14 @@ const DEFAULT_PARAMS: RetouchParams = {
               }
             </div>
           </div>
-          @if (embedded()) {
-            <ng-content />
-          }
         </div>
+        @if (embedded()) {
+          <div class="lg:col-start-1 lg:row-start-2 min-w-0">
+            <ng-content />
+          </div>
+        }
 
-        <div [class]="embedded() ? 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]' : 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]'">
+        <div [class]="embedded() ? 'lg:col-start-2 lg:row-start-1 lg:row-span-2 overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]' : 'overflow-y-auto border-l border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)]'">
           <div class="p-3 border-b border-[var(--mat-sys-outline-variant)] space-y-3">
             @if (embedded()) {
               <div class="grid grid-cols-2 gap-1 rounded-lg bg-[var(--mat-sys-surface-container)] p-1">
