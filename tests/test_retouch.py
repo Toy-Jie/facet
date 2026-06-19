@@ -1,5 +1,7 @@
+import base64
 import os
 import sqlite3
+from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,6 +73,31 @@ def test_retouch_preview_zero_max_size_keeps_original_dimensions(retouch_client,
     body = resp.json()
     assert body["width"] == 2048
     assert body["height"] == 1024
+
+
+def test_retouch_compare_preview_keeps_crop_but_skips_color_adjustments(retouch_client, tmp_path):
+    client, db_path = retouch_client
+    img_path, _ = _make_photo(tmp_path, db_path, size=(100, 80), filename="compare_portrait.jpg")
+
+    resp = client.post("/api/retouch/preview", json={
+        "image_path": str(img_path),
+        "params": {
+            "brightness": 80,
+            "saturation": -80,
+            "crop": {"x": 0.1, "y": 0.1, "width": 0.5, "height": 0.5, "unit": "normalized"},
+        },
+        "max_size": 2048,
+        "compare": True,
+    })
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["width"] == 50
+    assert body["height"] == 40
+    payload = body["image_base64"].split(",", 1)[1]
+    with Image.open(BytesIO(base64.b64decode(payload))) as img:
+        pixel = img.convert("RGB").getpixel((img.width // 2, img.height // 2))
+    assert all(abs(a - b) <= 3 for a, b in zip(pixel, (180, 130, 105)))
 
 
 def test_retouch_apply_saves_copy_and_records_history(retouch_client, tmp_path):

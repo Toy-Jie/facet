@@ -1918,7 +1918,11 @@
     "save_error": "Failed to save retouched copy",
     "preview_original": "Showing original preview",
     "preview_ready": "Preview updated",
-    "preview_error": "Failed to generate preview"
+    "preview_error": "Failed to generate preview",
+    "compare_hold": "Hold to compare",
+    "compare_hold_hint": "Hold to show the before preview; release to restore the edited preview",
+    "preview_resolution": "Editing preview resolution",
+    "preview_resolution_note": "Only affects editing preview speed and clarity. Saved copies and downloads still use original resolution."
   },
   "download": {
     "type_original": "Original",

@@ -70,6 +70,7 @@ class RetouchPreviewBody(BaseModel):
     image_path: Optional[str] = None
     params: RetouchAdjustments = Field(default_factory=RetouchAdjustments)
     max_size: int = Field(default=0, ge=0, le=12000)
+    compare: bool = False
 
 
 class RetouchApplyBody(BaseModel):
@@ -297,7 +298,7 @@ def _apply_inpaint(rgb: np.ndarray, mask_base64: Optional[str]) -> np.ndarray:
     return cv2.cvtColor(repaired, cv2.COLOR_BGR2RGB)
 
 
-def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
+def _process_geometry(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
     out = img.copy()
     rotate = params.rotate % 360
     if rotate:
@@ -306,6 +307,11 @@ def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
         out = ImageOps.mirror(out)
     if params.flip_vertical:
         out = ImageOps.flip(out)
+    return out
+
+
+def _process_image(img: Image.Image, params: RetouchAdjustments) -> Image.Image:
+    out = _process_geometry(img, params)
     if params.brightness:
         out = ImageEnhance.Brightness(out).enhance(_factor(params.brightness, 0.75))
     if params.contrast:
@@ -422,7 +428,9 @@ def api_retouch_preview(
     with get_db() as conn:
         _, disk_path = _resolve_visible_path(conn, db_path, user)
     img = _downsample(_load_image(disk_path), body.max_size)
-    result = _process_image(img, body.params)
+    result = _process_geometry(img, body.params) if body.compare else _process_image(img, body.params)
+    if body.compare and body.params.crop:
+        result = _apply_crop(result, body.params.crop)
     return {
         "image_base64": _jpeg_base64(result),
         "width": result.width,

@@ -85,6 +85,9 @@ interface PreviewResponse {
   mask_provider: string;
 }
 
+const RETOUCH_PREVIEW_SIZE_KEY = 'facet_retouch_preview_size';
+const RETOUCH_PREVIEW_SIZE_OPTIONS = [2048, 3000, 4000] as const;
+
 export interface ApplyResponse {
   original_path?: string;
   output_path: string;
@@ -171,7 +174,7 @@ const DEFAULT_PARAMS: RetouchParams = {
             >
               <img
                 #previewImage
-                [src]="previewSrc()"
+                [src]="displayPreviewSrc()"
                 [alt]="activeFilename()"
                 [class]="embedded() ? 'block max-w-full max-h-full object-contain select-none pointer-events-none' : 'block max-w-full max-h-[72vh] object-contain select-none pointer-events-none'"
                 draggable="false"
@@ -214,6 +217,25 @@ const DEFAULT_PARAMS: RetouchParams = {
                 ></span>
               }
             </div>
+            @if (canComparePreview()) {
+              <button
+                type="button"
+                class="absolute bottom-4 right-4 z-30 inline-flex h-10 items-center gap-2 rounded-md border border-white/25 bg-black/70 px-3 text-sm font-medium text-white shadow-lg backdrop-blur transition-colors hover:bg-black/85 active:bg-white active:text-black"
+                [class.opacity-70]="compareLoading()"
+                (pointerdown)="startComparePreview($event)"
+                (pointerup)="endComparePreview($event)"
+                (pointerleave)="endComparePreview($event)"
+                (pointercancel)="endComparePreview($event)"
+                [matTooltip]="'retouch.compare_hold_hint' | translate"
+              >
+                @if (compareLoading()) {
+                  <mat-spinner diameter="16" class="!inline-block" />
+                } @else {
+                  <mat-icon class="!text-base !w-4 !h-4">compare</mat-icon>
+                }
+                {{ 'retouch.compare_hold' | translate }}
+              </button>
+            }
           </div>
         </div>
         @if (embedded()) {
@@ -381,6 +403,24 @@ const DEFAULT_PARAMS: RetouchParams = {
                 {{ 'retouch.export' | translate }}
               </ng-template>
               <div class="p-4 space-y-4">
+                <div class="space-y-2">
+                  <label class="block text-sm font-medium" for="retouch-preview-size">
+                    {{ 'retouch.preview_resolution' | translate }}
+                  </label>
+                  <select
+                    id="retouch-preview-size"
+                    class="w-full rounded-md border border-[var(--mat-sys-outline-variant)] bg-[var(--mat-sys-surface)] px-3 py-2 text-sm"
+                    [ngModel]="previewMaxSize()"
+                    (ngModelChange)="setPreviewMaxSize($event)"
+                  >
+                    @for (size of previewSizeOptions; track size) {
+                      <option [ngValue]="size">{{ size }} px</option>
+                    }
+                  </select>
+                  <p class="m-0 text-xs text-[var(--mat-sys-on-surface-variant)]">
+                    {{ 'retouch.preview_resolution_note' | translate }}
+                  </p>
+                </div>
                 <div class="rounded border border-[var(--mat-sys-primary)] p-3 text-sm">
                   {{ 'retouch.save_copy_note' | translate }}
                 </div>
@@ -514,9 +554,13 @@ export class RetouchDialogComponent {
 
   readonly previewViewport = viewChild<ElementRef<HTMLDivElement>>('previewViewport');
   readonly previewImage = viewChild<ElementRef<HTMLImageElement>>('previewImage');
+  readonly previewSizeOptions = RETOUCH_PREVIEW_SIZE_OPTIONS;
   readonly params = signal<RetouchParams>({ ...DEFAULT_PARAMS });
   readonly previewSrc = signal('');
+  readonly comparePreviewSrc = signal('');
   readonly loadingPreview = signal(false);
+  readonly compareLoading = signal(false);
+  readonly compareHeld = signal(false);
   readonly saving = signal(false);
   readonly inpaintMode = signal(false);
   readonly spots = signal<Spot[]>([]);
@@ -528,6 +572,11 @@ export class RetouchDialogComponent {
   readonly panX = signal(0);
   readonly panY = signal(0);
   readonly isPanning = signal(false);
+  readonly previewMaxSize = signal(this.loadPreviewMaxSize());
+  readonly displayPreviewSrc = computed(() => this.compareHeld() && this.comparePreviewSrc()
+    ? this.comparePreviewSrc()
+    : this.previewSrc());
+  readonly canComparePreview = computed(() => this.hasCompareableAdjustments() && !this.isOriginalPreviewState());
   readonly previewTransform = computed(() => {
     const scale = this.zoomScale();
     const x = this.panX();
@@ -548,6 +597,7 @@ export class RetouchDialogComponent {
   private panStartY = 0;
   private panOriginX = 0;
   private panOriginY = 0;
+  private compareCacheKey = '';
 
   readonly canUndo = computed(() => (this.historyVersion(), this.undoStack.length > 0));
   readonly canRedo = computed(() => (this.historyVersion(), this.redoStack.length > 0));
@@ -567,6 +617,7 @@ export class RetouchDialogComponent {
       this.markHistoryChanged();
       this.previewWidth.set(0);
       this.previewHeight.set(0);
+      this.clearComparePreview();
       this.setOriginalPreview(path);
       this.resetPreviewZoom();
     });
@@ -580,24 +631,28 @@ export class RetouchDialogComponent {
   setParam(key: keyof RetouchParams, value: number | string): void {
     this.pushHistory();
     this.params.update(p => ({ ...p, [key]: Number(value) }));
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
   rotate(delta: number): void {
     this.pushHistory();
     this.params.update(p => ({ ...p, rotate: (p.rotate + delta + 360) % 360 }));
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
   toggleFlip(key: 'flip_horizontal' | 'flip_vertical'): void {
     this.pushHistory();
     this.params.update(p => ({ ...p, [key]: !p[key] }));
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
   setCropEnabled(enabled: boolean): void {
     this.pushHistory();
     this.cropPreviewConfirmed.set(false);
+    this.clearComparePreview();
     this.params.update(p => ({
       ...p,
       crop: enabled ? this.defaultCrop() : null,
@@ -608,6 +663,7 @@ export class RetouchDialogComponent {
   resetCrop(): void {
     this.pushHistory();
     this.cropPreviewConfirmed.set(false);
+    this.clearComparePreview();
     this.params.update(p => ({ ...p, crop: this.defaultCrop() }));
     this.schedulePreview();
   }
@@ -615,12 +671,14 @@ export class RetouchDialogComponent {
   confirmCrop(): void {
     if (!this.params().crop || this.cropPreviewConfirmed()) return;
     this.cropPreviewConfirmed.set(true);
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
   continueCrop(): void {
     if (!this.params().crop || !this.cropPreviewConfirmed()) return;
     this.cropPreviewConfirmed.set(false);
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
@@ -658,12 +716,14 @@ export class RetouchDialogComponent {
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
     this.pushHistory();
     this.spots.update(items => [...items, { x, y, radius: 16 }]);
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
   clearSpots(): void {
     this.pushHistory();
     this.spots.set([]);
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
@@ -673,6 +733,7 @@ export class RetouchDialogComponent {
     this.redoStack.push(this.currentHistoryState());
     this.restoreHistoryState(prev);
     this.markHistoryChanged();
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
@@ -682,6 +743,7 @@ export class RetouchDialogComponent {
     this.undoStack.push(this.currentHistoryState());
     this.restoreHistoryState(next);
     this.markHistoryChanged();
+    this.clearComparePreview();
     this.schedulePreview();
   }
 
@@ -691,7 +753,53 @@ export class RetouchDialogComponent {
     this.spots.set([]);
     this.cropPreviewConfirmed.set(false);
     this.resetPreviewZoom();
+    this.clearComparePreview();
     this.setOriginalPreview();
+  }
+
+  setPreviewMaxSize(value: number | string): void {
+    const size = this.normalizePreviewMaxSize(value);
+    this.previewMaxSize.set(size);
+    try { localStorage.setItem(RETOUCH_PREVIEW_SIZE_KEY, String(size)); } catch { /* ignore */ }
+    this.clearComparePreview();
+    this.schedulePreview();
+  }
+
+  async startComparePreview(event: PointerEvent): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!this.canComparePreview()) return;
+    const target = event.currentTarget as HTMLElement | null;
+    target?.setPointerCapture?.(event.pointerId);
+    this.compareHeld.set(true);
+    const key = this.currentCompareKey();
+    if (this.comparePreviewSrc() && this.compareCacheKey === key) return;
+    this.compareLoading.set(true);
+    try {
+      const res = await firstValueFrom(this.api.post<PreviewResponse>('/retouch/preview', {
+        image_path: this.activePath(),
+        params: this.paramsWithMask({ includeCrop: this.cropPreviewConfirmed() }),
+        max_size: this.previewMaxSize(),
+        compare: true,
+      }));
+      if (this.currentCompareKey() === key) {
+        this.compareCacheKey = key;
+        this.comparePreviewSrc.set(res.image_base64);
+      }
+    } catch {
+      this.compareHeld.set(false);
+      this.statusText.set(this.i18n.t('retouch.preview_error'));
+    } finally {
+      this.compareLoading.set(false);
+    }
+  }
+
+  endComparePreview(event?: PointerEvent): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    this.compareHeld.set(false);
+    const target = event?.currentTarget as HTMLElement | null;
+    if (event) target?.releasePointerCapture?.(event.pointerId);
   }
 
   onPreviewWheel(event: WheelEvent): void {
@@ -813,7 +921,7 @@ export class RetouchDialogComponent {
       const res = await firstValueFrom(this.api.post<PreviewResponse>('/retouch/preview', {
         image_path: this.activePath(),
         params: this.paramsWithMask({ includeCrop: this.cropPreviewConfirmed() }),
-        max_size: 0,
+        max_size: this.previewMaxSize(),
       }));
       this.previewSrc.set(res.image_base64);
       this.previewWidth.set(res.width);
@@ -839,6 +947,48 @@ export class RetouchDialogComponent {
     this.statusText.set(this.i18n.t('retouch.preview_original'));
   }
 
+  private clearComparePreview(): void {
+    this.compareHeld.set(false);
+    this.comparePreviewSrc.set('');
+    this.compareCacheKey = '';
+  }
+
+  private currentCompareKey(): string {
+    return JSON.stringify({
+      path: this.activePath(),
+      params: this.paramsWithMask({ includeCrop: this.cropPreviewConfirmed() }),
+      maxSize: this.previewMaxSize(),
+    });
+  }
+
+  private hasCompareableAdjustments(): boolean {
+    const params = this.params();
+    const compareKeys: Array<keyof RetouchParams> = [
+      'brightness',
+      'contrast',
+      'saturation',
+      'temperature',
+      'smooth_skin',
+      'whiten_skin',
+      'face_blemish',
+      'face_wrinkle',
+      'body_blemish',
+      'skin_texture',
+      'skin_tone',
+      'face_fullness',
+      'face_shape',
+      'eyebrow',
+      'nose',
+      'eyes',
+      'mouth',
+      'close_mouth',
+      'teeth',
+      'eye_enhance',
+      'background_blur',
+    ];
+    return this.spots().length > 0 || compareKeys.some(key => params[key] !== DEFAULT_PARAMS[key]);
+  }
+
   private isOriginalPreviewState(): boolean {
     if (this.spots().length || this.cropPreviewConfirmed()) return false;
     const params = this.params();
@@ -846,6 +996,21 @@ export class RetouchDialogComponent {
       if (key === 'inpaint_mask_base64') return true;
       return JSON.stringify(params[key]) === JSON.stringify(DEFAULT_PARAMS[key]);
     });
+  }
+
+  private loadPreviewMaxSize(): number {
+    try {
+      return this.normalizePreviewMaxSize(localStorage.getItem(RETOUCH_PREVIEW_SIZE_KEY) ?? '');
+    } catch {
+      return 2048;
+    }
+  }
+
+  private normalizePreviewMaxSize(value: number | string): number {
+    const size = Number(value);
+    return RETOUCH_PREVIEW_SIZE_OPTIONS.includes(size as typeof RETOUCH_PREVIEW_SIZE_OPTIONS[number])
+      ? size
+      : 2048;
   }
 
   private readonly onCropPointerMove = (event: PointerEvent): void => {
